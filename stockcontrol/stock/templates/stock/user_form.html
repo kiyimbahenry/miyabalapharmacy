@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Create User</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: #f0f2f5;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 30px;
+            border-radius: 10px;
+            margin-bottom: 30px;
+        }
+        .header h1 {
+            font-size: 32px;
+            font-weight: 300;
+        }
+        .nav {
+            background: white;
+            padding: 15px 25px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 30px;
+        }
+        .nav a {
+            color: #333;
+            text-decoration: none;
+            padding: 10px 20px;
+            margin: 0 5px;
+            border-radius: 5px;
+            transition: all 0.3s;
+        }
+        .nav a:hover {
+            background: #667eea;
+            color: white;
+        }
+        .card {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            font-weight: 600;
+            color: #333;
+            margin-bottom: 5px;
+        }
+        .form-group input, .form-group select, .form-group textarea {
+            width: 100%;
+            padding: 10px 15px;
+            border: 2px solid #ddd;
+            border-radius: 5px;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        .form-group input:focus, .form-group select:focus, .form-group textarea:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+        .form-group textarea {
+            min-height: 80px;
+            resize: vertical;
+        }
+        .form-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
+        .btn {
+            padding: 12px 30px;
+            color: white;
+            text-decoration: none;
+            border-radius: 5px;
+            transition: all 0.3s;
+            display: inline-block;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+        }
+        .btn-primary {
+            background: #667eea;
+        }
+        .btn-primary:hover {
+            background: #764ba2;
+            transform: translateY(-2px);
+        }
+        .btn-secondary {
+            background: #95a5a6;
+        }
+        .btn-secondary:hover {
+            background: #7f8c8d;
+        }
+        .form-actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 20px;
+        }
+        .help-text {
+            color: #888;
+            font-size: 12px;
+            margin-top: 5px;
+        }
+        .errorlist {
+            color: #e74c3c;
+            list-style: none;
+            padding: 0;
+            font-size: 13px;
+        }
+        .errorlist li {
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>👤 {{ title|default:"Create New User" }}</h1>
+        </div>
+
+        <div class="nav">
+            <a href="{% url 'stock:dashboard' %}">📊 Dashboard</a>
+            <a href="{% url 'stock:medicine_list' %}">💊 Medicines</a>
+            <a href="{% url 'stock:category_list' %}">📂 Categories</a>
+            <a href="{% url 'stock:user_list' %}" style="background: #667eea; color: white;">👥 Users</a>
+            <a href="/admin/">⚙️ Admin Panel</a>
+        </div>
+
+        <div class="card">
+            <form method="POST">
+                {% csrf_token %}
+                
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="id_username">Username *</label>
+                        <input type="text" name="username" id="id_username" 
+                               value="{{ form.username.value|default:'' }}" required>
+                        {% if form.username.errors %}
+                            <ul class="errorlist">{{ form.username.errors }}</ul>
+                        {% endif %}
+                        <div class="help-text">Required. 150 characters or fewer. Letters, digits and @/./+/-/_ only.</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="id_email">Email *</label>
+                        <input type="email" name="email" id="id_email" 
+                               value="{{ form.email.value|default:'' }}" required>
+                        {% if form.email.errors %}
+                            <ul class="errorlist">{{ form.email.errors }}</ul>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="id_first_name">First Name *</label>
+                        <input type="text" name="first_name" id="id_first_name" 
+                               value="{{ form.first_name.value|default:'' }}" required>
+                        {% if form.first_name.errors %}
+                            <ul class="errorlist">{{ form.first_name.errors }}</ul>
+                        {% endif %}
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="id_last_name">Last Name *</label>
+                        <input type="text" name="last_name" id="id_last_name" 
+                               value="{{ form.last_name.value|default:'' }}" required>
+                        {% if form.last_name.errors %}
+                            <ul class="errorlist">{{ form.last_name.errors }}</ul>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="form-row">
+                    <div class="form-group">
+                        <label for="id_password1">Password *</label>
+                        <input type="password" name="password1" id="id_password1" required>
+                        {% if form.password1.errors %}
+                            <ul class="errorlist">{{ form.password1.errors }}</ul>
+                        {% endif %}
+                        <div class="help-text">Your password must contain at least 8 characters.</div>
+                    </div>
+                    
+                    <div class="form-group">
+                        <label for="id_password2">Confirm Password *</label>
+                        <input type="password" name="password2" id="id_password2" required>
+                        {% if form.password2.errors %}
+                            <ul class="errorlist">{{ form.password2.errors }}</ul>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label for="id_role">Role *</label>
+                    <select name="role" id="id_role" required>
+                        <option value="">Select a role...</option>
+                        {% for role_value, role_label in form.fields.role.choices %}
+                            <option value="{{ role_value }}" 
+                                {% if form.role.value == role_value %}selected{% endif %}>
+                                {{ role_label }}
+                            </option>
+                        {% endfor %}
+                    </select>
+                    {% if form.role.errors %}
+                        <ul class="errorlist">{{ form.role.errors }}</ul>
+                    {% endif %}
+                </div>
+
+                <div class="form-group">
+                    <label for="id_phone_number">Phone Number</label>
+                    <input type="text" name="phone_number" id="id_phone_number" 
+                           value="{{ form.phone_number.value|default:'' }}">
+                </div>
+
+                <div class="form-group">
+                    <label for="id_address">Address</label>
+                    <textarea name="address" id="id_address">{{ form.address.value|default:'' }}</textarea>
+                </div>
+
+                <div class="form-actions">
+                    <button type="submit" class="btn btn-primary">✅ Create User</button>
+                    <a href="{% url 'stock:user_list' %}" class="btn btn-secondary">↩️ Cancel</a>
+                </div>
+            </form>
+        </div>
+    </div>
+</body>
+</html>
