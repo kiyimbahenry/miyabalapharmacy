@@ -1,0 +1,341 @@
+{% extends "admin/change_form.html" %}
+{% load i18n admin_urls static admin_modify %}
+
+{% block extrahead %}
+{{ block.super }}
+<style>
+    .two-column-layout {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 20px;
+        margin: 20px 0;
+    }
+    .two-column-layout .column {
+        flex: 1;
+        min-width: 300px;
+        background: #fff;
+        padding: 20px;
+        border-radius: 8px;
+        border: 1px solid #ddd;
+    }
+    .two-column-layout .column h4 {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+        padding: 10px 15px;
+        margin: -20px -20px 20px -20px;
+        border-radius: 8px 8px 0 0;
+    }
+    .field-box {
+        margin-bottom: 15px;
+    }
+    .text-danger {
+        color: #dc3545;
+    }
+    .text-muted {
+        color: #6c757d;
+        font-size: 12px;
+    }
+    .form-control {
+        width: 100%;
+        padding: 8px 12px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 14px;
+    }
+    .form-control:focus {
+        border-color: #667eea;
+        outline: none;
+        box-shadow: 0 0 0 2px rgba(102,126,234,0.25);
+    }
+    select.form-control {
+        height: 38px;
+    }
+    .selling-price-input {
+        font-weight: bold;
+        font-size: 18px !important;
+        color: #2d3748 !important;
+        background: #f0f7ff !important;
+        border-color: #667eea !important;
+    }
+    .calculation-info {
+        background: #e8f5e9;
+        padding: 8px 12px;
+        border-radius: 4px;
+        margin-top: 5px;
+        font-size: 13px;
+        border-left: 3px solid #4caf50;
+    }
+    .btn-calc {
+        background: #667eea;
+        color: white;
+        border: none;
+        padding: 5px 15px;
+        border-radius: 4px;
+        cursor: pointer;
+        margin-top: 5px;
+    }
+    .btn-calc:hover {
+        background: #5a67d8;
+    }
+    .btn-calc-50 {
+        background: #48bb78;
+        color: white;
+        border: none;
+        padding: 5px 15px;
+        border-radius: 4px;
+        cursor: pointer;
+        margin-top: 5px;
+        margin-left: 5px;
+    }
+    .btn-calc-50:hover {
+        background: #38a169;
+    }
+</style>
+{% endblock %}
+
+{% block field_sets %}
+<div class="two-column-layout">
+    <!-- ===== LEFT COLUMN ===== -->
+    <div class="column">
+        <h4><i class="fas fa-info-circle"></i> Drug Information</h4>
+        
+        <!-- Row 1: Generic Name -->
+        <div class="field-box">
+            <label for="id_generic_name">Generic Name <span class="text-danger">*</span></label>
+            <input type="text" class="form-control" id="id_generic_name" name="generic_name" 
+                   value="{{ original.generic_name|default:'' }}" required>
+        </div>
+        
+        <!-- Row 2: Dosage -->
+        <div class="field-box">
+            <label for="id_dosage">Dosage <span class="text-danger">*</span></label>
+            <select class="form-control" id="id_dosage" name="dosage" required>
+                <option value="">-- Select Dosage --</option>
+                <option value="tablet" {% if original.dosage == 'tablet' %}selected{% endif %}>Tablet</option>
+                <option value="capsules" {% if original.dosage == 'capsules' %}selected{% endif %}>Capsules</option>
+                <option value="injection" {% if original.dosage == 'injection' %}selected{% endif %}>Injection</option>
+                <option value="syrup" {% if original.dosage == 'syrup' %}selected{% endif %}>Syrup</option>
+                <option value="suspension" {% if original.dosage == 'suspension' %}selected{% endif %}>Suspension</option>
+                <option value="drops" {% if original.dosage == 'drops' %}selected{% endif %}>Drops</option>
+                <option value="ointment" {% if original.dosage == 'ointment' %}selected{% endif %}>Ointment</option>
+                <option value="cream" {% if original.dosage == 'cream' %}selected{% endif %}>Cream</option>
+                <option value="jerry" {% if original.dosage == 'jerry' %}selected{% endif %}>Jerry</option>
+                <option value="oil" {% if original.dosage == 'oil' %}selected{% endif %}>Oil</option>
+                <option value="spray" {% if original.dosage == 'spray' %}selected{% endif %}>Spray</option>
+                <option value="gel" {% if original.dosage == 'gel' %}selected{% endif %}>Gel</option>
+                <option value="powder" {% if original.dosage == 'powder' %}selected{% endif %}>Powder</option>
+                <option value="liquid" {% if original.dosage == 'liquid' %}selected{% endif %}>Liquid</option>
+                <option value="balm" {% if original.dosage == 'balm' %}selected{% endif %}>Balm</option>
+            </select>
+        </div>
+        
+        <!-- Row 3: Pack Size -->
+        <div class="field-box">
+            <label for="id_pack_size">Pack Size (Units per Packet) <span class="text-danger">*</span></label>
+            <input type="number" class="form-control" id="id_pack_size" name="pack_size" 
+                   value="{{ original.pack_size|default:'0' }}" min="1" required 
+                   placeholder="e.g., 100">
+            <small class="text-muted">Number of tablets/pieces in one packet</small>
+        </div>
+        
+        <!-- Row 4: Cost Price (Per Packet) -->
+        <div class="field-box">
+            <label for="id_cost_price">Cost Price (UGX per Packet) <span class="text-danger">*</span></label>
+            <input type="number" step="0.01" class="form-control" id="id_cost_price" name="cost_price" 
+                   value="{{ original.cost_price|default:'0' }}" required>
+            <small class="text-muted">Total cost for the entire packet</small>
+        </div>
+        
+        <!-- Row 5: Expiry Date -->
+        <div class="field-box">
+            <label for="id_expiry_date">Expiry Date <span class="text-danger">*</span></label>
+            <input type="date" class="form-control" id="id_expiry_date" name="expiry_date" 
+                   value="{{ original.expiry_date|date:'Y-m-d'|default:'' }}" required>
+        </div>
+        
+        <!-- Row 6: Who Entered -->
+        <div class="field-box">
+            <label>Who Entered</label>
+            <div style="background: #f5f5f5; padding: 8px 12px; border-radius: 4px; border: 1px solid #ddd;">
+                {{ request.user.username }}
+            </div>
+            <small class="text-muted">Current user: {{ request.user.username }}</small>
+        </div>
+    </div>
+    
+    <!-- ===== RIGHT COLUMN ===== -->
+    <div class="column">
+        <h4><i class="fas fa-cog"></i> Additional Details</h4>
+        
+        <!-- Row 1: Brand Name -->
+        <div class="field-box">
+            <label for="id_brand">Brand Name</label>
+            <input type="text" class="form-control" id="id_brand" name="brand" 
+                   value="{{ original.brand|default:'' }}">
+        </div>
+        
+        <!-- Row 2: Strength -->
+        <div class="field-box">
+            <label for="id_strength">Strength</label>
+            <input type="text" class="form-control" id="id_strength" name="strength" 
+                   value="{{ original.strength|default:'' }}" placeholder="e.g., 500mg">
+        </div>
+        
+        <!-- Row 3: Batch No. -->
+        <div class="field-box">
+            <label for="id_batch_no">Batch No.</label>
+            <input type="text" class="form-control" id="id_batch_no" name="batch_no" 
+                   value="{{ original.batch_no|default:'' }}">
+        </div>
+        
+        <!-- Row 4: Number of Packets Bought -->
+        <div class="field-box">
+            <label for="id_stock_quantity">No. of Packets Bought <span class="text-danger">*</span></label>
+            <input type="number" class="form-control" id="id_stock_quantity" name="stock_quantity" 
+                   value="{{ original.stock_quantity|default:'0' }}" min="0" required>
+            <small class="text-muted">Total number of packets received</small>
+        </div>
+        
+        <!-- Row 5: Supplier -->
+        <div class="field-box">
+            <label for="id_supplier">Supplier <span class="text-danger">*</span></label>
+            <select class="form-control" id="id_supplier" name="supplier" required>
+                <option value="">-- Select Supplier --</option>
+                {% for supplier in adminform.form.supplier.field.queryset %}
+                <option value="{{ supplier.id }}" {% if original.supplier.id == supplier.id %}selected{% endif %}>
+                    {{ supplier.name }}
+                </option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <!-- Row 6: Selling Price (Per Tablet - MANUALLY ADJUSTABLE) -->
+        <div class="field-box">
+            <label for="id_selling_price">
+                Selling Price (UGX per Tablet) <span class="text-danger">*</span>
+            </label>
+            <input type="number" step="0.01" class="form-control selling-price-input" id="id_selling_price" name="selling_price" 
+                   value="{{ original.selling_price|default:'0' }}" required>
+            
+            <div class="calculation-info" id="priceCalculation">
+                <i class="fas fa-calculator"></i> 
+                <span id="calc_explanation">Enter selling price or use auto-calculate below</span>
+            </div>
+            
+            <div style="margin-top: 8px;">
+                <button type="button" class="btn-calc" onclick="calculateSellingPrice(1.5)">
+                    <i class="fas fa-magic"></i> 1.5x (50% markup)
+                </button>
+                <button type="button" class="btn-calc-50" onclick="calculateSellingPrice(2.0)">
+                    <i class="fas fa-magic"></i> 2x (100% markup)
+                </button>
+                <button type="button" class="btn-calc" onclick="calculateSellingPrice(2.5)">
+                    <i class="fas fa-magic"></i> 2.5x (150% markup)
+                </button>
+                <small class="text-muted" style="display: block; margin-top: 4px;">
+                    <i class="fas fa-info-circle"></i> 
+                    Click to auto-calculate, or type your own price in UGX
+                </small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Hidden fields for Django admin -->
+<input type="hidden" name="name" id="id_name" value="{{ original.name|default:'' }}">
+<input type="hidden" name="category" id="id_category" value="{{ original.category.id|default:'1' }}">
+<input type="hidden" name="reorder_level" id="id_reorder_level" value="{{ original.reorder_level|default:'10' }}">
+<input type="hidden" name="is_active" id="id_is_active" value="on">
+<input type="hidden" name="markup_percentage" id="id_markup_percentage" value="50">
+
+<script>
+function calculateSellingPrice(multiplier) {
+    const costPrice = parseFloat(document.getElementById('id_cost_price').value) || 0;
+    const packSize = parseFloat(document.getElementById('id_pack_size').value) || 1;
+    
+    if (costPrice <= 0 || packSize <= 0) {
+        alert('Please enter Cost Price and Pack Size first!');
+        return;
+    }
+    
+    // Calculate cost per tablet: Cost Price ÷ Pack Size
+    const costPerTablet = costPrice / packSize;
+    
+    // Calculate selling price: Cost per tablet × multiplier
+    // Example: 2000 ÷ 100 = 20, then 20 × 1.5 = 30
+    const sellingPrice = costPerTablet * multiplier;
+    
+    // Set the selling price
+    document.getElementById('id_selling_price').value = sellingPrice.toFixed(2);
+    
+    // Update explanation
+    const markupPercent = ((multiplier - 1) * 100).toFixed(0);
+    document.getElementById('calc_explanation').innerHTML = 
+        `Cost per tablet: UGX ${costPerTablet.toFixed(2)} × ${multiplier}x (${markupPercent}% markup) = UGX ${sellingPrice.toFixed(2)} per tablet`;
+    
+    // Highlight the field
+    const field = document.getElementById('id_selling_price');
+    field.style.background = '#d4edda';
+    setTimeout(() => {
+        field.style.background = '#f0f7ff';
+    }, 1000);
+}
+
+function updatePriceInfo() {
+    const costPrice = parseFloat(document.getElementById('id_cost_price').value) || 0;
+    const packSize = parseFloat(document.getElementById('id_pack_size').value) || 1;
+    const sellingPrice = parseFloat(document.getElementById('id_selling_price').value) || 0;
+    
+    if (costPrice > 0 && packSize > 0) {
+        const costPerTablet = costPrice / packSize;
+        
+        if (sellingPrice > 0) {
+            const multiplier = sellingPrice / costPerTablet;
+            const markupPercent = ((multiplier - 1) * 100).toFixed(0);
+            
+            if (sellingPrice >= costPerTablet) {
+                document.getElementById('calc_explanation').innerHTML = 
+                    `Cost per tablet: UGX ${costPerTablet.toFixed(2)} | Markup: ${markupPercent}% | Selling: UGX ${sellingPrice.toFixed(2)} per tablet`;
+            } else {
+                document.getElementById('calc_explanation').innerHTML = 
+                    `<span style="color: #dc3545;">⚠️ Selling price (UGX ${sellingPrice.toFixed(2)}) is below cost (UGX ${costPerTablet.toFixed(2)})</span>`;
+            }
+        } else {
+            document.getElementById('calc_explanation').innerHTML = 
+                `Cost per tablet: UGX ${costPerTablet.toFixed(2)}. Enter selling price above.`;
+        }
+    }
+}
+
+document.addEventListener('DOMContentLoaded', function() {
+    const genericInput = document.getElementById('id_generic_name');
+    const nameInput = document.getElementById('id_name');
+    
+    // Auto-fill name from generic_name
+    if (genericInput && nameInput) {
+        genericInput.addEventListener('input', function() {
+            if (!nameInput.value || nameInput.value === '') {
+                nameInput.value = this.value;
+            }
+        });
+    }
+    
+    // Update info when fields change
+    const fields = ['id_cost_price', 'id_pack_size', 'id_selling_price'];
+    fields.forEach(id => {
+        const el = document.getElementById(id);
+        if (el) {
+            el.addEventListener('input', updatePriceInfo);
+            el.addEventListener('change', updatePriceInfo);
+        }
+    });
+    
+    // Initial update
+    setTimeout(updatePriceInfo, 500);
+});
+</script>
+{% endblock %}
+
+{% block submit_buttons_bottom %}
+{{ block.super }}
+{% endblock %}

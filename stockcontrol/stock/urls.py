@@ -32,7 +32,9 @@ urlpatterns = [
     # Categories
     path('categories/', views.category_list, name='category_list'),
 
-    # API
+    # ===== API ENDPOINTS (NEW) =====
+    path('api/drugs/', views.get_drugs_api, name='drugs_api'),
+    path('api/sale/', views.complete_sale, name='complete_sale'),
     path('api/calculate-selling-price/', views.calculate_selling_price, name='calculate_selling_price'),
 
     # Users (Admin only)

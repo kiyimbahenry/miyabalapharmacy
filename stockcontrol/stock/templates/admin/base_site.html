@@ -1,0 +1,31 @@
+{% extends "admin/base.html" %}
+{% load static %}
+
+{% block title %}{{ title }} | Pharmacy Stock Management{% endblock %}
+
+{% block branding %}
+<h1 id="site-name">
+    <a href="{% url 'admin:index' %}">
+        <i class="fas fa-capsules"></i> Pharmacy Stock Management
+    </a>
+</h1>
+{% endblock %}
+
+{% block extrahead %}
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css">
+<style>
+    #header {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    }
+    .module h2, .module caption {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%) !important;
+    }
+    .submit-row input.default {
+        background: linear-gradient(135deg, #48bb78 0%, #38a169 100%) !important;
+        border: none !important;
+    }
+    .submit-row input.default:hover {
+        background: linear-gradient(135deg, #38a169 0%, #2f855a 100%) !important;
+    }
+</style>
+{% endblock %}

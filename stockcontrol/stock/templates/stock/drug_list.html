@@ -1,0 +1,40 @@
+<!-- Add these columns to your table -->
+<thead>
+    <tr>
+        <th>Generic Name</th>
+        <th>Brand</th>
+        <th>Dosage</th>
+        <th>Strength</th>
+        <th>Batch No.</th>
+        <th>Stock</th>
+        <th>Cost Price</th>
+        <th>Selling Price</th>
+        <th>Expiry</th>
+        <th>Actions</th>
+    </tr>
+</thead>
+<tbody>
+    {% for drug in drugs %}
+    <tr>
+        <td>{{ drug.generic_name }}</td>
+        <td>{{ drug.brand|default:"-" }}</td>
+        <td>{{ drug.get_dosage_display }}</td>
+        <td>{{ drug.strength|default:"-" }}</td>
+        <td>{{ drug.batch_no|default:"-" }}</td>
+        <td>{{ drug.stock_quantity }}</td>
+        <td>UGX {{ drug.cost_price|floatformat:2 }}</td>
+        <td>UGX {{ drug.selling_price|floatformat:2 }}</td>
+        <td>
+            {% if drug.is_expired %}
+            <span class="badge badge-danger">Expired</span>
+            {% else %}
+            {{ drug.expiry_date|date:"Y-m-d" }}
+            {% endif %}
+        </td>
+        <td>
+            <a href="{% url 'stock:drug_edit' drug.id %}" class="btn btn-sm btn-primary">Edit</a>
+            <a href="{% url 'stock:drug_delete' drug.id %}" class="btn btn-sm btn-danger">Delete</a>
+        </td>
+    </tr>
+    {% endfor %}
+</tbody>
