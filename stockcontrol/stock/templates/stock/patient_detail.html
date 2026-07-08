@@ -1,0 +1,126 @@
+{% extends 'stock/base.html' %}
+{% load static %}
+
+{% block title %}Patient Details - {{ patient.first_name }} {{ patient.last_name }}{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card shadow">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h4><i class="fas fa-user-md"></i> Patient Details</h4>
+                <div>
+                    <a href="{% url 'stock:patient_edit' patient.id %}" class="btn btn-warning">
+                        <i class="fas fa-edit"></i> Edit
+                    </a>
+                    <a href="{% url 'stock:patient_list' %}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Back
+                    </a>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <!-- Patient Info -->
+                    <div class="col-md-6">
+                        <h5>Personal Information</h5>
+                        <table class="table table-borderless">
+                            <tr>
+                                <th>Patient ID:</th>
+                                <td><strong>{{ patient.patient_id }}</strong></td>
+                            </tr>
+                            <tr>
+                                <th>Name:</th>
+                                <td>{{ patient.first_name }} {{ patient.last_name }}</td>
+                            </tr>
+                            <tr>
+                                <th>Date of Birth:</th>
+                                <td>{{ patient.date_of_birth|date:'d/m/Y'|default:'N/A' }}</td>
+                            </tr>
+                            <tr>
+                                <th>Gender:</th>
+                                <td>{{ patient.get_gender_display|default:'N/A' }}</td>
+                            </tr>
+                            <tr>
+                                <th>Phone:</th>
+                                <td>{{ patient.phone|default:'N/A' }}</td>
+                            </tr>
+                            <tr>
+                                <th>Alternate Phone:</th>
+                                <td>{{ patient.alternate_phone|default:'N/A' }}</td>
+                            </tr>
+                            <tr>
+                                <th>Email:</th>
+                                <td>{{ patient.email|default:'N/A' }}</td>
+                            </tr>
+                            <tr>
+                                <th>Location:</th>
+                                <td>{{ patient.location|default:'N/A' }}</td>
+                            </tr>
+                            <tr>
+                                <th>Village:</th>
+                                <td>{{ patient.village|default:'N/A' }}</td>
+                            </tr>
+                            <tr>
+                                <th>District:</th>
+                                <td>{{ patient.district|default:'N/A' }}</td>
+                            </tr>
+                            <tr>
+                                <th>Status:</th>
+                                <td>
+                                    {% if patient.is_active %}
+                                    <span class="badge badge-success">Active</span>
+                                    {% else %}
+                                    <span class="badge badge-danger">Inactive</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                        </table>
+                    </div>
+                    
+                    <!-- Medical Info -->
+                    <div class="col-md-6">
+                        <h5>Medical Information</h5>
+                        <table class="table table-borderless">
+                            <tr>
+                                <th>Disease:</th>
+                                <td>
+                                    <span class="badge {% if patient.disease_type == 'HIV' %}bg-danger{% elif patient.disease_type == 'HYPERTENSION' %}bg-warning{% elif patient.disease_type == 'DM' %}bg-info{% elif patient.disease_type == 'NEURO' %}bg-primary{% elif patient.disease_type == 'ULCERS' %}bg-success{% else %}bg-secondary{% endif %}">
+                                        {{ patient.get_disease_type_display }}
+                                    </span>
+                                    {% if patient.other_disease %}
+                                    <br><small>({{ patient.other_disease }})</small>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr>
+                                <th>Diagnosis Date:</th>
+                                <td>{{ patient.diagnosis_date|date:'d/m/Y'|default:'N/A' }}</td>
+                            </tr>
+                            <tr>
+                                <th>Medications:</th>
+                                <td>{{ patient.medications|linebreaks|default:'N/A' }}</td>
+                            </tr>
+                            <tr>
+                                <th>Dosage:</th>
+                                <td>{{ patient.dosage|linebreaks|default:'N/A' }}</td>
+                            </tr>
+                            <tr>
+                                <th>Next Appointment:</th>
+                                <td>{{ patient.next_appointment|date:'d/m/Y'|default:'N/A' }}</td>
+                            </tr>
+                            <tr>
+                                <th>Registered:</th>
+                                <td>{{ patient.created_at|date:'d/m/Y H:i' }}</td>
+                            </tr>
+                            <tr>
+                                <th>Registered By:</th>
+                                <td>{{ patient.created_by.username|default:'N/A' }}</td>
+                            </tr>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

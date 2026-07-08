@@ -1,0 +1,121 @@
+{% extends 'stock/base.html' %}
+{% load static %}
+
+{% block title %}Receipts & Sales{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card shadow">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h4><i class="fas fa-receipt"></i> Sales Receipts</h4>
+                <div>
+                    <a href="{% url 'stock:create_sale' %}" class="btn btn-success">
+                        <i class="fas fa-plus-circle"></i> New Sale
+                    </a>
+                    <button onclick="window.print()" class="btn btn-secondary">
+                        <i class="fas fa-print"></i> Print Page
+                    </button>
+                </div>
+            </div>
+            <div class="card-body">
+                <!-- Summary Stats -->
+                <div class="row mb-4">
+                    <div class="col-md-3">
+                        <div class="card bg-primary text-white">
+                            <div class="card-body">
+                                <h5>Today's Sales</h5>
+                                <h3>UGX {{ today_total|floatformat:0 }}</h3>
+                                <small>{{ today_count }} transactions</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-success text-white">
+                            <div class="card-body">
+                                <h5>This Month</h5>
+                                <h3>UGX {{ month_total|floatformat:0 }}</h3>
+                                <small>{{ receipt_count }} total transactions</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-info text-white">
+                            <div class="card-body">
+                                <h5>Total Receipts</h5>
+                                <h3>{{ receipt_count }}</h3>
+                                <small>All time</small>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-3">
+                        <div class="card bg-warning text-white">
+                            <div class="card-body">
+                                <h5>Today</h5>
+                                <h3>{{ today_count }}</h3>
+                                <small>Transactions today</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Receipts Table -->
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>Receipt #</th>
+                                <th>Customer</th>
+                                <th>Items</th>
+                                <th>Total (UGX)</th>
+                                <th>Payment</th>
+                                <th>Date/Time</th>
+                                <th>Status</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for receipt in receipts %}
+                            <tr>
+                                <td><strong>{{ receipt.receipt_number }}</strong></td>
+                                <td>{{ receipt.customer_name|default:'Walk-in' }}</td>
+                                <td>{{ receipt.items|length }} items</td>
+                                <td><strong>UGX {{ receipt.total_amount|floatformat:0 }}</strong></td>
+                                <td>
+                                    <span class="badge bg-info">{{ receipt.payment_method|title }}</span>
+                                    <br>
+                                    <small>Paid: UGX {{ receipt.amount_paid|floatformat:0 }}</small>
+                                    {% if receipt.change_due > 0 %}
+                                        <br><small class="text-success">Change: UGX {{ receipt.change_due|floatformat:0 }}</small>
+                                    {% endif %}
+                                </td>
+                                <td>{{ receipt.created_at|date:'d/m/Y H:i' }}</td>
+                                <td>
+                                    {% if receipt.is_printed %}
+                                        <span class="badge bg-success">Printed</span>
+                                    {% else %}
+                                        <span class="badge bg-warning">Not Printed</span>
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="{% url 'stock:receipt_detail' receipt.id %}" class="btn btn-sm btn-info">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                    <a href="{% url 'stock:print_receipt' receipt.id %}" target="_blank" class="btn btn-sm btn-primary">
+                                        <i class="fas fa-print"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                            {% empty %}
+                            <tr>
+                                <td colspan="8" class="text-center">No receipts found.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

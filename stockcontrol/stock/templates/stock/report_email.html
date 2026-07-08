@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>{{ report_type }} Report</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            background: #f4f6f9;
+            padding: 20px;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .header {
+            text-align: center;
+            border-bottom: 3px solid #667eea;
+            padding-bottom: 20px;
+            margin-bottom: 20px;
+        }
+        .header h1 {
+            color: #2d3748;
+            margin: 0;
+        }
+        .header p {
+            color: #718096;
+            margin: 5px 0;
+        }
+        .summary {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+            gap: 15px;
+            margin: 20px 0;
+        }
+        .summary-box {
+            background: #f7fafc;
+            padding: 15px;
+            border-radius: 8px;
+            text-align: center;
+        }
+        .summary-box .number {
+            font-size: 24px;
+            font-weight: bold;
+            color: #2d3748;
+        }
+        .summary-box .label {
+            font-size: 12px;
+            color: #718096;
+            text-transform: uppercase;
+            margin-top: 5px;
+        }
+        .section {
+            margin: 20px 0;
+        }
+        .section h3 {
+            color: #2d3748;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 10px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 10px 0;
+        }
+        table th {
+            background: #667eea;
+            color: white;
+            padding: 10px;
+            text-align: left;
+        }
+        table td {
+            padding: 10px;
+            border-bottom: 1px solid #e2e8f0;
+        }
+        table tr:hover {
+            background: #f7fafc;
+        }
+        .footer {
+            text-align: center;
+            border-top: 2px solid #e2e8f0;
+            padding-top: 20px;
+            margin-top: 20px;
+            color: #718096;
+            font-size: 12px;
+        }
+        .badge {
+            display: inline-block;
+            padding: 2px 10px;
+            border-radius: 20px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+        .badge-success { background: #c6f6d5; color: #22543d; }
+        .badge-warning { background: #feebc8; color: #7b341e; }
+        .badge-danger { background: #fed7d7; color: #742a2a; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>🏥 M-9 Pharmacy</h1>
+            <h2>{{ report_data.period }}</h2>
+            <p>Generated: {{ report_data.generated_at }}</p>
+        </div>
+
+        <!-- Sales Summary -->
+        <div class="section">
+            <h3>📊 Sales Summary</h3>
+            <div class="summary">
+                <div class="summary-box">
+                    <div class="number">UGX {{ report_data.sales.total_amount|floatformat:0 }}</div>
+                    <div class="label">Total Sales</div>
+                </div>
+                <div class="summary-box">
+                    <div class="number">{{ report_data.sales.total_transactions }}</div>
+                    <div class="label">Transactions</div>
+                </div>
+                <div class="summary-box">
+                    <div class="number">{{ report_data.sales.total_items_sold }}</div>
+                    <div class="label">Items Sold</div>
+                </div>
+                <div class="summary-box">
+                    <div class="number">UGX {{ report_data.sales.average_transaction|floatformat:0 }}</div>
+                    <div class="label">Average Transaction</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Payment Breakdown -->
+        <div class="section">
+            <h3>💳 Payment Breakdown</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Method</th>
+                        <th>Amount (UGX)</th>
+                        <th>Transactions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for payment in report_data.payment_breakdown %}
+                    <tr>
+                        <td>{{ payment.method|title }}</td>
+                        <td>{{ payment.total|floatformat:0 }}</td>
+                        <td>{{ payment.count }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="3" style="text-align:center; color:#a0aec0;">No payment data available</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Top Products -->
+        <div class="section">
+            <h3>🏆 Top Selling Products</h3>
+            <table>
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Product</th>
+                        <th>Quantity Sold</th>
+                        <th>Total (UGX)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for product in report_data.top_products %}
+                    <tr>
+                        <td>{{ forloop.counter }}</td>
+                        <td>{{ product.name }}</td>
+                        <td>{{ product.quantity }}</td>
+                        <td>{{ product.total|floatformat:0 }}</td>
+                    </tr>
+                    {% empty %}
+                    <tr>
+                        <td colspan="4" style="text-align:center; color:#a0aec0;">No products sold</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+
+        <!-- Invoice Summary -->
+        <div class="section">
+            <h3>📄 Invoice Summary</h3>
+            <div class="summary">
+                <div class="summary-box">
+                    <div class="number">{{ report_data.invoices.total_invoices }}</div>
+                    <div class="label">Total Invoices</div>
+                </div>
+                <div class="summary-box">
+                    <div class="number">UGX {{ report_data.invoices.total_invoice_value|floatformat:0 }}</div>
+                    <div class="label">Total Value</div>
+                </div>
+                <div class="summary-box">
+                    <div class="number">{{ report_data.invoices.paid_count }}</div>
+                    <div class="label">Paid</div>
+                </div>
+                <div class="summary-box">
+                    <div class="number">{{ report_data.invoices.pending_count }}</div>
+                    <div class="label">Pending</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Footer -->
+        <div class="footer">
+            <p>This is an automated report from M-9 Pharmacy Stock Management System.</p>
+            <p>© 2024 M-9 Pharmacy. All rights reserved.</p>
+            <p><a href="http://127.0.0.1:8000">Visit our dashboard</a></p>
+        </div>
+    </div>
+</body>
+</html>

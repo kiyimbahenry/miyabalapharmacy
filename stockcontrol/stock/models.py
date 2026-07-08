@@ -3,9 +3,7 @@ from django.contrib.auth.models import User
 from django.utils import timezone
 from decimal import Decimal
 
-# ============================================================
 # CATEGORY MODEL
-# ============================================================
 class Category(models.Model):
     """Medicine category model"""
     name = models.CharField(max_length=100, unique=True)
@@ -20,10 +18,7 @@ class Category(models.Model):
     def __str__(self):
         return self.name
 
-
-# ============================================================
 # SUPPLIER MODEL
-# ============================================================
 class Supplier(models.Model):
     """Supplier model"""
     name = models.CharField(max_length=200)
@@ -42,20 +37,11 @@ class Supplier(models.Model):
     def __str__(self):
         return self.name
 
-
-# ============================================================
-# DRUG (MEDICINE) MODEL - FIXED
-# ============================================================
+# DRUG (MEDICINE) MODEL
 class Drug(models.Model):
     """Medicine/Drug model"""
-    markup_percentage = models.DecimalField(
-        max_digits=5,
-        decimal_places=2,
-        default=50.00,
-        help_text="Default 50% (1.5x cost price)"
-)
     
-    # Dosage Form Choices - FIXED (removed duplicates)
+    # Dosage Form Choices
     DOSAGE_CHOICES = [
         ('tablet', 'Tablet'),
         ('capsules', 'Capsules'),
@@ -73,27 +59,27 @@ class Drug(models.Model):
         ('liquid', 'Liquid'),
         ('balm', 'Balm'),
     ]
-    
-    # Basic Information - FIXED (added name field)
+
+    # Basic Information
     name = models.CharField(max_length=200)
     generic_name = models.CharField(max_length=200, blank=True, null=True)
     brand = models.CharField(max_length=100, blank=True, null=True)
     description = models.TextField(blank=True, null=True)
-    
-    # Dosage Field - FIXED (removed duplicate)
+
+    # Dosage Field
     dosage = models.CharField(
-        max_length=50, 
-        choices=DOSAGE_CHOICES, 
-        default='tablet', 
-        blank=True, 
+        max_length=50,
+        choices=DOSAGE_CHOICES,
+        default='tablet',
+        blank=True,
         null=True,
         help_text="Select the dosage form"
     )
-    
+
     strength = models.CharField(
-        max_length=100, 
-        blank=True, 
-        null=True, 
+        max_length=100,
+        blank=True,
+        null=True,
         help_text="e.g., 500mg, 10mg/5ml"
     )
 
@@ -101,28 +87,27 @@ class Drug(models.Model):
     category = models.ForeignKey(Category, on_delete=models.SET_NULL, null=True, related_name='drugs')
     supplier = models.ForeignKey(Supplier, on_delete=models.SET_NULL, null=True, related_name='drugs')
 
-    # Pricing and Stock - FIXED (changed CharField to DecimalField)
+    # Pricing and Stock
     cost_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
     selling_price = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+
     stock_quantity = models.PositiveIntegerField(default=0)
-    reorder_level = models.PositiveIntegerField(default=10)  # FIXED: renamed from min_stock_level
+    reorder_level = models.PositiveIntegerField(default=10)
     max_stock_level = models.PositiveIntegerField(default=100, blank=True, null=True)
 
     # Additional Information
     expiry_date = models.DateField(blank=True, null=True)
-    batch_no = models.CharField(max_length=50, blank=True, null=True, help_text="Batch/Lot number")  # FIXED
-    barcode = models.CharField(max_length=100, blank=True, null=True, unique=True)  # FIXED: removed unique from batch_no
+    batch_no = models.CharField(max_length=50, blank=True, null=True, help_text="Batch/Lot number")
+    barcode = models.CharField(max_length=100, blank=True, null=True, unique=True)
     is_active = models.BooleanField(default=True)
-    
-    # NEW: Pack Size field
-    pack_size = models.CharField(
-        max_length=50,
-        blank=True,
-        null=True,
-        help_text="e.g., 10 tablets, 100ml"
+
+    # Pack Size
+    pack_size = models.PositiveIntegerField(
+        default=0,
+        help_text="Number of units per packet"
     )
-    
-    # NEW: Markup Percentage for auto-calculating selling price
+
+    # Markup Percentage
     markup_percentage = models.DecimalField(
         max_digits=5,
         decimal_places=2,
@@ -133,14 +118,14 @@ class Drug(models.Model):
     # Audit Fields
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
-    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='drugs_created')
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name="drugs_created")
 
     class Meta:
-        ordering = ['name']
+        ordering = ["name"]
         indexes = [
-            models.Index(fields=['name']),
-            models.Index(fields=['batch_no']),  # FIXED: removed dot
-            models.Index(fields=['expiry_date']),
+            models.Index(fields=["name"]),
+            models.Index(fields=["batch_no"]),
+            models.Index(fields=["expiry_date"]),
         ]
 
     def __str__(self):
@@ -164,25 +149,18 @@ class Drug(models.Model):
         if self.cost_price > 0:
             return ((self.selling_price - self.cost_price) / self.cost_price) * 100
         return 0
-    
-    @property
-    def calculated_selling_price(self):
-        """Auto-calculate selling price based on markup"""
-        if self.cost_price > 0:
-            return self.cost_price * (1 + self.markup_percentage / 100)
-        return 0
-    
+
+    # ========== FIXED: Commented out auto-calculation ==========
     def save(self, *args, **kwargs):
-        """Auto-calculate selling price before saving"""
-        if self.cost_price:
-            self.selling_price = self.cost_price * (1 + self.markup_percentage / 100)
-            self.selling_price = round(self.selling_price, 2)
+        """Save the drug"""
+        # Commented out to fix the multiplication error
+        # if self.cost_price:
+        #     self.selling_price = self.cost_price * (1 + self.markup_percentage / 100)
+        #     self.selling_price = round(self.selling_price, 2)
         super().save(*args, **kwargs)
 
 
-# ============================================================
 # INVOICE MODEL
-# ============================================================
 class Invoice(models.Model):
     """Invoice model for purchases from suppliers"""
     STATUS_CHOICES = [
@@ -197,11 +175,10 @@ class Invoice(models.Model):
     invoice_date = models.DateField()
     due_date = models.DateField(blank=True, null=True)
     total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
-    paid_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)  # FIXED: removed quotes
+    paid_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     notes = models.TextField(blank=True, null=True)
 
-    # Audit Fields
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='invoices_created')
@@ -214,18 +191,14 @@ class Invoice(models.Model):
 
     @property
     def balance_due(self):
-        """Calculate remaining balance"""
         return self.total_amount - self.paid_amount
 
     @property
     def is_paid(self):
-        """Check if invoice is fully paid"""
         return self.balance_due <= 0
 
 
-# ============================================================
 # INVOICE ITEM MODEL
-# ============================================================
 class InvoiceItem(models.Model):
     """Invoice line items"""
     invoice = models.ForeignKey(Invoice, on_delete=models.CASCADE, related_name='items')
@@ -236,21 +209,15 @@ class InvoiceItem(models.Model):
 
     created_at = models.DateTimeField(auto_now_add=True)
 
-    class Meta:
-        ordering = ['id']
-
     def __str__(self):
         return f"{self.drug.name} x {self.quantity} - {self.invoice.invoice_number}"
 
     def save(self, *args, **kwargs):
-        """Calculate total before saving"""
         self.total = Decimal(self.quantity) * self.unit_price
         super().save(*args, **kwargs)
 
 
-# ============================================================
 # SALE MODEL
-# ============================================================
 class Sale(models.Model):
     """Sales model for customer purchases"""
     SALE_STATUS = [
@@ -260,18 +227,17 @@ class Sale(models.Model):
     ]
 
     sale_number = models.CharField(max_length=50, unique=True)
-    sale_date = models.DateTimeField(auto_now_add=True)  # FIXED: changed to DateTimeField
+    sale_date = models.DateTimeField(auto_now_add=True)
     customer_name = models.CharField(max_length=200, blank=True, null=True)
     customer_phone = models.CharField(max_length=20, blank=True, null=True)
     total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     discount_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
-    tax_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)  # FIXED: removed quotes
-    net_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)  # FIXED: removed quotes
+    tax_amount = models.DecimalField(max_digits=10, decimal_places=2, default=0)
+    net_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     paid_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     status = models.CharField(max_length=20, choices=SALE_STATUS, default='pending')
     notes = models.TextField(blank=True, null=True)
 
-    # Audit Fields
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='sales_created')
@@ -287,9 +253,7 @@ class Sale(models.Model):
         return self.net_amount - self.paid_amount
 
 
-# ============================================================
 # SALE ITEM MODEL
-# ============================================================
 class SaleItem(models.Model):
     """Sale line items"""
     sale = models.ForeignKey(Sale, on_delete=models.CASCADE, related_name='items')
@@ -307,14 +271,11 @@ class SaleItem(models.Model):
         return f"{self.drug.name} x {self.quantity} - {self.sale.sale_number}"
 
     def save(self, *args, **kwargs):
-        """Calculate total before saving"""
         self.total = Decimal(self.quantity) * self.unit_price
-        super().save(*args, **kwargs)  # FIXED: removed underscore
+        super().save(*args, **kwargs)
 
 
-# ============================================================
 # STOCK MOVEMENT MODEL
-# ============================================================
 class StockMovement(models.Model):
     """Track stock movements (in/out)"""
     MOVEMENT_TYPES = [
@@ -327,11 +288,11 @@ class StockMovement(models.Model):
     ]
 
     drug = models.ForeignKey(Drug, on_delete=models.CASCADE, related_name='stock_movements')
-    quantity = models.IntegerField()  # Positive for inbound, negative for outbound
+    quantity = models.IntegerField()
     movement_type = models.CharField(max_length=20, choices=MOVEMENT_TYPES)
     reference = models.CharField(max_length=200, blank=True, null=True)
     notes = models.TextField(blank=True, null=True)
-    date = models.DateTimeField(auto_now_add=True)  # FIXED: changed to DateTimeField
+    date = models.DateTimeField(auto_now_add=True)
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='stock_movements')
 
     class Meta:
@@ -339,3 +300,175 @@ class StockMovement(models.Model):
 
     def __str__(self):
         return f"{self.drug.name} x {self.quantity} - {self.movement_type}"
+
+# RECEIPT MODEL
+
+class Receipt(models.Model):
+    """Receipt model for tracking sales"""
+    receipt_number = models.CharField(max_length=50, unique=True)
+    sale = models.ForeignKey(Sale, on_delete=models.CASCADE, related_name='receipts', null=True, blank=True)
+    customer_name = models.CharField(max_length=200, blank=True, null=True)
+    customer_phone = models.CharField(max_length=20, blank=True, null=True)
+    total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    amount_paid = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    change_due = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    payment_method = models.CharField(max_length=50, default='cash')
+    items = models.JSONField(default=list)  # Store items as JSON
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='receipts_created')
+    is_printed = models.BooleanField(default=False)
+    printed_at = models.DateTimeField(null=True, blank=True)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['receipt_number']),
+            models.Index(fields=['created_at']),
+        ]
+
+    def __str__(self):
+        return f"Receipt #{self.receipt_number} - {self.total_amount} UGX"
+
+    def save(self, *args, **kwargs):
+        if not self.receipt_number:
+            # Generate receipt number: REC-YYYYMMDD-XXXX
+            today = timezone.now().strftime('%Y%m%d')
+            count = Receipt.objects.filter(created_at__date=timezone.now().date()).count() + 1
+            self.receipt_number = f"REC-{today}-{str(count).zfill(4)}"
+        super().save(*args, **kwargs)
+
+# REPORT MODEL
+
+class Report(models.Model):
+    """Report model for tracking system activities"""
+    REPORT_TYPES = [
+        ('daily', 'Daily Report'),
+        ('weekly', 'Weekly Report'),
+        ('monthly', 'Monthly Report'),
+        ('annual', 'Annual Report'),
+    ]
+    
+    report_type = models.CharField(max_length=20, choices=REPORT_TYPES)
+    report_date = models.DateField(auto_now_add=True)
+    data = models.JSONField(default=dict)
+    generated_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    sent_to_email = models.BooleanField(default=False)
+    email_sent_at = models.DateTimeField(null=True, blank=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.get_report_type_display()} - {self.report_date}"
+
+# ============================================================
+# CHRONIC PATIENT MODELS
+# ============================================================
+
+class ChronicPatient(models.Model):
+    """Model for chronic disease patients"""
+    
+    DISEASE_CHOICES = [
+        ('HIV', 'HIV/AIDS'),
+        ('HYPERTENSION', 'Hypertension'),
+        ('DM', 'Diabetes Mellitus'),
+        ('NEURO', 'Neuro Care'),
+        ('ULCERS', 'Ulcers'),
+        ('ASTHMA', 'Asthma'),
+        ('CANCER', 'Cancer'),
+        ('KIDNEY', 'Kidney Disease'),
+        ('HEART', 'Heart Disease'),
+        ('OTHER', 'Other'),
+    ]
+    
+    patient_id = models.CharField(max_length=50, unique=True, blank=True)
+    first_name = models.CharField(max_length=100)
+    last_name = models.CharField(max_length=100)
+    date_of_birth = models.DateField(null=True, blank=True)
+    gender = models.CharField(max_length=10, choices=[('M', 'Male'), ('F', 'Female'), ('O', 'Other')], blank=True)
+    phone = models.CharField(max_length=20, blank=True)
+    alternate_phone = models.CharField(max_length=20, blank=True)
+    email = models.EmailField(blank=True, null=True)
+    location = models.TextField(blank=True)
+    village = models.CharField(max_length=100, blank=True)
+    district = models.CharField(max_length=100, blank=True)
+    
+    # Disease Information
+    disease_type = models.CharField(max_length=20, choices=DISEASE_CHOICES)
+    other_disease = models.CharField(max_length=100, blank=True, help_text="Specify if disease is 'Other'")
+    diagnosis_date = models.DateField(null=True, blank=True)
+    
+    # Treatment Information
+    medications = models.TextField(blank=True, help_text="List of medications the patient is taking")
+    dosage = models.TextField(blank=True, help_text="Dosage information for each medication")
+    next_appointment = models.DateField(null=True, blank=True)
+    
+    # Status
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='patients_created')
+    
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['patient_id']),
+            models.Index(fields=['first_name', 'last_name']),
+            models.Index(fields=['disease_type']),
+        ]
+    
+    def __str__(self):
+        return f"{self.patient_id} - {self.first_name} {self.last_name} ({self.get_disease_type_display()})"
+    
+    def save(self, *args, **kwargs):
+        if not self.patient_id:
+            # Generate patient ID: CHR-YYYY-XXXX
+            year = timezone.now().year
+            count = ChronicPatient.objects.filter(created_at__year=year).count() + 1
+            self.patient_id = f"CHR-{year}-{str(count).zfill(4)}"
+        super().save(*args, **kwargs)
+
+
+class PatientMedication(models.Model):
+    """Model for patient medications"""
+    patient = models.ForeignKey(ChronicPatient, on_delete=models.CASCADE, related_name='medication_list')
+    drug = models.ForeignKey(Drug, on_delete=models.SET_NULL, null=True, blank=True, related_name='patient_medications')
+    medication_name = models.CharField(max_length=200)
+    dosage = models.CharField(max_length=100, help_text="e.g., 500mg twice daily")
+    frequency = models.CharField(max_length=100, help_text="e.g., Morning, Evening, Daily")
+    duration = models.CharField(max_length=100, blank=True, help_text="e.g., 3 months, Ongoing")
+    start_date = models.DateField(auto_now_add=True)
+    end_date = models.DateField(null=True, blank=True)
+    notes = models.TextField(blank=True)
+    is_active = models.BooleanField(default=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    
+    class Meta:
+        ordering = ['-created_at']
+    
+    def __str__(self):
+        return f"{self.patient.first_name} {self.patient.last_name} - {self.medication_name}"
+
+
+class PatientVisit(models.Model):
+    """Model for patient visit history"""
+    patient = models.ForeignKey(ChronicPatient, on_delete=models.CASCADE, related_name='visits')
+    visit_date = models.DateTimeField(auto_now_add=True)
+    visit_type = models.CharField(max_length=50, choices=[
+        ('regular', 'Regular Checkup'),
+        ('emergency', 'Emergency'),
+        ('followup', 'Follow-up'),
+        ('medication', 'Medication Pickup'),
+    ], default='regular')
+    complaints = models.TextField(blank=True)
+    vitals = models.JSONField(default=dict, blank=True, help_text="Blood Pressure, Heart Rate, Temperature, etc.")
+    notes = models.TextField(blank=True)
+    next_appointment = models.DateField(null=True, blank=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='patient_visits')
+    
+    class Meta:
+        ordering = ['-visit_date']
+    
+    def __str__(self):
+        return f"{self.patient.first_name} {self.patient.last_name} - {self.visit_date.strftime('%Y-%m-%d')}"

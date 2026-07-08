@@ -1,0 +1,386 @@
+{% extends 'stock/base.html' %}
+{% load static %}
+
+{% block title %}Reports Dashboard{% endblock %}
+
+{% block extra_css %}
+<style>
+    .report-stat {
+        background: white;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        text-align: center;
+        margin-bottom: 15px;
+        transition: transform 0.3s;
+    }
+    .report-stat:hover {
+        transform: translateY(-5px);
+    }
+    .report-stat .number {
+        font-size: 28px;
+        font-weight: bold;
+        color: #2d3748;
+    }
+    .report-stat .label {
+        font-size: 12px;
+        color: #718096;
+        text-transform: uppercase;
+        margin-top: 5px;
+    }
+    .report-stat .icon {
+        font-size: 30px;
+        margin-bottom: 10px;
+    }
+    .report-stat.daily .icon { color: #4299e1; }
+    .report-stat.weekly .icon { color: #48bb78; }
+    .report-stat.monthly .icon { color: #ed8936; }
+    .report-stat.annual .icon { color: #9f7aea; }
+    
+    .report-card {
+        background: white;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        margin-bottom: 20px;
+    }
+    .report-card h4 {
+        color: #2d3748;
+        margin-bottom: 15px;
+        border-bottom: 2px solid #e2e8f0;
+        padding-bottom: 10px;
+    }
+    .report-card h4 i {
+        margin-right: 10px;
+        color: #667eea;
+    }
+    .btn-email {
+        background: #48bb78;
+        color: white;
+        border: none;
+        padding: 10px 20px;
+        border-radius: 8px;
+        cursor: pointer;
+        font-weight: 600;
+        transition: 0.3s;
+        width: 100%;
+    }
+    .btn-email:hover {
+        background: #38a169;
+        color: white;
+    }
+    .btn-email:disabled {
+        opacity: 0.5;
+        cursor: not-allowed;
+    }
+    .email-status {
+        margin-top: 10px;
+        padding: 10px;
+        border-radius: 8px;
+        display: none;
+    }
+    .email-status.success {
+        display: block;
+        background: #c6f6d5;
+        color: #22543d;
+        border: 1px solid #48bb78;
+    }
+    .email-status.error {
+        display: block;
+        background: #fed7d7;
+        color: #742a2a;
+        border: 1px solid #fc8181;
+    }
+    .email-status.info {
+        display: block;
+        background: #bee3f8;
+        color: #2a4365;
+        border: 1px solid #4299e1;
+    }
+    .badge-status {
+        display: inline-block;
+        padding: 4px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+    .badge-status.paid { background: #c6f6d5; color: #22543d; }
+    .badge-status.pending { background: #feebc8; color: #7b341e; }
+    .badge-status.canceled { background: #fed7d7; color: #742a2a; }
+    .badge-status.draft { background: #e2e8f0; color: #4a5568; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h4><i class="fas fa-chart-bar"></i> Reports Dashboard</h4>
+        <hr>
+    </div>
+</div>
+
+<!-- Report Stats -->
+<div class="row">
+    <div class="col-md-3">
+        <div class="report-stat daily">
+            <div class="icon"><i class="fas fa-calendar-day"></i></div>
+            <div class="number">UGX {{ daily_total|floatformat:0 }}</div>
+            <div class="label">Daily Sales ({{ daily_count }} transactions)</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="report-stat weekly">
+            <div class="icon"><i class="fas fa-calendar-week"></i></div>
+            <div class="number">UGX {{ weekly_total|floatformat:0 }}</div>
+            <div class="label">Weekly Sales ({{ weekly_count }} transactions)</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="report-stat monthly">
+            <div class="icon"><i class="fas fa-calendar-alt"></i></div>
+            <div class="number">UGX {{ monthly_total|floatformat:0 }}</div>
+            <div class="label">Monthly Sales ({{ monthly_count }} transactions)</div>
+        </div>
+    </div>
+    <div class="col-md-3">
+        <div class="report-stat annual">
+            <div class="icon"><i class="fas fa-calendar"></i></div>
+            <div class="number">UGX {{ annual_total|floatformat:0 }}</div>
+            <div class="label">Annual Sales ({{ annual_count }} transactions)</div>
+        </div>
+    </div>
+</div>
+
+<!-- Email Report Button -->
+<div class="row mt-3">
+    <div class="col-md-12">
+        <div class="report-card">
+            <h4><i class="fas fa-envelope"></i> Email Reports</h4>
+            <div class="row">
+                <div class="col-md-3">
+                    <button class="btn-email" onclick="sendReport('daily')">
+                        <i class="fas fa-calendar-day"></i> Send Daily Report
+                    </button>
+                </div>
+                <div class="col-md-3">
+                    <button class="btn-email" onclick="sendReport('weekly')">
+                        <i class="fas fa-calendar-week"></i> Send Weekly Report
+                    </button>
+                </div>
+                <div class="col-md-3">
+                    <button class="btn-email" onclick="sendReport('monthly')">
+                        <i class="fas fa-calendar-alt"></i> Send Monthly Report
+                    </button>
+                </div>
+                <div class="col-md-3">
+                    <button class="btn-email" onclick="sendReport('annual')">
+                        <i class="fas fa-calendar"></i> Send Annual Report
+                    </button>
+                </div>
+            </div>
+            <div id="emailStatus" class="email-status mt-3"></div>
+            <div class="mt-2 text-muted">
+                <small><i class="fas fa-info-circle"></i> Reports will be sent to: <strong>kiyimbahenry314@gmail.com</strong></small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Payment Breakdown -->
+<div class="row mt-3">
+    <div class="col-md-6">
+        <div class="report-card">
+            <h4><i class="fas fa-credit-card"></i> Today's Payment Methods</h4>
+            {% if payment_breakdown %}
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>Method</th>
+                        <th>Amount (UGX)</th>
+                        <th>Transactions</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for method in payment_breakdown %}
+                    <tr>
+                        <td>{{ method.payment_method|title|default:'Unknown' }}</td>
+                        <td>{{ method.total|floatformat:0 }}</td>
+                        <td>{{ method.count }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="text-muted">No payment data available for today.</p>
+            {% endif %}
+        </div>
+    </div>
+    <div class="col-md-6">
+        <div class="report-card">
+            <h4><i class="fas fa-crown"></i> Top Selling Products</h4>
+            {% if top_selling %}
+            <table class="table">
+                <thead>
+                    <tr>
+                        <th>#</th>
+                        <th>Product</th>
+                        <th>Quantity</th>
+                        <th>Total (UGX)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for item in top_selling %}
+                    <tr>
+                        <td>{{ forloop.counter }}</td>
+                        <td>{{ item.0 }}</td>
+                        <td>{{ item.1.quantity }}</td>
+                        <td>{{ item.1.total|floatformat:0 }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+            {% else %}
+            <p class="text-muted">No sales data available.</p>
+            {% endif %}
+        </div>
+    </div>
+</div>
+
+<!-- Recent Receipts -->
+<div class="row mt-3">
+    <div class="col-md-12">
+        <div class="report-card">
+            <h4><i class="fas fa-receipt"></i> Recent Transactions</h4>
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Receipt #</th>
+                            <th>Customer</th>
+                            <th>Amount (UGX)</th>
+                            <th>Payment</th>
+                            <th>Cashier</th>
+                            <th>Date/Time</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for receipt in recent_receipts %}
+                        <tr>
+                            <td>{{ receipt.receipt_number }}</td>
+                            <td>{{ receipt.customer_name|default:'Walk-in' }}</td>
+                            <td>{{ receipt.total_amount|floatformat:0 }}</td>
+                            <td>{{ receipt.payment_method|title }}</td>
+                            <td>{{ receipt.created_by.username }}</td>
+                            <td>{{ receipt.created_at|date:'d/m/Y H:i' }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="6" class="text-center text-muted">No recent transactions.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Recent Invoices -->
+<div class="row mt-3">
+    <div class="col-md-12">
+        <div class="report-card">
+            <h4><i class="fas fa-file-invoice"></i> Recent Invoices</h4>
+            <div class="table-responsive">
+                <table class="table">
+                    <thead>
+                        <tr>
+                            <th>Invoice #</th>
+                            <th>Supplier</th>
+                            <th>Amount (UGX)</th>
+                            <th>Status</th>
+                            <th>Date</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for invoice in recent_invoices %}
+                        <tr>
+                            <td>{{ invoice.invoice_number }}</td>
+                            <td>{{ invoice.supplier.name }}</td>
+                            <td>{{ invoice.total_amount|floatformat:0 }}</td>
+                            <td>
+                                <span class="badge-status {{ invoice.status }}">
+                                    {{ invoice.status|title }}
+                                </span>
+                            </td>
+                            <td>{{ invoice.created_at|date:'d/m/Y' }}</td>
+                        </tr>
+                        {% empty %}
+                        <tr>
+                            <td colspan="5" class="text-center text-muted">No recent invoices.</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+function sendReport(type) {
+    const buttons = document.querySelectorAll('.btn-email');
+    const statusDiv = document.getElementById('emailStatus');
+    
+    buttons.forEach(btn => {
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+    });
+    
+    statusDiv.className = 'email-status';
+    statusDiv.style.display = 'none';
+    
+    fetch('{% url "stock:generate_report_api" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': '{{ csrf_token }}'
+        },
+        body: JSON.stringify({
+            report_type: type,
+            email: 'kiyimbahenry314@gmail.com'
+        })
+    })
+    .then(response => response.json())
+    .then(data => {
+        buttons.forEach(btn => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-envelope"></i> Send ' + type.charAt(0).toUpperCase() + type.slice(1) + ' Report';
+        });
+        
+        if (data.success) {
+            statusDiv.className = 'email-status success';
+            statusDiv.innerHTML = '<i class="fas fa-check-circle"></i> ' + data.message;
+            statusDiv.style.display = 'block';
+        } else {
+            statusDiv.className = 'email-status error';
+            statusDiv.innerHTML = '<i class="fas fa-exclamation-circle"></i> ' + data.message;
+            statusDiv.style.display = 'block';
+        }
+        
+        setTimeout(() => {
+            statusDiv.style.display = 'none';
+        }, 8000);
+    })
+    .catch(error => {
+        buttons.forEach(btn => {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fas fa-envelope"></i> Send ' + type.charAt(0).toUpperCase() + type.slice(1) + ' Report';
+        });
+        
+        statusDiv.className = 'email-status error';
+        statusDiv.innerHTML = '<i class="fas fa-exclamation-circle"></i> Error sending report: ' + error;
+        statusDiv.style.display = 'block';
+    });
+}
+</script>
+{% endblock %}

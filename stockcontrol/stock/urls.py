@@ -4,42 +4,85 @@ from . import views
 app_name = 'stock'
 
 urlpatterns = [
-    # Authentication
+    # ============================================================
+    # AUTHENTICATION
+    # ============================================================
     path('login/', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),
 
-    # Dashboard
+    # ============================================================
+    # DASHBOARD
+    # ============================================================
     path('', views.dashboard, name='dashboard'),
+    path('dashboard/', views.dashboard, name='dashboard'),
 
-    # Suppliers
+    # ============================================================
+    # DRUG (MEDICINE) URLs
+    # ============================================================
+    path('drugs/', views.drug_list, name='drug_list'),
+    path('drugs/create/', views.drug_create, name='drug_create'),
+    path('drugs/<int:drug_id>/edit/', views.drug_edit, name='drug_edit'),
+    path('drugs/<int:drug_id>/delete/', views.drug_delete, name='drug_delete'),
+
+    # ============================================================
+    # CHRONIC PATIENT URLs - ADDED
+    # ============================================================
+    path('patients/', views.patient_list, name='patient_list'),
+    path('patients/create/', views.patient_create, name='patient_create'),
+    path('patients/<int:patient_id>/', views.patient_detail, name='patient_detail'),
+    path('patients/<int:patient_id>/edit/', views.patient_edit, name='patient_edit'),
+    path('patients/<int:patient_id>/delete/', views.patient_delete, name='patient_delete'),
+    path('patients/<int:patient_id>/add-medication/', views.patient_add_medication, name='patient_add_medication'),
+    path('patients/medication/<int:medication_id>/remove/', views.patient_remove_medication, name='patient_remove_medication'),
+
+    # ============================================================
+    # CATEGORY URLs
+    # ============================================================
+    path('categories/', views.category_list, name='category_list'),
+
+    # ============================================================
+    # SUPPLIER URLs
+    # ============================================================
     path('suppliers/', views.supplier_list, name='supplier_list'),
     path('suppliers/create/', views.supplier_create, name='supplier_create'),
-    path('suppliers/edit/<int:supplier_id>/', views.supplier_edit, name='supplier_edit'),
-    path('suppliers/delete/<int:supplier_id>/', views.supplier_delete, name='supplier_delete'),
+    path('suppliers/<int:supplier_id>/edit/', views.supplier_edit, name='supplier_edit'),
+    path('suppliers/<int:supplier_id>/delete/', views.supplier_delete, name='supplier_delete'),
 
-    # Invoices
+    # ============================================================
+    # INVOICE URLs
+    # ============================================================
     path('invoices/', views.invoice_list, name='invoice_list'),
     path('invoices/create/', views.invoice_create, name='invoice_create'),
     path('invoices/<int:invoice_id>/', views.invoice_detail, name='invoice_detail'),
-    path('invoices/delete/<int:invoice_id>/', views.invoice_delete, name='invoice_delete'),
+    path('invoices/<int:invoice_id>/delete/', views.invoice_delete, name='invoice_delete'),
 
-    # Drugs (Medicines)
-    path('drugs/', views.drug_list, name='drug_list'),
-    path('drugs/create/', views.drug_create, name='drug_create'),
-    path('drugs/edit/<int:drug_id>/', views.drug_edit, name='drug_edit'),
-    path('drugs/delete/<int:drug_id>/', views.drug_delete, name='drug_delete'),
+    # ============================================================
+    # RECEIPT/SALES URLs
+    # ============================================================
+    path('receipts/', views.receipt_list, name='receipt_list'),
+    path('receipts/<int:receipt_id>/', views.receipt_detail, name='receipt_detail'),
+    path('receipts/<int:receipt_id>/print/', views.print_receipt, name='print_receipt'),
+    path('sale/create/', views.create_sale_receipt, name='create_sale'),
 
-    # Categories
-    path('categories/', views.category_list, name='category_list'),
+    # ============================================================
+    # REPORT URLs - ADDED
+    # ============================================================
+    path('reports/', views.reports_dashboard, name='reports_dashboard'),
+    path('api/generate-report/', views.generate_report_api, name='generate_report_api'),
 
-    # ===== API ENDPOINTS (NEW) =====
-    path('api/drugs/', views.get_drugs_api, name='drugs_api'),
-    path('api/sale/', views.complete_sale, name='complete_sale'),
-    path('api/calculate-selling-price/', views.calculate_selling_price, name='calculate_selling_price'),
+    # ============================================================
+    # API URLs
+    # ============================================================
+    path('api/drugs/', views.get_drugs_api, name='get_drugs_api'),
+    path('api/complete-sale/', views.complete_sale, name='complete_sale'),
+    path('api/calculate-price/', views.calculate_selling_price, name='calculate_selling_price'),
+    path('api/daily-sales/', views.get_daily_sales_api, name='daily_sales_api'),
 
-    # Users (Admin only)
+    # ============================================================
+    # USER MANAGEMENT URLs (Admin only)
+    # ============================================================
     path('users/', views.user_list, name='user_list'),
     path('users/create/', views.user_create, name='user_create'),
-    path('users/edit/<int:user_id>/', views.user_edit, name='user_edit'),
-    path('users/delete/<int:user_id>/', views.user_delete, name='user_delete'),
+    path('users/<int:user_id>/edit/', views.user_edit, name='user_edit'),
+    path('users/<int:user_id>/delete/', views.user_delete, name='user_delete'),
 ]

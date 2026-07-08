@@ -22,7 +22,7 @@
         max-width: 1400px;
         margin: 0 auto;
     }
-    
+
     /* ===== HEADER - KEEP EXACTLY AS IS ===== */
     .header {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
@@ -39,7 +39,7 @@
         opacity: 0.9;
         font-size: 16px;
     }
-    
+
     /* ===== NAVIGATION - KEEP EXACTLY AS IS ===== */
     .nav {
         background: white;
@@ -67,7 +67,7 @@
         background: #667eea;
         color: white;
     }
-    
+
     /* ===== STATISTICS - KEEP EXACTLY AS IS ===== */
     .stats {
         display: grid;
@@ -97,7 +97,7 @@
     .stat-card .number.warning { color: #ed8936; }
     .stat-card .number.danger { color: #fc8181; }
     .stat-card .number.info { color: #4299e1; }
-    
+
     /* ===== RECENT INVENTORY - KEEP EXACTLY AS IS ===== */
     .content {
         background: white;
@@ -139,19 +139,17 @@
     .badge-success { background: #c6f6d5; color: #22543d; }
     .badge-warning { background: #feebc8; color: #7b341e; }
     .badge-danger { background: #fed7d7; color: #742a2a; }
-    
+
     /* ============================================================
-       NEW: DASHBOARD FEATURES (ADDED BELOW RECENT INVENTORY)
+       DASHBOARD FEATURES
        ============================================================ */
-    
-    /* Left Sidebar + Content Wrapper */
+
     .dashboard-features {
         display: flex;
         gap: 20px;
         margin-top: 20px;
     }
-    
-    /* Left Sidebar Navigation */
+
     .sidebar-nav {
         width: 200px;
         background: white;
@@ -187,14 +185,20 @@
         color: #667eea;
         border-left-color: #667eea;
     }
-    
-    /* Main Content Area */
+    .sidebar-nav .nav-item a {
+        color: inherit;
+        text-decoration: none;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        width: 100%;
+    }
+
     .features-content {
         flex: 1;
         min-width: 0;
     }
-    
-    /* Drug List Table */
+
     .drug-list-panel {
         background: white;
         padding: 20px;
@@ -214,8 +218,7 @@
     .drug-list-panel h3 i {
         color: #ed8936;
     }
-    
-    /* Sale Panel */
+
     .sale-panel {
         background: white;
         padding: 20px;
@@ -235,8 +238,7 @@
     .sale-panel h3 i {
         color: #4299e1;
     }
-    
-    /* Expiry Badges */
+
     .expiry-soon {
         background: #fed7d7;
         color: #742a2a;
@@ -255,8 +257,7 @@
         font-weight: 600;
         display: inline-block;
     }
-    
-    /* Clickable Quantity */
+
     .qty-click {
         cursor: pointer;
         color: #4299e1;
@@ -276,8 +277,7 @@
         margin-left: 5px;
         font-size: 11px;
     }
-    
-    /* Sale Panel Form */
+
     .sale-item-detail {
         background: #f7fafc;
         padding: 12px;
@@ -324,7 +324,7 @@
         border-color: #667eea;
         outline: none;
     }
-    
+
     .payment-options {
         display: flex;
         gap: 8px;
@@ -354,7 +354,7 @@
     .payment-options button i {
         margin-right: 4px;
     }
-    
+
     .mobile-money-details {
         background: #f7fafc;
         padding: 12px;
@@ -370,7 +370,7 @@
     .mobile-money-details .merchant strong {
         color: #667eea;
     }
-    
+
     .total-display {
         font-size: 20px;
         font-weight: 700;
@@ -383,7 +383,7 @@
     .total-display span {
         color: #667eea;
     }
-    
+
     .btn-success {
         background: #48bb78;
         color: white;
@@ -403,7 +403,7 @@
         opacity: 0.5;
         cursor: not-allowed;
     }
-    
+
     .no-selection {
         text-align: center;
         color: #a0aec0;
@@ -425,7 +425,7 @@
         font-size: 30px;
         margin-bottom: 10px;
     }
-    
+
     /* Toast */
     .toast {
         position: fixed;
@@ -450,7 +450,51 @@
         from { transform: translateY(20px); opacity: 0; }
         to { transform: translateY(0); opacity: 1; }
     }
-    
+
+    /* Receipt Panel */
+    .receipt-panel {
+        background: white;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        overflow-x: auto;
+        margin-bottom: 20px;
+    }
+    .receipt-panel h3 {
+        color: #2d3748;
+        margin-bottom: 15px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 16px;
+    }
+    .receipt-panel h3 i {
+        color: #4299e1;
+    }
+    .receipt-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 15px;
+        margin-bottom: 20px;
+    }
+    .receipt-stat {
+        background: #f7fafc;
+        padding: 15px;
+        border-radius: 8px;
+        text-align: center;
+    }
+    .receipt-stat .number {
+        font-size: 24px;
+        font-weight: bold;
+        color: #2d3748;
+    }
+    .receipt-stat .label {
+        font-size: 12px;
+        color: #718096;
+        text-transform: uppercase;
+        margin-top: 4px;
+    }
+
     /* Responsive */
     @media (max-width: 1100px) {
         .dashboard-features {
@@ -488,26 +532,29 @@
         .table th, .table td {
             padding: 6px 8px;
         }
+        .receipt-stats {
+            grid-template-columns: 1fr 1fr;
+        }
     }
     </style>
 </head>
 <body>
 <div class="container">
-    
+
     <!-- ===== HEADER - KEEP EXACTLY AS IS ===== -->
     <div class="header">
-        <h1>M-9 Pharmacy Stock Management</h1>
+        <h1>MIYABALA Pharmacy</h1>
         <p>Welcome to your pharmacy management dashboard</p>
     </div>
-    
+
     <!-- ===== NAVIGATION - KEEP EXACTLY AS IS ===== -->
     <div class="nav">
         <a href="{% url 'stock:dashboard' %}" class="active">Dashboard</a>
         <a href="{% url 'stock:drug_list' %}">Medicines</a>
-        <a href="{% url 'stock:category_list' %}">Categories</a>
+        <a href="{% url 'stock:patient_list' %}">Chronic Patients</a>
         <a href="/admin/">Admin Panel</a>
     </div>
-    
+
     <!-- ===== STATISTICS - KEEP EXACTLY AS IS ===== -->
     <div class="stats">
         <div class="stat-card">
@@ -527,7 +574,7 @@
             <div class="number info">{{ total_invoices|default:"0" }}</div>
         </div>
     </div>
-    
+
     <!-- ===== RECENT INVENTORY - KEEP EXACTLY AS IS ===== -->
     <div class="content">
         <h2>Recent Inventory</h2>
@@ -546,9 +593,9 @@
                 {% for medicine in recent_medicines %}
                 <tr>
                     <td>{{ medicine.name }}</td>
-                    <td>{{ medicine.category.name }}</td>
+                    <td>{{ medicine.category.name|default:'N/A' }}</td>
                     <td>{{ medicine.stock_quantity }}</td>
-                    <td>{{ medicine.selling_price }}</td>
+                    <td>UGX {{ medicine.selling_price|floatformat:0 }}</td>
                     <td>
                         {% if medicine.stock_quantity <= 10 %}
                         <span class="badge badge-danger">Low Stock</span>
@@ -566,13 +613,13 @@
         <p>No medicines available.</p>
         {% endif %}
     </div>
-    
+
     <!-- ============================================================
-         NEW: DASHBOARD FEATURES (ADDED BELOW RECENT INVENTORY)
+         DASHBOARD FEATURES
          ============================================================ -->
     <div class="dashboard-features">
-        
-        <!-- LEFT SIDEBAR -->
+
+        <!-- LEFT SIDEBAR - UPDATED WITH FULL NAVIGATION -->
         <div class="sidebar-nav">
             <div class="nav-item active" data-section="retail">
                 <i class="fas fa-store"></i> Retail Sale
@@ -580,26 +627,60 @@
             <div class="nav-item" data-section="wholesale">
                 <i class="fas fa-warehouse"></i> Whole Sale
             </div>
-            <div class="nav-item" data-section="reports">
-                <i class="fas fa-chart-bar"></i> Reports
-            </div>
-            <div class="nav-item" data-section="receipts">
+            <!-- Medicines Link -->
+            <a href="{% url 'stock:drug_list' %}" class="nav-item" style="text-decoration:none; color:inherit;">
+                <i class="fas fa-capsules"></i> Medicines
+            </a>
+            <!-- Chronic Patients Link -->
+            <a href="{% url 'stock:patient_list' %}" class="nav-item" style="text-decoration:none; color:inherit;">
+                <i class="fas fa-heartbeat"></i> Chronic Patients
+            </a>
+            <!-- Suppliers Link -->
+            <a href="{% url 'stock:supplier_list' %}" class="nav-item" style="text-decoration:none; color:inherit;">
+                <i class="fas fa-truck"></i> Suppliers
+            </a>
+            <!-- Invoices Link -->
+            <a href="{% url 'stock:invoice_list' %}" class="nav-item" style="text-decoration:none; color:inherit;">
+                <i class="fas fa-file-invoice"></i> Invoices
+            </a>
+            <!-- Receipts Link -->
+            <a href="{% url 'stock:receipt_list' %}" class="nav-item" style="text-decoration:none; color:inherit;">
                 <i class="fas fa-receipt"></i> Receipts
-            </div>
+            </a>
+            <!-- New Sale Link -->
+            <a href="{% url 'stock:create_sale' %}" class="nav-item" style="text-decoration:none; color:inherit;">
+                <i class="fas fa-cash-register"></i> New Sale
+            </a>
+            <!-- Reports Link -->
+            <a href="{% url 'stock:reports_dashboard' %}" class="nav-item" style="text-decoration:none; color:inherit;">
+                <i class="fas fa-chart-bar"></i> Reports
+            </a>
+            <!-- Users Link (Admin only) -->
+            {% if user.is_superuser %}
+            <a href="{% url 'stock:user_list' %}" class="nav-item" style="text-decoration:none; color:inherit;">
+                <i class="fas fa-users"></i> Users
+            </a>
+            {% endif %}
+            <!-- Divider -->
+            <div style="border-top: 1px solid #e2e8f0; margin: 5px 15px;"></div>
+            <!-- Logout -->
+            <a href="{% url 'stock:logout' %}" class="nav-item" style="text-decoration:none; color:inherit;">
+                <i class="fas fa-sign-out-alt"></i> Logout
+            </a>
         </div>
-        
+
         <!-- MAIN CONTENT -->
         <div class="features-content">
-            
-            <!-- Drug List -->
-            <div class="drug-list-panel">
+
+            <!-- Drug List Panel -->
+            <div id="drugListPanel" class="drug-list-panel">
                 <h3><i class="fas fa-clock"></i> Shortest Expiry Drugs (Top 10)</h3>
-                
+
                 <div id="loadingMessage" class="loading">
                     <i class="fas fa-spinner fa-spin"></i>
                     <p>Loading drugs...</p>
                 </div>
-                
+
                 <div id="drugTableContainer" style="display:none;">
                     <table class="table">
                         <thead>
@@ -617,11 +698,18 @@
                     </table>
                 </div>
             </div>
-            
+
+            <!-- Receipts Panel -->
+            <div id="receiptsPanel" class="receipt-panel" style="display:none;">
+                <h3><i class="fas fa-receipt"></i> Today's Receipts</h3>
+                <div id="receiptsContent">
+                    <div class="loading"><i class="fas fa-spinner fa-spin"></i> Loading receipts...</div>
+                </div>
+            </div>
+
             <!-- Sale Panel -->
             <div class="sale-panel" id="salePanel">
                 <h3><i class="fas fa-shopping-cart"></i> Sell Drug</h3>
-                
                 <div id="saleContent">
                     <div class="no-selection">
                         <i class="fas fa-hand-pointer"></i>
@@ -629,10 +717,10 @@
                     </div>
                 </div>
             </div>
-            
+
         </div>
     </div>
-    
+
 </div>
 
 <!-- Toast -->
@@ -658,17 +746,17 @@ async function fetchDrugs() {
             throw new Error(errorData.message || 'Failed to fetch drugs');
         }
         drugData = await response.json();
-        
+
         document.getElementById('loadingMessage').style.display = 'none';
         document.getElementById('drugTableContainer').style.display = 'block';
-        
+
         renderTable();
     } catch (error) {
         console.error('Error fetching drugs:', error);
         document.getElementById('loadingMessage').innerHTML = `
             <i class="fas fa-exclamation-circle" style="color:#fc8181; font-size:30px;"></i>
             <p style="margin-top:10px; color:#742a2a;">Error loading drugs: ${error.message}</p>
-            <button onclick="fetchDrugs()" style="margin-top:10px; padding:8px 16px; background:#667eea; color:white; border:none; border-radius:5px; cursor:pointer;">
+            <button onclick="fetchDrugs()" style="margin-top:10px; padding:8px 16px; background:#667eea;color:white; border:none; border-radius:5px; cursor:pointer;">
                 <i class="fas fa-redo"></i> Retry
             </button>
         `;
@@ -699,20 +787,19 @@ function renderTable() {
         const today = new Date();
         const daysUntilExpiry = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
         const expiryClass = daysUntilExpiry <= 30 ? 'expiry-soon' : 'expiry-normal';
-        const expiryLabel = daysUntilExpiry <= 30 ? '⚠️ Soon' : '✓ Valid';
 
         const row = document.createElement('tr');
         row.innerHTML = `
             <td><strong>${drug.generic || 'N/A'}</strong></td>
             <td>${drug.brand || 'N/A'}</td>
-            <td><span class="${expiryClass}">${drug.expiry} ${expiryLabel}</span></td>
+            <td><span class="${expiryClass}">${drug.expiry}</span></td>
             <td>${drug.batch_no || 'N/A'}</td>
             <td>
                 <span class="qty-click" onclick="openSale(${drug.id})" title="Click to sell">
                     ${drug.qty} <i class="fas fa-chevron-right"></i>
                 </span>
             </td>
-            <td class="price">UGX ${Number(drug.price).toLocaleString()}</td>
+            <td>UGX ${Number(drug.price).toLocaleString()}</td>
         `;
         tbody.appendChild(row);
     });
@@ -758,7 +845,7 @@ function renderSalePanel() {
 
         <div class="form-group">
             <label for="qtyInput">Quantity to sell</label>
-            <input type="number" id="qtyInput" min="1" max="${drug.qty}" value="${saleQuantity}" 
+            <input type="number" id="qtyInput" min="1" max="${drug.qty}" value="${saleQuantity}"
                    onchange="updateQuantity(this.value)" />
         </div>
 
@@ -785,7 +872,7 @@ function renderSalePanel() {
                     <label style="font-size:13px; font-weight:600; display:block; margin-bottom:4px; color:#2d3748;">
                         <i class="fas fa-user"></i> Customer Phone Number
                     </label>
-                    <input type="tel" id="customerPhone" placeholder="e.g. 0772 123 456" 
+                    <input type="tel" id="customerPhone" placeholder="e.g. 0772 123 456"
                            style="width:100%; padding:8px 12px; border:2px solid #e2e8f0; border-radius:8px; font-size:14px;" />
                     <div style="font-size:11px; color:#718096; margin-top:5px;">
                         <i class="fas fa-info-circle"></i> Customer will receive a prompt to confirm payment
@@ -843,7 +930,7 @@ async function completeSale() {
             return;
         }
         showToast(`📱 Payment prompt sent to ${phone}. Customer to enter PIN on their phone.`, 'info');
-        
+
         setTimeout(() => {
             showToast(`✅ Payment of UGX ${(selectedDrug.price * saleQuantity).toLocaleString()} received on MTN 729933`, 'success');
             updateStock();
@@ -861,11 +948,11 @@ async function updateStock() {
     if (!selectedDrug) return;
 
     try {
-        const response = await fetch('/api/sale/', {
+        const response = await fetch('/api/complete-sale/', {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'X-CSRFToken': document.querySelector('[name=csrf-token]')?.content || '',
+                'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || '',
             },
             body: JSON.stringify({
                 drug_id: selectedDrug.id,
@@ -875,12 +962,13 @@ async function updateStock() {
         });
 
         const data = await response.json();
-        
+
         if (data.success) {
             await fetchDrugs();
             selectedDrug = null;
             renderSalePanel();
-            
+            loadReceipts();
+
             if (data.stock_remaining === 0) {
                 showToast('⚠️ This drug is now out of stock!', 'error');
             }
@@ -891,6 +979,86 @@ async function updateStock() {
         console.error('Error updating stock:', error);
         showToast('❌ An error occurred. Please try again.', 'error');
     }
+}
+
+// ============================================================
+//  LOAD RECEIPTS
+// ============================================================
+function loadReceipts() {
+    const container = document.getElementById('receiptsContent');
+    if (!container) return;
+
+    container.innerHTML = '<div class="loading"><i class="fas fa-spinner fa-spin"></i> Loading receipts...</div>';
+
+    fetch('/api/daily-sales/')
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                let html = `
+                    <div class="receipt-stats">
+                        <div class="receipt-stat">
+                            <div class="number">UGX ${data.total_sales.toFixed(0)}</div>
+                            <div class="label">Today's Total</div>
+                        </div>
+                        <div class="receipt-stat">
+                            <div class="number">${data.total_transactions}</div>
+                            <div class="label">Transactions</div>
+                        </div>
+                        <div class="receipt-stat">
+                            <div class="number">${data.recent_receipts ? data.recent_receipts.length : 0}</div>
+                            <div class="label">Recent</div>
+                        </div>
+                    </div>
+                `;
+
+                if (data.recent_receipts && data.recent_receipts.length > 0) {
+                    html += `
+                        <table class="table">
+                            <thead>
+                                <tr>
+                                    <th>Receipt #</th>
+                                    <th>Customer</th>
+                                    <th>Amount (UGX)</th>
+                                    <th>Time</th>
+                                    <th>Action</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                    `;
+                    data.recent_receipts.forEach(receipt => {
+                        html += `
+                            <tr>
+                                <td><strong>${receipt.receipt_number}</strong></td>
+                                <td>${receipt.customer}</td>
+                                <td>UGX ${receipt.amount.toFixed(0)}</td>
+                                <td>${receipt.time}</td>
+                                <td>
+                                    <a href="/receipts/${receipt.id}/print/" target="_blank" style="padding:4px 8px; background:#4299e1; color:white; border-radius:4px; text-decoration:none; font-size:12px;">
+                                        <i class="fas fa-print"></i>
+                                    </a>
+                                    <a href="/receipts/${receipt.id}/" style="padding:4px 8px; background:#48bb78; color:white; border-radius:4px; text-decoration:none; font-size:12px;">
+                                        <i class="fas fa-eye"></i>
+                                    </a>
+                                </td>
+                            </tr>
+                        `;
+                    });
+                    html += `</tbody></table>`;
+                } else {
+                    html += `<p style="text-align:center; color:#a0aec0; padding:20px;">
+                        <i class="fas fa-receipt" style="font-size:30px; display:block; margin-bottom:10px;"></i>
+                        No receipts found for today.
+                    </p>`;
+                }
+                container.innerHTML = html;
+            } else {
+                container.innerHTML = `<p style="text-align:center; color:#fc8181; padding:20px;">Error loading receipts</p>`;
+            }
+        })
+        .catch(error => {
+            console.error('Error loading receipts:', error);
+            container.innerHTML = `<p style="text-align:center; color:#fc8181; padding:20px;">Error loading receipts</p>`;
+        });
 }
 
 // ============================================================
@@ -909,24 +1077,42 @@ function showToast(message, type = 'success') {
 // ============================================================
 //  SIDEBAR NAVIGATION
 // ============================================================
-document.querySelectorAll('.sidebar-nav .nav-item').forEach(item => {
-    item.addEventListener('click', function() {
-        document.querySelectorAll('.sidebar-nav .nav-item').forEach(i => i.classList.remove('active'));
-        this.classList.add('active');
-        
-        const section = this.dataset.section;
-        if (section !== 'retail') {
-            showToast(`📋 ${this.textContent.trim()} section - Coming soon!`, 'info');
-        }
+document.addEventListener('DOMContentLoaded', function() {
+    fetchDrugs();
+
+    document.querySelectorAll('.sidebar-nav .nav-item:not(a)').forEach(item => {
+        item.addEventListener('click', function() {
+            document.querySelectorAll('.sidebar-nav .nav-item').forEach(i => i.classList.remove('active'));
+            this.classList.add('active');
+
+            const section = this.dataset.section;
+            const drugPanel = document.getElementById('drugListPanel');
+            const receiptsPanel = document.getElementById('receiptsPanel');
+
+            if (section === 'receipts') {
+                drugPanel.style.display = 'none';
+                receiptsPanel.style.display = 'block';
+                loadReceipts();
+            } else if (section === 'retail') {
+                drugPanel.style.display = 'block';
+                receiptsPanel.style.display = 'none';
+                fetchDrugs();
+            } else {
+                drugPanel.style.display = 'block';
+                receiptsPanel.style.display = 'none';
+                showToast(`📋 ${this.textContent.trim()} section - Coming soon!`, 'info');
+            }
+        });
     });
 });
 
-// ============================================================
-//  INIT
-// ============================================================
-document.addEventListener('DOMContentLoaded', function() {
-    fetchDrugs();
-});
+// Auto-refresh receipts every 30 seconds
+setInterval(function() {
+    const receiptsPanel = document.getElementById('receiptsPanel');
+    if (receiptsPanel && receiptsPanel.style.display !== 'none') {
+        loadReceipts();
+    }
+}, 30000);
 </script>
 
 </body>

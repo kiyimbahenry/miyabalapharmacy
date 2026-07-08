@@ -1,13 +1,21 @@
 from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth.decorators import login_required, user_passes_test  # FIXED: correct import
+from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth import login, authenticate, logout
 from django.contrib import messages
 from django.http import JsonResponse
 from django.db.models import Sum, Count, Q
-from .models import Drug, Supplier, Invoice, Category, InvoiceItem, Sale, SaleItem
 from django.contrib.auth.models import User
+from django.utils import timezone
+from django.core.exceptions import ValidationError
+from django.core.mail import send_mail
+from django.conf import settings
+from django.template.loader import render_to_string
 import json
-from datetime import datetime
+import traceback
+from datetime import datetime, timedelta
+from decimal import Decimal
+
+from .models import Drug, Supplier, Invoice, Category, InvoiceItem, Sale, SaleItem, Receipt, Report, ChronicPatient, PatientMedication, PatientVisit
 
 
 # ============================================================
@@ -74,6 +82,7 @@ def dashboard(request):
         'recent_medicines': recent_medicines,
         'total_stock_value': total_stock_value,
     }
+
     return render(request, 'stock/dashboard.html', context)
 
 
@@ -81,9 +90,11 @@ def dashboard(request):
 # API VIEWS FOR DASHBOARD
 # ============================================================
 
-@login_required  # FIXED: added @ symbol
+@login_required
 def get_drugs_api(request):
-    """API endpoint to get drugs sorted by expiry date (top 10 shortest expiry)"""
+    """
+    API endpoint to get drugs sorted by expiry date (top 10 shortest expiry)
+    """
     try:
         # Get drugs sorted by expiry date (soonest first)
         drugs = Drug.objects.filter(expiry_date__isnull=False).order_by('expiry_date')[:10]
@@ -92,7 +103,7 @@ def get_drugs_api(request):
         for drug in drugs:
             data.append({
                 'id': drug.id,
-                'generic': drug.generic_name if drug.generic_name else drug.name,  # FIXED: genetic_name -> generic_name
+                'generic': drug.generic_name if drug.generic_name else drug.name,
                 'brand': drug.brand if drug.brand else 'N/A',
                 'strength': getattr(drug, 'strength', 'N/A'),
                 'expiry': drug.expiry_date.strftime('%Y-%m-%d') if drug.expiry_date else 'N/A',
@@ -197,7 +208,7 @@ def drug_list(request):
     if search_query:
         drugs = drugs.filter(
             Q(name__icontains=search_query) |
-            Q(generic_name__icontains=search_query) |  # FIXED: genre__name__icontains -> generic_name__icontains
+            Q(generic_name__icontains=search_query) |
             Q(brand__icontains=search_query) |
             Q(description__icontains=search_query)
         )
@@ -212,6 +223,10 @@ def drug_list(request):
     }
     return render(request, 'stock/drug_list.html', context)
 
+
+# ============================================================
+# DRUG CREATE - FIXED
+# ============================================================
 
 @login_required
 def drug_create(request):
@@ -228,86 +243,81 @@ def drug_create(request):
             dosage = request.POST.get('dosage')
             strength = request.POST.get('strength')
             batch_no = request.POST.get('batch_no')
-            pack_size = request.POST.get('pack_size')
-            supplier_id = request.POST.get('supplier')
-            cost_price = request.POST.get('cost_price')
-            selling_price = request.POST.get('selling_price')  # Manually entered from form
+
+            # FIX: Convert to proper types
+            pack_size = int(request.POST.get('pack_size', 0))
+            supplier_id = int(request.POST.get('supplier', 0))
+            cost_price = float(request.POST.get('cost_price', 0))
+            selling_price = float(request.POST.get('selling_price', 0))
+            stock_quantity = int(request.POST.get('stock_quantity', 0))
+            category_id = int(request.POST.get('category', 1))
+            reorder_level = int(request.POST.get('reorder_level', 10))
             expiry_date = request.POST.get('expiry_date')
-            stock_quantity = request.POST.get('stock_quantity')
-            category_id = request.POST.get('category', 1)
-            reorder_level = request.POST.get('reorder_level', 10)
 
             # Debug - print to console
             print(f"Creating Drug: {generic_name}, Dosage: {dosage}, Pack Size: {pack_size}")
 
-            # Validate required fields - FIXED: Generic_name -> generic_name
+            # ========== VALIDATION ==========
+            errors = []
+
             if not generic_name:
-                messages.error(request, 'Generic Name is required.')
-                return render(request, 'stock/drug_form.html', {
-                    'categories': categories,
-                    'suppliers': suppliers,
-                    'is_edit': False
-                })
+                errors.append('Generic Name is required.')
 
             if not dosage:
-                messages.error(request, 'Dosage is required.')
-                return render(request, 'stock/drug_form.html', {
-                    'categories': categories,
-                    'suppliers': suppliers,
-                    'is_edit': False
-                })
+                errors.append('Dosage is required.')
 
-            if not supplier_id:
-                messages.error(request, 'Supplier is required.')
-                return render(request, 'stock/drug_form.html', {
-                    'categories': categories,
-                    'suppliers': suppliers,
-                    'is_edit': False
-                })
+            if not supplier_id or supplier_id <= 0:
+                errors.append('Supplier is required.')
+            else:
+                # Verify supplier exists
+                try:
+                    supplier = Supplier.objects.get(id=supplier_id)
+                except Supplier.DoesNotExist:
+                    errors.append('Selected supplier does not exist.')
 
-            if not cost_price or float(cost_price) <= 0:
-                messages.error(request, 'Cost Price must be greater than 0.')
-                return render(request, 'stock/drug_form.html', {
-                    'categories': categories,
-                    'suppliers': suppliers,
-                    'is_edit': False
-                })
+            if cost_price <= 0:
+                errors.append('Cost Price must be greater than 0.')
 
-            if not selling_price or float(selling_price) <= 0:
-                messages.error(request, 'Selling Price must be greater than 0.')
-                return render(request, 'stock/drug_form.html', {
-                    'categories': categories,
-                    'suppliers': suppliers,
-                    'is_edit': False
-                })
+            if selling_price <= 0:
+                errors.append('Selling Price must be greater than 0.')
 
-            if not pack_size or int(pack_size) <= 0:
-                messages.error(request, 'Pack Size must be greater than 0.')
-                return render(request, 'stock/drug_form.html', {
-                    'categories': categories,
-                    'suppliers': suppliers,
-                    'is_edit': False
-                })
+            if pack_size <= 0:
+                errors.append('Pack Size must be greater than 0.')
 
-            if not stock_quantity or int(stock_quantity) < 0:
-                messages.error(request, 'Stock quantity must be 0 or more.')
-                return render(request, 'stock/drug_form.html', {
-                    'categories': categories,
-                    'suppliers': suppliers,
-                    'is_edit': False
-                })
+            if stock_quantity < 0:
+                errors.append('Stock quantity cannot be negative.')
 
             if not expiry_date:
-                messages.error(request, 'Expiry Date is required.')
+                errors.append('Expiry Date is required.')
+
+            # Convert date format (dd/mm/yyyy to yyyy-mm-dd)
+            if expiry_date and '/' in expiry_date:
+                try:
+                    parts = expiry_date.split('/')
+                    if len(parts) == 3:
+                        expiry_date = f"{parts[2]}-{parts[1]}-{parts[0]}"
+                except:
+                    errors.append('Invalid date format. Use dd/mm/yyyy')
+
+            # Verify category exists
+            try:
+                category = Category.objects.get(id=category_id)
+            except Category.DoesNotExist:
+                errors.append('Selected category does not exist.')
+
+            # If there are errors, show them and return
+            if errors:
+                for error in errors:
+                    messages.error(request, error)
                 return render(request, 'stock/drug_form.html', {
                     'categories': categories,
                     'suppliers': suppliers,
                     'is_edit': False
                 })
 
-            # Create drug - FIXED: added all required fields
+            # ========== CREATE DRUG ==========
             drug = Drug.objects.create(
-                name=name,
+                name=name or generic_name,
                 generic_name=generic_name,
                 brand=brand or '',
                 dosage=dosage,
@@ -327,10 +337,12 @@ def drug_create(request):
             messages.success(request, f'Drug "{drug.name}" created successfully!')
             return redirect('stock:drug_list')
 
+        except ValueError as e:
+            messages.error(request, f'Please enter valid numbers for numeric fields.')
         except Exception as e:
             messages.error(request, f'Error creating drug: {str(e)}')
             import traceback
-            traceback.print_exc()  # Print error to console for debugging
+            traceback.print_exc()
 
     context = {
         'categories': categories,
@@ -339,6 +351,10 @@ def drug_create(request):
     }
     return render(request, 'stock/drug_form.html', context)
 
+
+# ============================================================
+# DRUG EDIT - FIXED
+# ============================================================
 
 @login_required
 def drug_edit(request, drug_id):
@@ -349,28 +365,106 @@ def drug_edit(request, drug_id):
 
     if request.method == 'POST':
         try:
-            # Update drug data - FIXED: genric_name -> generic_name
-            drug.generic_name = request.POST.get('generic_name')
-            drug.brand = request.POST.get('brand')
-            drug.dosage = request.POST.get('dosage')
-            drug.strength = request.POST.get('strength')
-            drug.batch_no = request.POST.get('batch_no')
-            drug.pack_size = request.POST.get('pack_size')
-            drug.supplier_id = request.POST.get('supplier')
-            drug.cost_price = request.POST.get('cost_price')
-            drug.selling_price = request.POST.get('selling_price')  # Manually entered
-            drug.stock_quantity = request.POST.get('stock_quantity')
-            drug.expiry_date = request.POST.get('expiry_date')
-            drug.name = request.POST.get('name') or drug.generic_name  # FIXED: genric_name -> generic_name
-            drug.category_id = request.POST.get('category', 1)
-            drug.reorder_level = request.POST.get('reorder_level', 10)
+            # Get form data
+            generic_name = request.POST.get('generic_name')
+            brand = request.POST.get('brand')
+            dosage = request.POST.get('dosage')
+            strength = request.POST.get('strength')
+            batch_no = request.POST.get('batch_no')
 
+            # FIX: Convert to proper types
+            pack_size = int(request.POST.get('pack_size', 0))
+            supplier_id = int(request.POST.get('supplier', 0))
+            cost_price = float(request.POST.get('cost_price', 0))
+            selling_price = float(request.POST.get('selling_price', 0))
+            stock_quantity = int(request.POST.get('stock_quantity', 0))
+            category_id = int(request.POST.get('category', 1))
+            reorder_level = int(request.POST.get('reorder_level', 10))
+            expiry_date = request.POST.get('expiry_date')
+            name = request.POST.get('name') or generic_name
+
+            # ========== VALIDATION ==========
+            errors = []
+
+            if not generic_name:
+                errors.append('Generic Name is required.')
+
+            if not dosage:
+                errors.append('Dosage is required.')
+
+            if not supplier_id or supplier_id <= 0:
+                errors.append('Supplier is required.')
+            else:
+                try:
+                    supplier = Supplier.objects.get(id=supplier_id)
+                except Supplier.DoesNotExist:
+                    errors.append('Selected supplier does not exist.')
+
+            if cost_price <= 0:
+                errors.append('Cost Price must be greater than 0.')
+
+            if selling_price <= 0:
+                errors.append('Selling Price must be greater than 0.')
+
+            if pack_size <= 0:
+                errors.append('Pack Size must be greater than 0.')
+
+            if stock_quantity < 0:
+                errors.append('Stock quantity cannot be negative.')
+
+            if not expiry_date:
+                errors.append('Expiry Date is required.')
+
+            # Convert date format (dd/mm/yyyy to yyyy-mm-dd)
+            if expiry_date and '/' in expiry_date:
+                try:
+                    parts = expiry_date.split('/')
+                    if len(parts) == 3:
+                        expiry_date = f"{parts[2]}-{parts[1]}-{parts[0]}"
+                except:
+                    errors.append('Invalid date format. Use dd/mm/yyyy')
+
+            try:
+                category = Category.objects.get(id=category_id)
+            except Category.DoesNotExist:
+                errors.append('Selected category does not exist.')
+
+            if errors:
+                for error in errors:
+                    messages.error(request, error)
+                return render(request, 'stock/drug_form.html', {
+                    'drug': drug,
+                    'categories': categories,
+                    'suppliers': suppliers,
+                    'is_edit': True
+                })
+
+            # ========== UPDATE DRUG ==========
+            drug.generic_name = generic_name
+            drug.brand = brand or ''
+            drug.dosage = dosage
+            drug.strength = strength or ''
+            drug.batch_no = batch_no or ''
+            drug.pack_size = pack_size
+            drug.supplier_id = supplier_id
+            drug.cost_price = cost_price
+            drug.selling_price = selling_price
+            drug.stock_quantity = stock_quantity
+            drug.expiry_date = expiry_date
+            drug.name = name or generic_name
+            drug.category_id = category_id
+            drug.reorder_level = reorder_level
             drug.save()
+
             messages.success(request, f'Drug "{drug.name}" updated successfully!')
             return redirect('stock:drug_list')
 
+        except ValueError as e:
+            messages.error(request, f'Please enter valid numbers for numeric fields.')
         except Exception as e:
             messages.error(request, f'Error updating drug: {str(e)}')
+            import traceback
+            traceback.print_exc()
 
     context = {
         'drug': drug,
@@ -380,6 +474,10 @@ def drug_edit(request, drug_id):
     }
     return render(request, 'stock/drug_form.html', context)
 
+
+# ============================================================
+# DRUG DELETE - FIXED
+# ============================================================
 
 @login_required
 def drug_delete(request, drug_id):
@@ -426,6 +524,7 @@ def supplier_create(request):
             )
             messages.success(request, f'Supplier "{supplier.name}" created successfully!')
             return redirect('stock:supplier_list')
+
         except Exception as e:
             messages.error(request, f'Error creating supplier: {str(e)}')
 
@@ -467,10 +566,480 @@ def supplier_delete(request, supplier_id):
             supplier.delete()
             messages.success(request, f'Supplier "{supplier_name}" deleted successfully!')
             return redirect('stock:supplier_list')
+
         except Exception as e:
             messages.error(request, f'Error deleting supplier: {str(e)}')
 
     return render(request, 'stock/supplier_confirm_delete.html', {'supplier': supplier})
+
+
+# ============================================================
+# RECEIPT/SALES VIEWS
+# ============================================================
+
+@login_required
+def receipt_list(request):
+    """List all receipts"""
+    receipts = Receipt.objects.all().select_related('created_by').order_by('-created_at')
+
+    # Get today's total sales
+    today = timezone.now().date()
+    today_receipts = Receipt.objects.filter(created_at__date=today)
+    today_total = today_receipts.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
+
+    # Get this month's total
+    month_start = timezone.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+    month_receipts = Receipt.objects.filter(created_at__gte=month_start)
+    month_total = month_receipts.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
+
+    context = {
+        'receipts': receipts,
+        'today_total': today_total,
+        'month_total': month_total,
+        'receipt_count': receipts.count(),
+        'today_count': today_receipts.count(),
+    }
+    return render(request, 'stock/receipt_list.html', context)
+
+
+@login_required
+def receipt_detail(request, receipt_id):
+    """View receipt details"""
+    receipt = get_object_or_404(Receipt, id=receipt_id)
+    return render(request, 'stock/receipt_detail.html', {'receipt': receipt})
+
+
+@login_required
+def create_sale_receipt(request):
+    """Create a new sale receipt (for retail sale)"""
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            items = data.get('items', [])
+            customer_name = data.get('customer_name', 'Walk-in Customer')
+            customer_phone = data.get('customer_phone', '')
+            amount_paid = float(data.get('amount_paid', 0))
+            payment_method = data.get('payment_method', 'cash')
+
+            if not items:
+                return JsonResponse({'success': False, 'message': 'No items in sale'}, status=400)
+
+            total_amount = 0
+            sale_items = []
+
+            # Process each item
+            for item in items:
+                drug_id = item.get('drug_id')
+                quantity = int(item.get('quantity', 0))
+                selling_price = float(item.get('selling_price', 0))
+
+                if quantity <= 0:
+                    continue
+
+                drug = Drug.objects.get(id=drug_id)
+
+                # Check stock
+                if drug.stock_quantity < quantity:
+                    return JsonResponse({
+                        'success': False,
+                        'message': f'Insufficient stock for {drug.name}. Available: {drug.stock_quantity}'
+                    }, status=400)
+
+                # Update stock
+                drug.stock_quantity -= quantity
+                drug.save()
+
+                total = quantity * selling_price
+                total_amount += total
+
+                sale_items.append({
+                    'drug_name': drug.name,
+                    'quantity': quantity,
+                    'unit_price': float(selling_price),
+                    'total': total
+                })
+
+            # Calculate change
+            change_due = amount_paid - total_amount if amount_paid > total_amount else 0
+
+            # Create receipt
+            receipt = Receipt.objects.create(
+                customer_name=customer_name,
+                customer_phone=customer_phone,
+                total_amount=total_amount,
+                amount_paid=amount_paid,
+                change_due=change_due,
+                payment_method=payment_method,
+                items=sale_items,
+                created_by=request.user
+            )
+
+            return JsonResponse({
+                'success': True,
+                'message': 'Sale completed successfully!',
+                'receipt_id': receipt.id,
+                'receipt_number': receipt.receipt_number,
+                'total_amount': total_amount,
+                'change_due': change_due,
+                'receipt_url': f'/receipts/{receipt.id}/'
+            })
+
+        except Drug.DoesNotExist:
+            return JsonResponse({'success': False, 'message': 'Drug not found'}, status=400)
+        except Exception as e:
+            return JsonResponse({'success': False, 'message': str(e)}, status=400)
+
+    # GET request - show sale form
+    drugs = Drug.objects.filter(stock_quantity__gt=0).order_by('name')
+    return render(request, 'stock/sale_form.html', {'drugs': drugs})
+
+
+@login_required
+def print_receipt(request, receipt_id):
+    """Print receipt (returns a printable version)"""
+    receipt = get_object_or_404(Receipt, id=receipt_id)
+
+    # Mark as printed
+    if not receipt.is_printed:
+        receipt.is_printed = True
+        receipt.printed_at = timezone.now()
+        receipt.save()
+
+    return render(request, 'stock/receipt_print.html', {'receipt': receipt})
+
+
+@login_required
+def get_daily_sales_api(request):
+    """API to get daily sales data for dashboard"""
+    try:
+        today = timezone.now().date()
+        receipts = Receipt.objects.filter(created_at__date=today)
+
+        total_sales = receipts.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
+        total_transactions = receipts.count()
+
+        # Get last 10 receipts
+        last_receipts = receipts.order_by('-created_at')[:10]
+
+        data = []
+        for receipt in last_receipts:
+            data.append({
+                'id': receipt.id,
+                'receipt_number': receipt.receipt_number,
+                'customer': receipt.customer_name or 'Walk-in',
+                'amount': float(receipt.total_amount),
+                'time': receipt.created_at.strftime('%H:%M'),
+            })
+
+        return JsonResponse({
+            'success': True,
+            'total_sales': float(total_sales),
+            'total_transactions': total_transactions,
+            'recent_receipts': data
+        })
+
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=500)
+
+
+# ============================================================
+# REPORT VIEWS
+# ============================================================
+
+@login_required
+def reports_dashboard(request):
+    """Main reports dashboard"""
+    # Get today's date
+    today = timezone.now().date()
+    week_start = today - timedelta(days=today.weekday())
+    month_start = today.replace(day=1)
+    year_start = today.replace(month=1, day=1)
+    
+    # Daily Sales
+    daily_receipts = Receipt.objects.filter(created_at__date=today)
+    daily_total = daily_receipts.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
+    daily_count = daily_receipts.count()
+    
+    # Weekly Sales
+    weekly_receipts = Receipt.objects.filter(created_at__date__gte=week_start, created_at__date__lte=today)
+    weekly_total = weekly_receipts.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
+    weekly_count = weekly_receipts.count()
+    
+    # Monthly Sales
+    monthly_receipts = Receipt.objects.filter(created_at__date__gte=month_start, created_at__date__lte=today)
+    monthly_total = monthly_receipts.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
+    monthly_count = monthly_receipts.count()
+    
+    # Annual Sales
+    annual_receipts = Receipt.objects.filter(created_at__date__gte=year_start, created_at__date__lte=today)
+    annual_total = annual_receipts.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
+    annual_count = annual_receipts.count()
+    
+    # Get recent receipts
+    recent_receipts = Receipt.objects.all().order_by('-created_at')[:20]
+    
+    # Get recent invoices
+    recent_invoices = Invoice.objects.all().order_by('-created_at')[:10]
+    
+    # Payment method breakdown for today
+    payment_breakdown = daily_receipts.values('payment_method').annotate(
+        total=Sum('total_amount'),
+        count=Count('id')
+    )
+    
+    # Top selling drugs
+    top_drugs = []
+    for receipt in Receipt.objects.all()[:100]:
+        if receipt.items:
+            for item in receipt.items:
+                top_drugs.append({
+                    'name': item.get('drug_name', 'Unknown'),
+                    'quantity': item.get('quantity', 0),
+                    'total': item.get('total', 0)
+                })
+    
+    # Aggregate top drugs
+    drug_summary = {}
+    for drug in top_drugs:
+        name = drug['name']
+        if name in drug_summary:
+            drug_summary[name]['quantity'] += drug['quantity']
+            drug_summary[name]['total'] += drug['total']
+        else:
+            drug_summary[name] = {'quantity': drug['quantity'], 'total': drug['total']}
+    
+    # Sort and get top 10
+    top_selling = sorted(drug_summary.items(), key=lambda x: x[1]['quantity'], reverse=True)[:10]
+    
+    context = {
+        'daily_total': daily_total,
+        'daily_count': daily_count,
+        'weekly_total': weekly_total,
+        'weekly_count': weekly_count,
+        'monthly_total': monthly_total,
+        'monthly_count': monthly_count,
+        'annual_total': annual_total,
+        'annual_count': annual_count,
+        'recent_receipts': recent_receipts,
+        'recent_invoices': recent_invoices,
+        'payment_breakdown': payment_breakdown,
+        'top_selling': top_selling,
+        'today': today,
+        'week_start': week_start,
+        'month_start': month_start,
+        'year_start': year_start,
+    }
+    
+    return render(request, 'stock/reports_dashboard.html', context)
+
+
+@login_required
+def generate_report_api(request):
+    """API to generate and send email report"""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Invalid method'}, status=400)
+    
+    try:
+        data = json.loads(request.body)
+        report_type = data.get('report_type', 'daily')
+        email = data.get('email', 'kiyimbahenry314@gmail.com')
+        
+        # Generate report data
+        report_data = generate_report_data(report_type)
+        
+        # Send email
+        success = send_report_email(report_data, email, report_type)
+        
+        if success:
+            # Save report to database
+            report = Report.objects.create(
+                report_type=report_type,
+                data=report_data,
+                generated_by=request.user,
+                sent_to_email=True,
+                email_sent_at=timezone.now()
+            )
+            
+            return JsonResponse({
+                'success': True,
+                'message': f'{report_type.capitalize()} report sent to {email}',
+                'report_id': report.id
+            })
+        else:
+            return JsonResponse({
+                'success': False,
+                'message': 'Failed to send email. Please check email settings.'
+            }, status=500)
+            
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=500)
+
+
+def generate_report_data(report_type):
+    """Generate report data based on type"""
+    today = timezone.now().date()
+    report_data = {
+        'report_type': report_type,
+        'generated_at': timezone.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'sales': {},
+        'invoices': {},
+        'payment_breakdown': [],
+        'top_products': []
+    }
+    
+    # Set date range based on report type
+    if report_type == 'daily':
+        start_date = today
+        end_date = today
+        report_data['period'] = f"Daily Report - {today.strftime('%B %d, %Y')}"
+    elif report_type == 'weekly':
+        start_date = today - timedelta(days=7)
+        end_date = today
+        report_data['period'] = f"Weekly Report - {start_date.strftime('%B %d')} to {end_date.strftime('%B %d, %Y')}"
+    elif report_type == 'monthly':
+        start_date = today.replace(day=1)
+        end_date = today
+        report_data['period'] = f"Monthly Report - {today.strftime('%B %Y')}"
+    elif report_type == 'annual':
+        start_date = today.replace(month=1, day=1)
+        end_date = today
+        report_data['period'] = f"Annual Report - {today.year}"
+    else:
+        start_date = today
+        end_date = today
+    
+    # Get receipts within date range
+    receipts = Receipt.objects.filter(
+        created_at__date__gte=start_date,
+        created_at__date__lte=end_date
+    )
+    
+    # Sales summary
+    total_sales = receipts.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
+    total_transactions = receipts.count()
+    total_items_sold = 0
+    
+    for receipt in receipts:
+        if receipt.items:
+            for item in receipt.items:
+                total_items_sold += item.get('quantity', 0)
+    
+    report_data['sales'] = {
+        'total_amount': float(total_sales),
+        'total_transactions': total_transactions,
+        'total_items_sold': total_items_sold,
+        'average_transaction': float(total_sales / total_transactions) if total_transactions > 0 else 0,
+        'start_date': start_date.strftime('%Y-%m-%d'),
+        'end_date': end_date.strftime('%Y-%m-%d'),
+    }
+    
+    # Payment breakdown
+    payment_breakdown = receipts.values('payment_method').annotate(
+        total=Sum('total_amount'),
+        count=Count('id')
+    )
+    
+    for item in payment_breakdown:
+        report_data['payment_breakdown'].append({
+            'method': item['payment_method'] or 'unknown',
+            'total': float(item['total']),
+            'count': item['count']
+        })
+    
+    # Top selling products
+    product_sales = {}
+    for receipt in receipts:
+        if receipt.items:
+            for item in receipt.items:
+                name = item.get('drug_name', 'Unknown')
+                quantity = item.get('quantity', 0)
+                total = item.get('total', 0)
+                if name in product_sales:
+                    product_sales[name]['quantity'] += quantity
+                    product_sales[name]['total'] += total
+                else:
+                    product_sales[name] = {'quantity': quantity, 'total': total}
+    
+    # Get top 10
+    sorted_products = sorted(product_sales.items(), key=lambda x: x[1]['quantity'], reverse=True)[:10]
+    for name, data in sorted_products:
+        report_data['top_products'].append({
+            'name': name,
+            'quantity': data['quantity'],
+            'total': float(data['total'])
+        })
+    
+    # Invoice summary
+    invoices = Invoice.objects.filter(
+        created_at__date__gte=start_date,
+        created_at__date__lte=end_date
+    )
+    
+    report_data['invoices'] = {
+        'total_invoices': invoices.count(),
+        'total_invoice_value': float(invoices.aggregate(Sum('total_amount'))['total_amount__sum'] or 0),
+        'pending_count': invoices.filter(status='pending').count(),
+        'paid_count': invoices.filter(status='paid').count(),
+    }
+    
+    return report_data
+
+
+def send_report_email(report_data, email, report_type):
+    """Send report via email"""
+    try:
+        # Create email subject
+        subject = f"Miyabala Pharmacy - {report_type.capitalize()} Report"
+        
+        # Create email body
+        html_message = render_to_string('stock/report_email.html', {
+            'report_data': report_data,
+            'report_type': report_type.capitalize(),
+            'site_url': 'http://127.0.0.1:8000'
+        })
+        
+        # Send email
+        send_mail(
+            subject,
+            f"Please view the HTML version of this email.",
+            settings.DEFAULT_FROM_EMAIL or 'noreply@miyabalapharmacy.com',
+            [email],
+            html_message=html_message,
+            fail_silently=False,
+        )
+        
+        return True
+        
+    except Exception as e:
+        print(f"Error sending email: {e}")
+        return False
+
+
+def send_auto_reports():
+    """Automated function to send daily reports at midnight"""
+    try:
+        # Generate daily report
+        report_data = generate_report_data('daily')
+        
+        # Send to main email
+        success = send_report_email(report_data, 'kiyimbahenry314@gmail.com', 'daily')
+        
+        if success:
+            # Save report
+            admin_user = User.objects.filter(is_superuser=True).first()
+            Report.objects.create(
+                report_type='daily',
+                data=report_data,
+                generated_by=admin_user,
+                sent_to_email=True,
+                email_sent_at=timezone.now()
+            )
+            print(f"✅ Daily report sent successfully at {timezone.now()}")
+        else:
+            print(f"❌ Failed to send daily report at {timezone.now()}")
+            
+    except Exception as e:
+        print(f"❌ Error sending auto report: {e}")
 
 
 # ============================================================
@@ -497,7 +1066,7 @@ def invoice_create(request):
             invoice_number = request.POST.get('invoice_number')
             notes = request.POST.get('notes')
 
-            # Get drug items from POST - FIXED: use getlist
+            # Get drug items from POST
             drug_ids = request.POST.getlist('drug_ids')
             quantities = request.POST.getlist('quantities')
             unit_prices = request.POST.getlist('unit_prices')
@@ -514,7 +1083,7 @@ def invoice_create(request):
             invoice = Invoice.objects.create(
                 supplier_id=supplier_id,
                 invoice_number=invoice_number,
-                invoice_date=invoice_date or datetime.now().date(),
+                invoice_date=invoice_date or timezone.now().date(),
                 notes=notes,
                 created_by=request.user
             )
@@ -586,6 +1155,7 @@ def invoice_delete(request, invoice_id):
             invoice.delete()
             messages.success(request, f'Invoice #{invoice_number} deleted successfully!')
             return redirect('stock:invoice_list')
+
         except Exception as e:
             messages.error(request, f'Error deleting invoice: {str(e)}')
 
@@ -729,3 +1299,227 @@ def user_delete(request, user_id):
             messages.error(request, f'Error deleting user: {str(e)}')
 
     return render(request, 'stock/user_delete.html', {'user': user})
+
+# ============================================================
+# CHRONIC PATIENT VIEWS
+# ============================================================
+
+@login_required
+def patient_list(request):
+    """List all chronic patients"""
+    patients = ChronicPatient.objects.all().select_related('created_by')
+    
+    # Search functionality
+    search_query = request.GET.get('search')
+    if search_query:
+        patients = patients.filter(
+            Q(first_name__icontains=search_query) |
+            Q(last_name__icontains=search_query) |
+            Q(patient_id__icontains=search_query) |
+            Q(phone__icontains=search_query) |
+            Q(location__icontains=search_query)
+        )
+    
+    # Filter by disease type
+    disease_filter = request.GET.get('disease')
+    if disease_filter:
+        patients = patients.filter(disease_type=disease_filter)
+    
+    context = {
+        'patients': patients,
+        'search_query': search_query,
+        'disease_filter': disease_filter,
+        'disease_choices': ChronicPatient.DISEASE_CHOICES,
+    }
+    return render(request, 'stock/patient_list.html', context)
+
+
+@login_required
+def patient_create(request):
+    """Create a new chronic patient"""
+    if request.method == 'POST':
+        try:
+            # Get form data
+            first_name = request.POST.get('first_name', '').strip()
+            last_name = request.POST.get('last_name', '').strip()
+            date_of_birth = request.POST.get('date_of_birth') or None
+            gender = request.POST.get('gender', '')
+            phone = request.POST.get('phone', '').strip()
+            alternate_phone = request.POST.get('alternate_phone', '').strip()
+            email = request.POST.get('email', '').strip() or None
+            location = request.POST.get('location', '').strip()
+            village = request.POST.get('village', '').strip()
+            district = request.POST.get('district', '').strip()
+            disease_type = request.POST.get('disease_type', '')
+            other_disease = request.POST.get('other_disease', '').strip()
+            diagnosis_date = request.POST.get('diagnosis_date') or None
+            medications = request.POST.get('medications', '').strip()
+            dosage = request.POST.get('dosage', '').strip()
+            next_appointment = request.POST.get('next_appointment') or None
+            
+            # Validation
+            errors = []
+            if not first_name:
+                errors.append('First name is required.')
+            if not last_name:
+                errors.append('Last name is required.')
+            if not disease_type:
+                errors.append('Disease type is required.')
+            if disease_type == 'OTHER' and not other_disease:
+                errors.append('Please specify the disease type.')
+            
+            if errors:
+                for error in errors:
+                    messages.error(request, error)
+                return render(request, 'stock/patient_form.html', {
+                    'disease_choices': ChronicPatient.DISEASE_CHOICES,
+                    'is_edit': False
+                })
+            
+            # Create patient
+            patient = ChronicPatient.objects.create(
+                first_name=first_name,
+                last_name=last_name,
+                date_of_birth=date_of_birth,
+                gender=gender,
+                phone=phone,
+                alternate_phone=alternate_phone,
+                email=email,
+                location=location,
+                village=village,
+                district=district,
+                disease_type=disease_type,
+                other_disease=other_disease if disease_type == 'OTHER' else '',
+                diagnosis_date=diagnosis_date,
+                medications=medications,
+                dosage=dosage,
+                next_appointment=next_appointment,
+                created_by=request.user
+            )
+            
+            messages.success(request, f'Patient "{patient.first_name} {patient.last_name}" registered successfully!')
+            return redirect('stock:patient_list')
+            
+        except Exception as e:
+            messages.error(request, f'Error creating patient: {str(e)}')
+            import traceback
+            traceback.print_exc()
+    
+    context = {
+        'disease_choices': ChronicPatient.DISEASE_CHOICES,
+        'is_edit': False,
+    }
+    return render(request, 'stock/patient_form.html', context)
+
+
+@login_required
+def patient_edit(request, patient_id):
+    """Edit a chronic patient"""
+    patient = get_object_or_404(ChronicPatient, id=patient_id)
+    
+    if request.method == 'POST':
+        try:
+            # Get form data
+            patient.first_name = request.POST.get('first_name', '').strip()
+            patient.last_name = request.POST.get('last_name', '').strip()
+            patient.date_of_birth = request.POST.get('date_of_birth') or None
+            patient.gender = request.POST.get('gender', '')
+            patient.phone = request.POST.get('phone', '').strip()
+            patient.alternate_phone = request.POST.get('alternate_phone', '').strip()
+            patient.email = request.POST.get('email', '').strip() or None
+            patient.location = request.POST.get('location', '').strip()
+            patient.village = request.POST.get('village', '').strip()
+            patient.district = request.POST.get('district', '').strip()
+            patient.disease_type = request.POST.get('disease_type', '')
+            patient.other_disease = request.POST.get('other_disease', '').strip() if patient.disease_type == 'OTHER' else ''
+            patient.diagnosis_date = request.POST.get('diagnosis_date') or None
+            patient.medications = request.POST.get('medications', '').strip()
+            patient.dosage = request.POST.get('dosage', '').strip()
+            patient.next_appointment = request.POST.get('next_appointment') or None
+            patient.is_active = request.POST.get('is_active') == 'on'
+            
+            patient.save()
+            
+            messages.success(request, f'Patient "{patient.first_name} {patient.last_name}" updated successfully!')
+            return redirect('stock:patient_list')
+            
+        except Exception as e:
+            messages.error(request, f'Error updating patient: {str(e)}')
+    
+    context = {
+        'patient': patient,
+        'disease_choices': ChronicPatient.DISEASE_CHOICES,
+        'is_edit': True,
+    }
+    return render(request, 'stock/patient_form.html', context)
+
+
+@login_required
+def patient_detail(request, patient_id):
+    """View patient details"""
+    patient = get_object_or_404(ChronicPatient, id=patient_id)
+    return render(request, 'stock/patient_detail.html', {'patient': patient})
+
+
+@login_required
+def patient_delete(request, patient_id):
+    """Delete a patient"""
+    patient = get_object_or_404(ChronicPatient, id=patient_id)
+    
+    if request.method == 'POST':
+        try:
+            patient_name = f"{patient.first_name} {patient.last_name}"
+            patient.delete()
+            messages.success(request, f'Patient "{patient_name}" deleted successfully!')
+            return redirect('stock:patient_list')
+        except Exception as e:
+            messages.error(request, f'Error deleting patient: {str(e)}')
+    
+    return render(request, 'stock/patient_confirm_delete.html', {'patient': patient})
+
+
+@login_required
+def patient_add_medication(request, patient_id):
+    """Add medication to patient"""
+    patient = get_object_or_404(ChronicPatient, id=patient_id)
+    
+    if request.method == 'POST':
+        try:
+            medication_name = request.POST.get('medication_name', '').strip()
+            dosage = request.POST.get('dosage', '').strip()
+            frequency = request.POST.get('frequency', '').strip()
+            duration = request.POST.get('duration', '').strip()
+            notes = request.POST.get('notes', '').strip()
+            
+            if not medication_name:
+                messages.error(request, 'Medication name is required.')
+            else:
+                PatientMedication.objects.create(
+                    patient=patient,
+                    medication_name=medication_name,
+                    dosage=dosage,
+                    frequency=frequency,
+                    duration=duration,
+                    notes=notes
+                )
+                messages.success(request, f'Medication "{medication_name}" added successfully!')
+                
+        except Exception as e:
+            messages.error(request, f'Error adding medication: {str(e)}')
+        
+        return redirect('stock:patient_detail', patient_id=patient_id)
+    
+    return redirect('stock:patient_detail', patient_id=patient_id)
+
+
+@login_required
+def patient_remove_medication(request, medication_id):
+    """Remove medication from patient"""
+    medication = get_object_or_404(PatientMedication, id=medication_id)
+    patient_id = medication.patient.id
+    
+    if request.method == 'POST':
+        medication.delete()
+        messages.success(request, 'Medication removed successfully!')
+    
+    return redirect('stock:patient_detail', patient_id=patient_id)

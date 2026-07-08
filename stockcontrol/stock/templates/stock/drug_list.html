@@ -1,40 +1,115 @@
-<!-- Add these columns to your table -->
-<thead>
-    <tr>
-        <th>Generic Name</th>
-        <th>Brand</th>
-        <th>Dosage</th>
-        <th>Strength</th>
-        <th>Batch No.</th>
-        <th>Stock</th>
-        <th>Cost Price</th>
-        <th>Selling Price</th>
-        <th>Expiry</th>
-        <th>Actions</th>
-    </tr>
-</thead>
-<tbody>
-    {% for drug in drugs %}
-    <tr>
-        <td>{{ drug.generic_name }}</td>
-        <td>{{ drug.brand|default:"-" }}</td>
-        <td>{{ drug.get_dosage_display }}</td>
-        <td>{{ drug.strength|default:"-" }}</td>
-        <td>{{ drug.batch_no|default:"-" }}</td>
-        <td>{{ drug.stock_quantity }}</td>
-        <td>UGX {{ drug.cost_price|floatformat:2 }}</td>
-        <td>UGX {{ drug.selling_price|floatformat:2 }}</td>
-        <td>
-            {% if drug.is_expired %}
-            <span class="badge badge-danger">Expired</span>
-            {% else %}
-            {{ drug.expiry_date|date:"Y-m-d" }}
-            {% endif %}
-        </td>
-        <td>
-            <a href="{% url 'stock:drug_edit' drug.id %}" class="btn btn-sm btn-primary">Edit</a>
-            <a href="{% url 'stock:drug_delete' drug.id %}" class="btn btn-sm btn-danger">Delete</a>
-        </td>
-    </tr>
-    {% endfor %}
-</tbody>
+{% extends 'stock/base.html' %}
+{% load static %}
+
+{% block title %}Medicines List{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card shadow">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h4><i class="fas fa-capsules"></i> Medicines List</h4>
+                <a href="{% url 'stock:drug_create' %}" class="btn btn-primary">
+                    <i class="fas fa-plus-circle"></i> Add New Drug
+                </a>
+            </div>
+            <div class="card-body">
+                <!-- Search -->
+                <div class="row mb-3">
+                    <div class="col-md-6">
+                        <form method="GET" class="d-flex">
+                            <input type="text" name="search" class="form-control me-2" 
+                                   placeholder="Search medicines..." value="{{ search_query }}">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-search"></i>
+                            </button>
+                        </form>
+                    </div>
+                </div>
+                
+                <!-- Table -->
+                <div class="table-responsive">
+                    <table class="table table-hover">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Generic Name</th>
+                                <th>Brand</th>
+                                <th>Dosage</th>
+                                <th>Pack Size</th>
+                                <th>Stock</th>
+                                <th>Cost Price</th>
+                                <th>Selling Price</th>
+                                <th>Expiry</th>
+                                <th>Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for drug in drugs %}
+                            <tr>
+                                <td>{{ forloop.counter }}</td>
+                                <td>{{ drug.generic_name|default:drug.name }}</td>
+                                <td>{{ drug.brand|default:'-' }}</td>
+                                <td>{{ drug.get_dosage_display|default:'-' }}</td>
+                                <td>{{ drug.pack_size }}</td>
+                                <td>
+                                    <span class="badge {% if drug.is_low_stock %}bg-danger{% else %}bg-success{% endif %}">
+                                        {{ drug.stock_quantity }}
+                                    </span>
+                                </td>
+                                <td>UGX {{ drug.cost_price|floatformat:2 }}</td>
+                                <td>UGX {{ drug.selling_price|floatformat:2 }}</td>
+                                <td>
+                                    {% if drug.expiry_date %}
+                                        <span class="{% if drug.is_expired %}text-danger{% endif %}">
+                                            {{ drug.expiry_date|date:'d/m/Y' }}
+                                        </span>
+                                    {% else %}
+                                        -
+                                    {% endif %}
+                                </td>
+                                <td>
+                                    <a href="{% url 'stock:drug_edit' drug.id %}" class="btn btn-sm btn-warning">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
+                                    <button class="btn btn-sm btn-danger" data-bs-toggle="modal" 
+                                            data-bs-target="#deleteModal{{ drug.id }}">
+                                        <i class="fas fa-trash"></i>
+                                    </button>
+                                </td>
+                            </tr>
+                            
+                            <!-- Delete Modal -->
+                            <div class="modal fade" id="deleteModal{{ drug.id }}" tabindex="-1">
+                                <div class="modal-dialog">
+                                    <div class="modal-content">
+                                        <div class="modal-header">
+                                            <h5 class="modal-title">Delete Drug</h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                        </div>
+                                        <div class="modal-body">
+                                            Are you sure you want to delete <strong>{{ drug.name }}</strong>?
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                            <form method="POST" action="{% url 'stock:drug_delete' drug.id %}">
+                                                {% csrf_token %}
+                                                <button type="submit" class="btn btn-danger">Delete</button>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            {% empty %}
+                            <tr>
+                                <td colspan="10" class="text-center">No medicines found.</td>
+                            </tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

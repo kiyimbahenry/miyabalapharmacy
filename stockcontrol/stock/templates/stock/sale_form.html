@@ -1,0 +1,326 @@
+{% extends 'stock/base.html' %}
+{% load static %}
+
+{% block title %}New Sale{% endblock %}
+
+{% block extra_css %}
+<style>
+    .cart-item {
+        border-bottom: 1px solid #eee;
+        padding: 10px 0;
+    }
+    .cart-item:last-child {
+        border-bottom: none;
+    }
+    .pos-search {
+        position: sticky;
+        top: 0;
+        background: white;
+        z-index: 100;
+        padding: 10px 0;
+        border-bottom: 2px solid #3498db;
+    }
+    .drug-list {
+        max-height: 400px;
+        overflow-y: auto;
+    }
+    .drug-item:hover {
+        background: #f0f8ff;
+        cursor: pointer;
+    }
+    .drug-item {
+        padding: 8px 12px;
+        border-bottom: 1px solid #f0f0f0;
+    }
+    .cart-total {
+        position: sticky;
+        bottom: 0;
+        background: white;
+        padding: 15px 0;
+        border-top: 3px solid #3498db;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <!-- Left: Drug Selection -->
+    <div class="col-md-7">
+        <div class="card shadow">
+            <div class="card-header">
+                <h5><i class="fas fa-search"></i> Select Medicines</h5>
+            </div>
+            <div class="card-body">
+                <!-- Search -->
+                <div class="pos-search">
+                    <input type="text" id="searchDrug" class="form-control" 
+                           placeholder="Search medicine by name or generic..." 
+                           onkeyup="filterDrugs()">
+                </div>
+                
+                <!-- Drug List -->
+                <div class="drug-list mt-2" id="drugList">
+                    {% for drug in drugs %}
+                    <div class="drug-item" onclick="addToCart({{ drug.id }}, '{{ drug.name }}', {{ drug.selling_price }}, {{ drug.stock_quantity }})">
+                        <div class="row">
+                            <div class="col-6">
+                                <strong>{{ drug.name }}</strong>
+                                <br>
+                                <small class="text-muted">{{ drug.generic_name|default:'' }}</small>
+                            </div>
+                            <div class="col-3">
+                                <span class="badge bg-info">UGX {{ drug.selling_price|floatformat:0 }}</span>
+                            </div>
+                            <div class="col-3">
+                                <span class="badge {% if drug.stock_quantity <= drug.reorder_level %}bg-danger{% else %}bg-success{% endif %}">
+                                    Stock: {{ drug.stock_quantity }}
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                    {% empty %}
+                    <div class="text-center text-muted py-3">
+                        No medicines with stock available.
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Right: Cart -->
+    <div class="col-md-5">
+        <div class="card shadow">
+            <div class="card-header">
+                <h5><i class="fas fa-shopping-cart"></i> Shopping Cart</h5>
+            </div>
+            <div class="card-body">
+                <!-- Customer Info -->
+                <div class="row mb-3">
+                    <div class="col-7">
+                        <input type="text" id="customerName" class="form-control" 
+                               placeholder="Customer Name (optional)">
+                    </div>
+                    <div class="col-5">
+                        <input type="text" id="customerPhone" class="form-control" 
+                               placeholder="Phone (optional)">
+                    </div>
+                </div>
+
+                <!-- Cart Items -->
+                <div id="cartItems" style="max-height:300px; overflow-y:auto;">
+                    <div class="text-center text-muted py-3">
+                        <i class="fas fa-cart-plus fa-2x"></i>
+                        <p>No items in cart</p>
+                    </div>
+                </div>
+
+                <!-- Cart Total -->
+                <div class="cart-total">
+                    <div class="row">
+                        <div class="col-6">
+                            <h5>Total:</h5>
+                        </div>
+                        <div class="col-6 text-end">
+                            <h5 id="cartTotal">UGX 0</h5>
+                        </div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-6">
+                            <input type="number" id="amountPaid" class="form-control" 
+                                   placeholder="Amount Paid" step="100" min="0">
+                        </div>
+                        <div class="col-6">
+                            <input type="text" id="changeDue" class="form-control" 
+                                   placeholder="Change" readonly>
+                        </div>
+                    </div>
+                    <div class="row mt-2">
+                        <div class="col-6">
+                            <select id="paymentMethod" class="form-select">
+                                <option value="cash">Cash</option>
+                                <option value="mobile_money">Mobile Money</option>
+                                <option value="bank">Bank Transfer</option>
+                                <option value="card">Card</option>
+                            </select>
+                        </div>
+                        <div class="col-6">
+                            <button class="btn btn-success w-100" onclick="completeSale()">
+                                <i class="fas fa-check"></i> Complete Sale
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    let cart = [];
+    let total = 0;
+
+    function filterDrugs() {
+        const search = document.getElementById('searchDrug').value.toLowerCase();
+        const items = document.querySelectorAll('.drug-item');
+        items.forEach(item => {
+            const text = item.textContent.toLowerCase();
+            item.style.display = text.includes(search) ? '' : 'none';
+        });
+    }
+
+    function addToCart(id, name, price, stock) {
+        // Check if already in cart
+        const existing = cart.find(item => item.id === id);
+        if (existing) {
+            if (existing.quantity < stock) {
+                existing.quantity++;
+            } else {
+                alert('Not enough stock available!');
+                return;
+            }
+        } else {
+            if (stock > 0) {
+                cart.push({ id, name, price, quantity: 1 });
+            } else {
+                alert('Item out of stock!');
+                return;
+            }
+        }
+        updateCart();
+    }
+
+    function removeFromCart(index) {
+        cart.splice(index, 1);
+        updateCart();
+    }
+
+    function updateQuantity(index, change) {
+        const item = cart[index];
+        if (item) {
+            item.quantity += change;
+            if (item.quantity <= 0) {
+                cart.splice(index, 1);
+            }
+            updateCart();
+        }
+    }
+
+    function updateCart() {
+        const container = document.getElementById('cartItems');
+        total = 0;
+
+        if (cart.length === 0) {
+            container.innerHTML = `
+                <div class="text-center text-muted py-3">
+                    <i class="fas fa-cart-plus fa-2x"></i>
+                    <p>No items in cart</p>
+                </div>
+            `;
+            document.getElementById('cartTotal').textContent = 'UGX 0';
+            return;
+        }
+
+        let html = '';
+        cart.forEach((item, index) => {
+            const itemTotal = item.price * item.quantity;
+            total += itemTotal;
+            html += `
+                <div class="cart-item row">
+                    <div class="col-5">
+                        <strong>${item.name}</strong>
+                        <br>
+                        <small>UGX ${item.price.toFixed(0)}</small>
+                    </div>
+                    <div class="col-4">
+                        <div class="input-group input-group-sm">
+                            <button class="btn btn-outline-secondary" onclick="updateQuantity(${index}, -1)">-</button>
+                            <input type="text" class="form-control text-center" value="${item.quantity}" readonly>
+                            <button class="btn btn-outline-secondary" onclick="updateQuantity(${index}, 1)">+</button>
+                        </div>
+                    </div>
+                    <div class="col-2 text-end">
+                        UGX ${itemTotal.toFixed(0)}
+                    </div>
+                    <div class="col-1">
+                        <button class="btn btn-sm btn-danger" onclick="removeFromCart(${index})">
+                            <i class="fas fa-times"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+        });
+
+        container.innerHTML = html;
+        document.getElementById('cartTotal').textContent = `UGX ${total.toFixed(0)}`;
+        calculateChange();
+    }
+
+    function calculateChange() {
+        const amountPaid = parseFloat(document.getElementById('amountPaid').value) || 0;
+        const change = amountPaid - total;
+        document.getElementById('changeDue').value = change > 0 ? `UGX ${change.toFixed(0)}` : '';
+    }
+
+    document.getElementById('amountPaid').addEventListener('input', calculateChange);
+
+    function completeSale() {
+        if (cart.length === 0) {
+            alert('Cart is empty! Add some items first.');
+            return;
+        }
+
+        const amountPaid = parseFloat(document.getElementById('amountPaid').value) || 0;
+        if (amountPaid < total) {
+            alert(`Insufficient payment! Total is UGX ${total.toFixed(0)}`);
+            return;
+        }
+
+        const customerName = document.getElementById('customerName').value || '';
+        const customerPhone = document.getElementById('customerPhone').value || '';
+        const paymentMethod = document.getElementById('paymentMethod').value;
+
+        if (!confirm(`Total: UGX ${total.toFixed(0)}\nAmount Paid: UGX ${amountPaid.toFixed(0)}\nProceed with sale?`)) {
+            return;
+        }
+
+        // Send to server
+        fetch('{% url "stock:create_sale" %}', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': '{{ csrf_token }}'
+            },
+            body: JSON.stringify({
+                items: cart,
+                customer_name: customerName,
+                customer_phone: customerPhone,
+                amount_paid: amountPaid,
+                payment_method: paymentMethod
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            if (data.success) {
+                alert(`Sale completed!\nReceipt: ${data.receipt_number}\nTotal: UGX ${data.total_amount.toFixed(0)}\nChange: UGX ${data.change_due.toFixed(0)}`);
+                // Redirect to print receipt
+                window.open(`/receipts/${data.receipt_id}/print/`, '_blank');
+                // Clear cart
+                cart = [];
+                updateCart();
+                document.getElementById('customerName').value = '';
+                document.getElementById('customerPhone').value = '';
+                document.getElementById('amountPaid').value = '';
+                document.getElementById('changeDue').value = '';
+                // Refresh page to update stock
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                alert('Error: ' + data.message);
+            }
+        })
+        .catch(error => {
+            alert('Error completing sale: ' + error);
+        });
+    }
+</script>
+{% endblock %}

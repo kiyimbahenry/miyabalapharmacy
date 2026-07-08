@@ -1,0 +1,33 @@
+{% extends 'stock/base.html' %}
+{% load static %}
+
+{% block title %}Delete Patient{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-6 mx-auto">
+        <div class="card shadow">
+            <div class="card-header bg-danger text-white">
+                <h4><i class="fas fa-exclamation-triangle"></i> Delete Patient</h4>
+            </div>
+            <div class="card-body">
+                <p>Are you sure you want to delete <strong>{{ patient.first_name }} {{ patient.last_name }}</strong>?</p>
+                <p class="text-muted">Patient ID: {{ patient.patient_id }}</p>
+                <p class="text-danger"><strong>This action cannot be undone!</strong></p>
+                
+                <form method="POST">
+                    {% csrf_token %}
+                    <div class="d-flex justify-content-end gap-2">
+                        <a href="{% url 'stock:patient_detail' patient.id %}" class="btn btn-secondary">
+                            <i class="fas fa-times"></i> Cancel
+                        </a>
+                        <button type="submit" class="btn btn-danger">
+                            <i class="fas fa-trash"></i> Delete Patient
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

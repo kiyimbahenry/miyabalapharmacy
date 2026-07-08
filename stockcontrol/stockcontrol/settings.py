@@ -123,11 +123,25 @@ STATIC_URL = 'static/'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
-# ============ AUTHENTICATION SETTINGS (ADD THESE) ============
-# Login/Logout URLs
-LOGIN_URL = '/login/'  # Redirect here if user is not logged in
-LOGIN_REDIRECT_URL = '/'  # Redirect here after successful login
-LOGOUT_REDIRECT_URL = '/login/'  # Redirect here after logout
+# ============ AUTHENTICATION SETTINGS ============
+LOGIN_URL = '/login/'
+LOGIN_REDIRECT_URL = '/'
+LOGOUT_REDIRECT_URL = '/login/'
 
-# Optional: If you want to use sessions for longer
-# SESSION_COOKIE_AGE = 86400  # 24 hours in seconds
+# ============================================================
+# EMAIL CONFIGURATION - FIXED
+# ============================================================
+
+# Option 1: For Gmail (REAL EMAIL SENDING)
+# You need to use an App Password, NOT your regular password
+EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST = 'smtp.gmail.com'
+EMAIL_PORT = 587
+EMAIL_USE_TLS = True
+EMAIL_HOST_USER = 'kiyimbahenry314@gmail.com'  # FIXED: removed 'your-'
+EMAIL_HOST_PASSWORD = 'oetpdk6fs5utanbq62q6rwbuzxu53kf7'  # ← YOU NEED AN APP PASSWORD, NOT 'admin256'
+DEFAULT_FROM_EMAIL = 'kiyimbahenry314@gmail.com'  # FIXED: removed 'your-'
+
+# Option 2: For Testing (PRINTS EMAIL TO CONSOLE)
+# Uncomment this to test without sending real emails
+# EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'

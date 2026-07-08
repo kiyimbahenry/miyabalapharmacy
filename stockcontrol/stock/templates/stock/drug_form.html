@@ -13,201 +13,137 @@
                 </h4>
             </div>
             <div class="card-body">
-                <form method="POST" id="drugForm">
+                <form method="POST">
                     {% csrf_token %}
                     
                     <div class="row">
-                        <!-- ===== LEFT COLUMN ===== -->
+                        <!-- Left Column -->
                         <div class="col-md-6">
-                            <div class="card h-100">
-                                <div class="card-header bg-light" style="background: #f7fafc !important; color: #2d3748 !important;">
-                                    <h5><i class="fas fa-info-circle" style="color: #667eea;"></i> Drug Information</h5>
-                                </div>
-                                <div class="card-body">
-                                    <!-- Row 1: Generic Name -->
-                                    <div class="mb-3">
-                                        <label for="generic_name" class="form-label fw-bold">
-                                            Generic Name <span class="text-danger">*</span>
-                                        </label>
-                                        <input type="text" class="form-control" id="generic_name" name="generic_name" 
-                                               value="{{ drug.generic_name|default:'' }}" required>
-                                    </div>
-                                    
-                                    <!-- Row 2: Dosage -->
-                                    <div class="mb-3">
-                                        <label for="dosage" class="form-label fw-bold">
-                                            Dosage <span class="text-danger">*</span>
-                                        </label>
-                                        <select class="form-select" id="dosage" name="dosage" required>
-                                            <option value="">-- Select Dosage --</option>
-                                            <option value="tablet" {% if drug.dosage == 'tablet' %}selected{% endif %}>Tablet</option>
-                                            <option value="capsules" {% if drug.dosage == 'capsules' %}selected{% endif %}>Capsules</option>
-                                            <option value="injection" {% if drug.dosage == 'injection' %}selected{% endif %}>Injection</option>
-                                            <option value="syrup" {% if drug.dosage == 'syrup' %}selected{% endif %}>Syrup</option>
-                                            <option value="suspension" {% if drug.dosage == 'suspension' %}selected{% endif %}>Suspension</option>
-                                            <option value="drops" {% if drug.dosage == 'drops' %}selected{% endif %}>Drops</option>
-                                            <option value="ointment" {% if drug.dosage == 'ointment' %}selected{% endif %}>Ointment</option>
-                                            <option value="cream" {% if drug.dosage == 'cream' %}selected{% endif %}>Cream</option>
-                                            <option value="jerry" {% if drug.dosage == 'jerry' %}selected{% endif %}>Jerry</option>
-                                            <option value="oil" {% if drug.dosage == 'oil' %}selected{% endif %}>Oil</option>
-                                            <option value="spray" {% if drug.dosage == 'spray' %}selected{% endif %}>Spray</option>
-                                            <option value="gel" {% if drug.dosage == 'gel' %}selected{% endif %}>Gel</option>
-                                            <option value="powder" {% if drug.dosage == 'powder' %}selected{% endif %}>Powder</option>
-                                            <option value="liquid" {% if drug.dosage == 'liquid' %}selected{% endif %}>Liquid</option>
-                                            <option value="balm" {% if drug.dosage == 'balm' %}selected{% endif %}>Balm</option>
-                                        </select>
-                                    </div>
-                                    
-                                    <!-- Row 3: No. of Packets Bought -->
-                                    <div class="mb-3">
-                                        <label for="stock_quantity" class="form-label fw-bold">
-                                            No. of Packets Bought <span class="text-danger">*</span>
-                                        </label>
-                                        <input type="number" class="form-control" id="stock_quantity" name="stock_quantity" 
-                                               value="{{ drug.stock_quantity|default:'0' }}" min="0" required>
-                                    </div>
-                                    
-                                    <!-- Row 4: Cost Price -->
-                                    <div class="mb-3">
-                                        <label for="cost_price" class="form-label fw-bold">
-                                            Cost Price (UGX) <span class="text-danger">*</span>
-                                        </label>
-                                        <input type="number" step="0.01" class="form-control" id="cost_price" name="cost_price" 
-                                               value="{{ drug.cost_price|default:'0' }}" required>
-                                    </div>
-                                    
-                                    <!-- Row 5: Expiry Date -->
-                                    <div class="mb-3">
-                                        <label for="expiry_date" class="form-label fw-bold">
-                                            Expiry Date <span class="text-danger">*</span>
-                                        </label>
-                                        <input type="date" class="form-control" id="expiry_date" name="expiry_date" 
-                                               value="{{ drug.expiry_date|date:'Y-m-d'|default:'' }}" required>
-                                    </div>
-                                    
-                                    <!-- Row 6: Who Entered -->
-                                    <div class="mb-3">
-                                        <label for="created_by" class="form-label fw-bold">Who Entered</label>
-                                        <input type="text" class="form-control" id="created_by" 
-                                               value="{{ request.user.username }}" disabled>
-                                        <small class="text-muted">Current user: {{ request.user.username }}</small>
-                                    </div>
-                                </div>
+                            <h5 class="border-bottom pb-2">Drug Information</h5>
+                            
+                            <div class="mb-3">
+                                <label class="form-label required-field">Generic Name</label>
+                                <input type="text" name="generic_name" class="form-control" 
+                                       value="{{ drug.generic_name|default:'' }}" required>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label required-field">Dosage</label>
+                                <select name="dosage" class="form-select" required>
+                                    <option value="">-- Select Dosage --</option>
+                                    <option value="tablet" {% if drug.dosage == 'tablet' %}selected{% endif %}>Tablet</option>
+                                    <option value="capsules" {% if drug.dosage == 'capsules' %}selected{% endif %}>Capsules</option>
+                                    <option value="injection" {% if drug.dosage == 'injection' %}selected{% endif %}>Injection</option>
+                                    <option value="syrup" {% if drug.dosage == 'syrup' %}selected{% endif %}>Syrup</option>
+                                    <option value="suspension" {% if drug.dosage == 'suspension' %}selected{% endif %}>Suspension</option>
+                                    <option value="drops" {% if drug.dosage == 'drops' %}selected{% endif %}>Drops</option>
+                                    <option value="ointment" {% if drug.dosage == 'ointment' %}selected{% endif %}>Ointment</option>
+                                    <option value="cream" {% if drug.dosage == 'cream' %}selected{% endif %}>Cream</option>
+                                    <option value="liquid" {% if drug.dosage == 'liquid' %}selected{% endif %}>Liquid</option>
+                                    <option value="powder" {% if drug.dosage == 'powder' %}selected{% endif %}>Powder</option>
+                                </select>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label required-field">Pack Size (Units per Packet)</label>
+                                <input type="number" name="pack_size" class="form-control" 
+                                       value="{{ drug.pack_size|default:'' }}" min="1" required>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label required-field">Cost Price (UGX per Packet)</label>
+                                <input type="number" step="0.01" name="cost_price" class="form-control" 
+                                       value="{{ drug.cost_price|default:'' }}" min="0" required>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label required-field">Expiry Date</label>
+                                <input type="text" name="expiry_date" class="form-control" 
+                                       value="{{ drug.expiry_date|date:'d/m/Y'|default:'' }}" 
+                                       placeholder="dd/mm/yyyy" required>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Brand Name</label>
+                                <input type="text" name="brand" class="form-control" 
+                                       value="{{ drug.brand|default:'' }}">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Strength</label>
+                                <input type="text" name="strength" class="form-control" 
+                                       value="{{ drug.strength|default:'' }}" placeholder="e.g., 500mg">
                             </div>
                         </div>
                         
-                        <!-- ===== RIGHT COLUMN ===== -->
+                        <!-- Right Column -->
                         <div class="col-md-6">
-                            <div class="card h-100">
-                                <div class="card-header bg-light" style="background: #f7fafc !important; color: #2d3748 !important;">
-                                    <h5><i class="fas fa-cog" style="color: #667eea;"></i> Additional Details</h5>
-                                </div>
-                                <div class="card-body">
-                                    <!-- Row 1: Brand Name -->
-                                    <div class="mb-3">
-                                        <label for="brand" class="form-label fw-bold">Brand Name</label>
-                                        <input type="text" class="form-control" id="brand" name="brand" 
-                                               value="{{ drug.brand|default:'' }}">
-                                    </div>
-                                    
-                                    <!-- Row 2: Strength -->
-                                    <div class="mb-3">
-                                        <label for="strength" class="form-label fw-bold">Strength</label>
-                                        <input type="text" class="form-control" id="strength" name="strength" 
-                                               value="{{ drug.strength|default:'' }}" placeholder="e.g., 500mg">
-                                    </div>
-                                    
-                                    <!-- Row 3: Batch No. -->
-                                    <div class="mb-3">
-                                        <label for="batch_no" class="form-label fw-bold">Batch No.</label>
-                                        <input type="text" class="form-control" id="batch_no" name="batch_no" 
-                                               value="{{ drug.batch_no|default:'' }}">
-                                    </div>
-                                    
-                                    <!-- Row 4: Selling Price (Auto-calculated) -->
-                                    <div class="mb-3">
-                                        <label for="selling_price" class="form-label fw-bold">
-                                            Selling Price (UGX) <span class="text-danger">*</span>
-                                        </label>
-                                        <input type="number" step="0.01" class="form-control bg-light" id="selling_price" name="selling_price" 
-                                               value="{{ drug.selling_price|default:'0' }}" 
-                                               readonly style="font-weight: bold; color: #2d3748; font-size: 16px;">
-                                        <small class="text-muted">
-                                            <i class="fas fa-calculator"></i> Auto-calculated: Cost Price × 1.5 (50% markup)
-                                        </small>
-                                    </div>
-                                    
-                                    <!-- Row 5: Supplier -->
-                                    <div class="mb-3">
-                                        <label for="supplier" class="form-label fw-bold">
-                                            Supplier <span class="text-danger">*</span>
-                                        </label>
-                                        <select class="form-select" id="supplier" name="supplier" required>
-                                            <option value="">-- Select Supplier --</option>
-                                            {% for supplier in suppliers %}
-                                            <option value="{{ supplier.id }}" {% if drug.supplier.id == supplier.id %}selected{% endif %}>
-                                                {{ supplier.name }}
-                                            </option>
-                                            {% endfor %}
-                                        </select>
-                                    </div>
-                                    
-                                    <!-- Row 6: Pack Size -->
-                                    <div class="mb-3">
-                                        <label for="pack_size" class="form-label fw-bold">Pack Size</label>
-                                        <input type="text" class="form-control" id="pack_size" name="pack_size" 
-                                               value="{{ drug.pack_size|default:'' }}" placeholder="e.g., 10 tablets, 100ml">
-                                    </div>
-                                </div>
+                            <h5 class="border-bottom pb-2">Additional Details</h5>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Batch No.</label>
+                                <input type="text" name="batch_no" class="form-control" 
+                                       value="{{ drug.batch_no|default:'' }}">
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label required-field">No. of Packets Bought</label>
+                                <input type="number" name="stock_quantity" class="form-control" 
+                                       value="{{ drug.stock_quantity|default:'0' }}" min="0" required>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label required-field">Supplier</label>
+                                <select name="supplier" class="form-select" required>
+                                    <option value="">-- Select Supplier --</option>
+                                    {% for supplier in suppliers %}
+                                        <option value="{{ supplier.id }}" {% if drug.supplier.id == supplier.id %}selected{% endif %}>
+                                            {{ supplier.name }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label required-field">Selling Price (UGX per Tablet)</label>
+                                <input type="number" step="0.01" name="selling_price" class="form-control" 
+                                       value="{{ drug.selling_price|default:'' }}" min="0" required>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Category</label>
+                                <select name="category" class="form-select">
+                                    <option value="1">General</option>
+                                    {% for category in categories %}
+                                        <option value="{{ category.id }}" {% if drug.category.id == category.id %}selected{% endif %}>
+                                            {{ category.name }}
+                                        </option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">Reorder Level</label>
+                                <input type="number" name="reorder_level" class="form-control" 
+                                       value="{{ drug.reorder_level|default:'10' }}" min="0">
+                                <small class="text-muted">Alert when stock falls below this level</small>
                             </div>
                         </div>
                     </div>
                     
-                    <!-- Hidden Fields -->
-                    <input type="hidden" name="name" id="drug_name" value="{{ drug.name|default:'' }}">
-                    <input type="hidden" name="category" value="1">
+                    <hr>
                     
-                    <!-- Form Actions -->
-                    <div class="row mt-4">
-                        <div class="col-12 text-center">
-                            <button type="submit" class="btn btn-success btn-lg px-5">
-                                <i class="fas fa-save"></i> {% if is_edit %}Update Drug{% else %}Save Drug{% endif %}
-                            </button>
-                            <a href="{% url 'stock:drug_list' %}" class="btn btn-secondary btn-lg px-5">
-                                <i class="fas fa-times"></i> Cancel
-                            </a>
-                        </div>
+                    <div class="d-flex justify-content-end gap-2">
+                        <a href="{% url 'stock:drug_list' %}" class="btn btn-secondary">
+                            <i class="fas fa-times"></i> Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> {% if is_edit %}Update Drug{% else %}Add Drug{% endif %}
+                        </button>
                     </div>
                 </form>
             </div>
         </div>
     </div>
 </div>
-
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-    const genericInput = document.getElementById('generic_name');
-    const nameInput = document.getElementById('drug_name');
-    const costPriceInput = document.getElementById('cost_price');
-    const sellingPriceInput = document.getElementById('selling_price');
-    
-    // Auto-fill name from generic_name
-    if (genericInput && nameInput) {
-        genericInput.addEventListener('input', function() {
-            if (!nameInput.value || nameInput.value === '') {
-                nameInput.value = this.value;
-            }
-        });
-    }
-    
-    // Auto-calculate selling price (1.5x of cost price)
-    if (costPriceInput && sellingPriceInput) {
-        costPriceInput.addEventListener('input', function() {
-            const costPrice = parseFloat(this.value) || 0;
-            const sellingPrice = costPrice * 1.5;  // 50% markup
-            sellingPriceInput.value = sellingPrice.toFixed(2);
-        });
-    }
-});
-</script>
 {% endblock %}
