@@ -15,7 +15,13 @@ import traceback
 from datetime import datetime, timedelta
 from decimal import Decimal
 
-from .models import Drug, Supplier, Invoice, Category, InvoiceItem, Sale, SaleItem, Receipt, Report, ChronicPatient, PatientMedication, PatientVisit
+# ===== ADD MISSING IMPORTS =====
+from .models import (
+    Drug, Supplier, Invoice, Category, InvoiceItem,
+    Sale, SaleItem, Receipt, Report, ChronicPatient,
+    PatientMedication, PatientVisit,
+    ReturnedDrug, StockMovement   # <-- added
+)
 
 
 def is_admin_or_manager(user):
@@ -378,7 +384,7 @@ def drug_list(request):
 # ============================================================
 
 @login_required
-@user_passes_test(is_admin_or_manager)   # <-- ADDED
+@user_passes_test(is_admin_or_manager)
 def drug_create(request):
     """Create a new drug/medicine"""
     categories = Category.objects.all()
@@ -507,7 +513,7 @@ def drug_create(request):
 # ============================================================
 
 @login_required
-@user_passes_test(is_admin_or_manager)   # <-- ADDED
+@user_passes_test(is_admin_or_manager)
 def drug_edit(request, drug_id):
     """Edit an existing drug/medicine"""
     drug = get_object_or_404(Drug, id=drug_id)
@@ -631,7 +637,7 @@ def drug_edit(request, drug_id):
 # ============================================================
 
 @login_required
-@user_passes_test(is_admin_or_manager)   # <-- ADDED
+@user_passes_test(is_admin_or_manager)
 def drug_delete(request, drug_id):
     """Delete a drug/medicine"""
     drug = get_object_or_404(Drug, id=drug_id)
@@ -654,7 +660,7 @@ def drug_delete(request, drug_id):
 # ============================================================
 
 @login_required
-@user_passes_test(is_admin_or_manager)   # <-- ADDED
+@user_passes_test(is_admin_or_manager)
 def add_stock_to_drug(request):
     """
     Add stock to an existing drug, linked to an invoice.
@@ -976,6 +982,91 @@ def get_daily_sales_api(request):
 
 
 # ============================================================
+# RETURN VIEWS
+# ============================================================
+
+@login_required
+def return_list(request):
+    """List all returned drugs"""
+    returns = ReturnedDrug.objects.all().select_related('receipt', 'drug', 'created_by').order_by('-returned_date')
+    return render(request, 'stock/return_list.html', {'returns': returns})
+
+
+@login_required
+def return_create(request):
+    """Create a new return"""
+    if request.method == 'POST':
+        try:
+            receipt_id = request.POST.get('receipt')
+            drug_id = request.POST.get('drug')
+            quantity = int(request.POST.get('quantity', 0))
+            reason = request.POST.get('reason', '')
+
+            if not receipt_id or not drug_id or quantity <= 0:
+                messages.error(request, 'Please fill all required fields correctly.')
+                return redirect('stock:return_create')
+
+            receipt = get_object_or_404(Receipt, id=receipt_id)
+            drug = get_object_or_404(Drug, id=drug_id)
+
+            # Check that the drug is present in the receipt's items
+            receipt_item = None
+            for item in receipt.items:
+                if item.get('drug_id') == drug.id or item.get('drug_name') == drug.name:
+                    receipt_item = item
+                    break
+
+            if not receipt_item:
+                messages.error(request, 'This drug is not on the selected receipt.')
+                return redirect('stock:return_create')
+
+            # Get unit price from receipt item (or use current selling price)
+            unit_price = receipt_item.get('unit_price', drug.selling_price)
+            # Convert to Decimal
+            from decimal import Decimal
+            unit_price = Decimal(str(unit_price))
+
+            # Create return record
+            return_obj = ReturnedDrug.objects.create(
+                receipt=receipt,
+                drug=drug,
+                quantity=quantity,
+                unit_price=unit_price,
+                reason=reason,
+                created_by=request.user
+            )
+
+            # Restore stock
+            drug.stock_quantity += quantity
+            drug.save()
+
+            # Create a stock movement entry
+            StockMovement.objects.create(
+                drug=drug,
+                quantity=quantity,
+                movement_type='return',
+                reference=f"Return from Receipt {receipt.receipt_number}",
+                notes=reason,
+                created_by=request.user
+            )
+
+            messages.success(request, f'Successfully returned {quantity} of "{drug.name}" to stock.')
+            return redirect('stock:return_list')
+
+        except Exception as e:
+            messages.error(request, f'Error creating return: {str(e)}')
+            return redirect('stock:return_create')
+
+    # GET – show form
+    receipts = Receipt.objects.all().order_by('-created_at')
+    drugs = Drug.objects.all().order_by('name')
+    return render(request, 'stock/return_form.html', {
+        'receipts': receipts,
+        'drugs': drugs,
+    })
+
+
+# ============================================================
 # REPORT VIEWS
 # ============================================================
 
@@ -1108,8 +1199,12 @@ def generate_report_api(request):
         return JsonResponse({'success': False, 'message': str(e)}, status=500)
 
 
+# ============================================================
+# FIXED: generate_report_data – returns now included correctly
+# ============================================================
+
 def generate_report_data(report_type):
-    """Generate report data based on type"""
+    """Generate report data based on type (including returns)"""
     today = timezone.now().date()
     report_data = {
         'report_type': report_type,
@@ -1141,24 +1236,40 @@ def generate_report_data(report_type):
         start_date = today
         end_date = today
 
-    # Get receipts within date range
+    # ----- Get receipts within date range -----
     receipts = Receipt.objects.filter(
         created_at__date__gte=start_date,
         created_at__date__lte=end_date
     )
 
-    # Sales summary
+    # ----- Get returns within date range -----
+    returns = ReturnedDrug.objects.filter(
+        returned_date__date__gte=start_date,
+        returned_date__date__lte=end_date
+    )
+
+    # ----- Sales summary -----
     total_sales = receipts.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
     total_transactions = receipts.count()
     total_items_sold = 0
-
     for receipt in receipts:
         if receipt.items:
             for item in receipt.items:
                 total_items_sold += item.get('quantity', 0)
 
+    # ----- Returns summary -----
+    total_returned_amount = returns.aggregate(Sum('total_refund'))['total_refund__sum'] or 0
+    total_returned_items = returns.aggregate(Sum('quantity'))['quantity__sum'] or 0
+
+    # Net sales = total sales - total returns
+    net_sales = total_sales - total_returned_amount
+
+    # ----- Build sales dict -----
     report_data['sales'] = {
         'total_amount': float(total_sales),
+        'net_sales': float(net_sales),
+        'total_returns': float(total_returned_amount),
+        'total_returned_items': int(total_returned_items),
         'total_transactions': total_transactions,
         'total_items_sold': total_items_sold,
         'average_transaction': float(total_sales / total_transactions) if total_transactions > 0 else 0,
@@ -1166,12 +1277,11 @@ def generate_report_data(report_type):
         'end_date': end_date.strftime('%Y-%m-%d'),
     }
 
-    # Payment breakdown
+    # ----- Payment breakdown -----
     payment_breakdown = receipts.values('payment_method').annotate(
         total=Sum('total_amount'),
         count=Count('id')
     )
-
     for item in payment_breakdown:
         report_data['payment_breakdown'].append({
             'method': item['payment_method'] or 'unknown',
@@ -1179,7 +1289,7 @@ def generate_report_data(report_type):
             'count': item['count']
         })
 
-    # Top selling products
+    # ----- Top selling products -----
     product_sales = {}
     for receipt in receipts:
         if receipt.items:
@@ -1193,7 +1303,6 @@ def generate_report_data(report_type):
                 else:
                     product_sales[name] = {'quantity': quantity, 'total': total}
 
-    # Get top 10
     sorted_products = sorted(product_sales.items(), key=lambda x: x[1]['quantity'], reverse=True)[:10]
     for name, data in sorted_products:
         report_data['top_products'].append({
@@ -1202,12 +1311,11 @@ def generate_report_data(report_type):
             'total': float(data['total'])
         })
 
-    # Invoice summary
+    # ----- Invoice summary -----
     invoices = Invoice.objects.filter(
         created_at__date__gte=start_date,
         created_at__date__lte=end_date
     )
-
     report_data['invoices'] = {
         'total_invoices': invoices.count(),
         'total_invoice_value': float(invoices.aggregate(Sum('total_amount'))['total_amount__sum'] or 0),
@@ -1442,7 +1550,6 @@ def user_list(request):
 def user_create(request):
     """Create a new user (admin only)"""
 
-    # ===== ADD THIS LINE =====
     ROLE_CHOICES = [
         ('admin', 'Admin'),
         ('manager', 'Manager'),
@@ -1459,13 +1566,13 @@ def user_create(request):
             password = request.POST.get('password')
             is_staff = request.POST.get('is_staff') == 'on'
             is_superuser = request.POST.get('is_superuser') == 'on'
-            role = request.POST.get('role')  # 👈 capture role from dropdown
+            role = request.POST.get('role')
 
             if User.objects.filter(username=username).exists():
                 messages.error(request, 'Username already exists.')
                 return render(request, 'stock/user_form.html', {
                     'is_edit': False,
-                    'role_choices': ROLE_CHOICES,   # 👈 pass to template
+                    'role_choices': ROLE_CHOICES,
                 })
 
             user = User.objects.create_user(
@@ -1477,7 +1584,6 @@ def user_create(request):
             user.is_superuser = is_superuser
             user.save()
 
-            # ===== Assign user to a group based on role =====
             if role:
                 from django.contrib.auth.models import Group
                 group, _ = Group.objects.get_or_create(name=role)
@@ -1489,17 +1595,16 @@ def user_create(request):
         except Exception as e:
             messages.error(request, f'Error creating user: {str(e)}')
 
-    # GET request – show the form
     return render(request, 'stock/user_form.html', {
         'is_edit': False,
-        'role_choices': ROLE_CHOICES,   # 👈 always pass to template
+        'role_choices': ROLE_CHOICES,
     })
 
 
 @login_required
 @user_passes_test(is_admin)
 def user_detail(request, user_id):
-    """View user details (admin only) - ADDED THIS MISSING VIEW"""
+    """View user details (admin only)"""
     user = get_object_or_404(User, id=user_id)
     return render(request, 'stock/user_detail.html', {'user': user})
 
@@ -1510,7 +1615,6 @@ def user_edit(request, user_id):
     """Edit a user (admin only)"""
     user = get_object_or_404(User, id=user_id)
 
-    # ===== ROLE CHOICES =====
     ROLE_CHOICES = [
         ('admin', 'Admin'),
         ('manager', 'Manager'),
@@ -1520,7 +1624,6 @@ def user_edit(request, user_id):
         ('viewer', 'Viewer (Read-only)'),
     ]
 
-    # Get current role (assuming it's stored in a group)
     current_role = user.groups.first().name if user.groups.exists() else ''
 
     if request.method == 'POST':
@@ -1559,7 +1662,6 @@ def user_edit(request, user_id):
                 user.set_password(password)
             user.save()
 
-            # Update role (remove old groups, add new one)
             if role:
                 user.groups.clear()
                 from django.contrib.auth.models import Group
@@ -1582,7 +1684,7 @@ def user_edit(request, user_id):
 
 
 @login_required
-@user_passes_test(is_admin_or_manager)   # already using the combined check
+@user_passes_test(is_admin_or_manager)
 def user_delete(request, user_id):
     """Delete a user (admin or manager)"""
     user = get_object_or_404(User, id=user_id)

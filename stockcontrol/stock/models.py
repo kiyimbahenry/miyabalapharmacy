@@ -345,6 +345,33 @@ class Receipt(models.Model):
             self.receipt_number = f"REC-{today}-{str(count).zfill(4)}"
         super().save(*args, **kwargs)
 
+# ============================================================
+# RETURNED DRUG MODEL
+# ============================================================
+
+class ReturnedDrug(models.Model):
+    """Record of drugs returned by customers after sale"""
+    receipt = models.ForeignKey(Receipt, on_delete=models.CASCADE, related_name='returns')
+    drug = models.ForeignKey(Drug, on_delete=models.PROTECT, related_name='returns')
+    quantity = models.PositiveIntegerField()
+    unit_price = models.DecimalField(max_digits=10, decimal_places=2)
+    total_refund = models.DecimalField(max_digits=12, decimal_places=2)
+    reason = models.TextField(blank=True, null=True)
+    returned_date = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='returns_created')
+
+    class Meta:
+        ordering = ['-returned_date']
+        verbose_name_plural = "Returned Drugs"
+
+    def __str__(self):
+        return f"{self.drug.name} x{self.quantity} (Receipt {self.receipt.receipt_number})"
+
+    def save(self, *args, **kwargs):
+        # Auto‑calculate total_refund
+        self.total_refund = self.quantity * self.unit_price
+        super().save(*args, **kwargs)
+
 # REPORT MODEL
 
 class Report(models.Model):

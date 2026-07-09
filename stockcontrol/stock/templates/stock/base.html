@@ -231,6 +231,13 @@
                             </a>
                         </li>
 
+                        <!-- Returns -->
+                        <li class="nav-item">
+                            <a class="nav-link {% if 'return' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'stock:return_list' %}">
+                                <i class="fas fa-undo-alt"></i> Returns
+                            </a>
+                        </li>
+
                         <!-- New Sale (always visible) -->
                         <li class="nav-item">
                             <a class="nav-link {% if 'create_sale' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'stock:create_sale' %}">

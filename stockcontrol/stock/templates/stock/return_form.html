@@ -1,0 +1,63 @@
+{% extends 'stock/base.html' %}
+{% load static %}
+
+{% block title %}New Return{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-md-8 mx-auto">
+        <div class="card shadow">
+            <div class="card-header">
+                <h4><i class="fas fa-undo-alt"></i> Record Return</h4>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    {% csrf_token %}
+
+                    <div class="mb-3">
+                        <label class="form-label required-field">Receipt</label>
+                        <select name="receipt" class="form-select" required>
+                            <option value="">-- Select Receipt --</option>
+                            {% for receipt in receipts %}
+                                <option value="{{ receipt.id }}">
+                                    {{ receipt.receipt_number }} - {{ receipt.created_at|date:"d/m/Y H:i" }}
+                                </option>
+                            {% endfor %}
+                        </select>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label required-field">Drug</label>
+                        <select name="drug" class="form-select" required>
+                            <option value="">-- Select Drug --</option>
+                            {% for drug in drugs %}
+                                <option value="{{ drug.id }}">{{ drug.name }}</option>
+                            {% endfor %}
+                        </select>
+                        <small class="text-muted">Select the drug being returned (must match a drug on the selected receipt).</small>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label required-field">Quantity</label>
+                        <input type="number" name="quantity" class="form-control" min="1" required>
+                    </div>
+
+                    <div class="mb-3">
+                        <label class="form-label">Reason</label>
+                        <textarea name="reason" class="form-control" rows="3" placeholder="Why is the drug being returned?"></textarea>
+                    </div>
+
+                    <hr>
+
+                    <div class="d-flex justify-content-end gap-2">
+                        <a href="{% url 'stock:return_list' %}" class="btn btn-secondary">Cancel</a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Record Return
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}

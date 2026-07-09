@@ -66,6 +66,8 @@ urlpatterns = [
     path('receipts/<int:receipt_id>/print/', views.print_receipt, name='print_receipt'),
     path('sale/create/', views.create_sale_receipt, name='create_sale'),
     path('api/complete-sale/', views.complete_sale, name='complete_sale'),
+    path('returns/', views.return_list, name='return_list'),
+    path('returns/create/', views.return_create, name='return_create'),
     # ============================================================
     # REPORT URLs - ADDED
     # ============================================================
