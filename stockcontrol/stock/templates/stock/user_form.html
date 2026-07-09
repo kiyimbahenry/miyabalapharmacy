@@ -145,21 +145,21 @@
         <div class="card">
             <form method="POST">
                 {% csrf_token %}
-                
+
                 <div class="form-row">
                     <div class="form-group">
                         <label for="id_username">Username *</label>
-                        <input type="text" name="username" id="id_username" 
+                        <input type="text" name="username" id="id_username"
                                value="{{ form.username.value|default:'' }}" required>
                         {% if form.username.errors %}
                             <ul class="errorlist">{{ form.username.errors }}</ul>
                         {% endif %}
                         <div class="help-text">Required. 150 characters or fewer. Letters, digits and @/./+/-/_ only.</div>
                     </div>
-                    
+
                     <div class="form-group">
                         <label for="id_email">Email *</label>
-                        <input type="email" name="email" id="id_email" 
+                        <input type="email" name="email" id="id_email"
                                value="{{ form.email.value|default:'' }}" required>
                         {% if form.email.errors %}
                             <ul class="errorlist">{{ form.email.errors }}</ul>
@@ -170,16 +170,16 @@
                 <div class="form-row">
                     <div class="form-group">
                         <label for="id_first_name">First Name *</label>
-                        <input type="text" name="first_name" id="id_first_name" 
+                        <input type="text" name="first_name" id="id_first_name"
                                value="{{ form.first_name.value|default:'' }}" required>
                         {% if form.first_name.errors %}
                             <ul class="errorlist">{{ form.first_name.errors }}</ul>
                         {% endif %}
                     </div>
-                    
+
                     <div class="form-group">
                         <label for="id_last_name">Last Name *</label>
-                        <input type="text" name="last_name" id="id_last_name" 
+                        <input type="text" name="last_name" id="id_last_name"
                                value="{{ form.last_name.value|default:'' }}" required>
                         {% if form.last_name.errors %}
                             <ul class="errorlist">{{ form.last_name.errors }}</ul>
@@ -196,7 +196,7 @@
                         {% endif %}
                         <div class="help-text">Your password must contain at least 8 characters.</div>
                     </div>
-                    
+
                     <div class="form-group">
                         <label for="id_password2">Confirm Password *</label>
                         <input type="password" name="password2" id="id_password2" required>
@@ -206,13 +206,14 @@
                     </div>
                 </div>
 
+                <!-- ===== UPDATED ROLE DROPDOWN ===== -->
                 <div class="form-group">
                     <label for="id_role">Role *</label>
                     <select name="role" id="id_role" required>
-                        <option value="">Select a role...</option>
-                        {% for role_value, role_label in form.fields.role.choices %}
-                            <option value="{{ role_value }}" 
-                                {% if form.role.value == role_value %}selected{% endif %}>
+                        <option value="">-- Select a role --</option>
+                        {% for role_value, role_label in role_choices %}
+                            <option value="{{ role_value }}"
+                                {% if user_role == role_value %}selected{% endif %}>
                                 {{ role_label }}
                             </option>
                         {% endfor %}
@@ -224,7 +225,7 @@
 
                 <div class="form-group">
                     <label for="id_phone_number">Phone Number</label>
-                    <input type="text" name="phone_number" id="id_phone_number" 
+                    <input type="text" name="phone_number" id="id_phone_number"
                            value="{{ form.phone_number.value|default:'' }}">
                 </div>
 

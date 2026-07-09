@@ -1,223 +1,179 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <meta charset="UTF-8">
     <title>Receipt #{{ receipt.receipt_number }}</title>
     <style>
-        @media print {
-            body { margin: 0; padding: 20px; font-family: 'Courier New', monospace; }
-            .no-print { display: none; }
-            .receipt { max-width: 80mm; margin: 0 auto; }
-            .print-btn { display: none; }
+        @page {
+            margin: 0.5in;
         }
         body {
-            font-family: 'Courier New', monospace;
-            background: #f4f4f4;
-            padding: 20px;
-        }
-        .receipt {
-            max-width: 80mm;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            font-size: 14px;
+            line-height: 1.7;
+            max-width: 350px;
             margin: 0 auto;
+            padding: 15px;
             background: white;
-            padding: 20px;
-            border-radius: 8px;
-            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            color: #222;
         }
         .header {
             text-align: center;
-            border-bottom: 2px dashed #333;
-            padding-bottom: 10px;
-            margin-bottom: 10px;
+            border-bottom: 2px dashed #555;
+            padding-bottom: 12px;
+            margin-bottom: 12px;
         }
-        .header h2 {
+        .header h1 {
+            font-size: 22px;
             margin: 0;
-            font-size: 18px;
+            letter-spacing: 1px;
+            font-weight: 700;
         }
-        .header p {
-            margin: 2px 0;
-            font-size: 12px;
-            color: #666;
+        .header .sub {
+            font-size: 14px;
+            margin: 4px 0;
+            font-weight: 500;
+        }
+        .header .contact {
+            font-size: 13px;
+            margin: 4px 0;
+            color: #333;
         }
         .receipt-info {
-            font-size: 12px;
-            margin-bottom: 10px;
-        }
-        .receipt-info table {
-            width: 100%;
-            font-size: 12px;
-        }
-        .receipt-info td {
-            padding: 2px 0;
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            margin-bottom: 6px;
         }
         .items {
             width: 100%;
-            font-size: 12px;
             border-collapse: collapse;
-            margin: 10px 0;
+            margin: 12px 0;
+            font-size: 13px;
         }
         .items th {
             text-align: left;
-            border-bottom: 1px solid #ddd;
-            padding: 5px 0;
+            border-bottom: 1px dashed #555;
+            padding-bottom: 6px;
+            font-weight: 600;
         }
         .items td {
-            padding: 3px 0;
+            padding: 6px 0;
+            border-bottom: 1px dotted #ccc;
         }
-        .items .text-right {
+        .items .right {
             text-align: right;
         }
-        .total {
-            border-top: 2px dashed #333;
+        .total-row {
+            display: flex;
+            justify-content: space-between;
+            font-size: 18px;
+            font-weight: 700;
+            border-top: 2px solid #333;
             padding-top: 10px;
             margin-top: 10px;
-            font-size: 14px;
-            font-weight: bold;
+        }
+        .payment-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 13px;
+            margin-top: 6px;
         }
         .footer {
             text-align: center;
-            font-size: 11px;
-            color: #666;
-            border-top: 2px dashed #333;
-            padding-top: 10px;
-            margin-top: 10px;
+            border-top: 2px dashed #555;
+            padding-top: 14px;
+            margin-top: 18px;
+            font-size: 14px;
+            font-weight: 600;
+            color: #111;
+        }
+        .footer .thankyou {
+            margin-top: 8px;
+            font-weight: 400;
+            font-size: 14px;
+            line-height: 1.4;
         }
         .print-btn {
-            text-align: center;
-            margin-top: 20px;
-        }
-        .print-btn button {
-            padding: 10px 30px;
-            background: #3498db;
+            display: block;
+            margin: 25px auto 10px;
+            padding: 12px 35px;
+            background: #667eea;
             color: white;
             border: none;
-            border-radius: 5px;
+            border-radius: 6px;
             font-size: 16px;
             cursor: pointer;
+            font-weight: 500;
         }
-        .print-btn button:hover {
-            background: #2980b9;
+        @media print {
+            .print-btn { display: none; }
+            body { margin: 0; padding: 20px; }
+            .no-print { display: none; }
         }
     </style>
 </head>
 <body>
-    <div class="receipt">
-        <!-- Header -->
-        <div class="header">
-            <h2>M-9 Pharmacy</h2>
-            <p>Your Trusted Pharmacy</p>
-            <p>Tel: +256 700 000 000</p>
-            <p>Kampala, Uganda</p>
-        </div>
-
-        <!-- Receipt Info -->
-        <div class="receipt-info">
-            <table>
-                <tr>
-                    <td><strong>Receipt #:</strong></td>
-                    <td>{{ receipt.receipt_number }}</td>
-                </tr>
-                <tr>
-                    <td><strong>Date:</strong></td>
-                    <td>{{ receipt.created_at|date:'d/m/Y H:i' }}</td>
-                </tr>
-                <tr>
-                    <td><strong>Customer:</strong></td>
-                    <td>{{ receipt.customer_name|default:'Walk-in' }}</td>
-                </tr>
-                <tr>
-                    <td><strong>Phone:</strong></td>
-                    <td>{{ receipt.customer_phone|default:'N/A' }}</td>
-                </tr>
-                <tr>
-                    <td><strong>Payment:</strong></td>
-                    <td>{{ receipt.payment_method|title }}</td>
-                </tr>
-                <tr>
-                    <td><strong>Cashier:</strong></td>
-                    <td>{{ receipt.created_by.username }}</td>
-                </tr>
-            </table>
-        </div>
-
-        <hr>
-
-        <!-- Items -->
-        <table class="items">
-            <thead>
-                <tr>
-                    <th>Item</th>
-                    <th class="text-right">Qty</th>
-                    <th class="text-right">Price</th>
-                    <th class="text-right">Total</th>
-                </tr>
-            </thead>
-            <tbody>
-                {% for item in receipt.items %}
-                <tr>
-                    <td>{{ item.drug_name }}</td>
-                    <td class="text-right">{{ item.quantity }}</td>
-                    <td class="text-right">{{ item.unit_price|floatformat:0 }}</td>
-                    <td class="text-right">{{ item.total|floatformat:0 }}</td>
-                </tr>
-                {% endfor %}
-            </tbody>
-        </table>
-
-        <!-- Total -->
-        <div class="total">
-            <table style="width:100%;">
-                <tr>
-                    <td><strong>Subtotal:</strong></td>
-                    <td class="text-right">UGX {{ receipt.total_amount|floatformat:0 }}</td>
-                </tr>
-                <tr>
-                    <td><strong>Amount Paid:</strong></td>
-                    <td class="text-right">UGX {{ receipt.amount_paid|floatformat:0 }}</td>
-                </tr>
-                {% if receipt.change_due > 0 %}
-                <tr>
-                    <td><strong>Change Due:</strong></td>
-                    <td class="text-right">UGX {{ receipt.change_due|floatformat:0 }}</td>
-                </tr>
-                {% endif %}
-                <tr style="font-size:16px; border-top:2px solid #333;">
-                    <td><strong>TOTAL:</strong></td>
-                    <td class="text-right"><strong>UGX {{ receipt.total_amount|floatformat:0 }}</strong></td>
-                </tr>
-            </table>
-        </div>
-
-        <!-- Footer -->
-        <div class="footer">
-            <p>Thank you for your purchase!</p>
-            <p>Items sold are NOT returnable</p>
-            <p>Visit us again!</p>
-            <p style="font-size:9px; color:#999; margin-top:5px;">
-                Printed: {{ receipt.printed_at|date:'d/m/Y H:i:s'|default:receipt.created_at|date:'d/m/Y H:i:s' }}
-            </p>
-        </div>
+    <!-- Header -->
+    <div class="header">
+        <h1>MIYABALA PHARMACY</h1>
+        <div class="sub">Located in Entebbe Lugonjo</div>
+        <div class="contact">📞 0759025693, 0780290815, 0762556915</div>
     </div>
 
-    <!-- Print Button -->
-    <div class="print-btn no-print">
-        <button onclick="window.print()">
-            <i class="fas fa-print"></i> Print Receipt
-        </button>
-        <br><br>
-        <a href="{% url 'stock:receipt_list' %}" class="btn btn-secondary">
-            <i class="fas fa-arrow-left"></i> Back to Receipts
-        </a>
-        <a href="{% url 'stock:create_sale' %}" class="btn btn-success">
-            <i class="fas fa-plus-circle"></i> New Sale
-        </a>
+    <!-- Receipt info -->
+    <div class="receipt-info">
+        <span><strong>Receipt #:</strong> {{ receipt.receipt_number }}</span>
+        <span><strong>Date:</strong> {{ receipt.created_at|date:"d/m/Y H:i" }}</span>
     </div>
+    <div class="receipt-info">
+        <span><strong>Customer:</strong> {{ receipt.customer_name|default:"Walk-in" }}</span>
+        <span><strong>Phone:</strong> {{ receipt.customer_phone|default:"N/A" }}</span>
+    </div>
+
+    <!-- Items table -->
+    <table class="items">
+        <thead>
+            <tr>
+                <th>Item</th>
+                <th class="right">Qty</th>
+                <th class="right">Price</th>
+                <th class="right">Total</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in receipt.items %}
+            <tr>
+                <td>{{ item.drug_name }}</td>
+                <td class="right">{{ item.quantity }}</td>
+                <td class="right">UGX {{ item.unit_price|floatformat:0 }}</td>
+                <td class="right">UGX {{ item.total|floatformat:0 }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+
+    <!-- Totals -->
+    <div class="total-row">
+        <span>Total</span>
+        <span>UGX {{ receipt.total_amount|floatformat:0 }}</span>
+    </div>
+    <div class="payment-info">
+        <span>Payment Method</span>
+        <span>{{ receipt.payment_method|title }}</span>
+    </div>
+
+    <!-- Footer -->
+    <div class="footer">
+        <div>⚠️ ONCE GOODS SOLD AREN'T RETURNABLE</div>
+        <div class="thankyou">THANK YOU FOR SUPPORTING US<br>WE WISH YOU WELL</div>
+    </div>
+
+    <!-- Print button (hidden when printing) -->
+    <button class="print-btn no-print" onclick="window.print()">🖨️ Print Receipt</button>
 
     <script>
-        // Auto-print when page loads (optional)
-        window.onload = function() {
-            // Uncomment below to auto-print
-            // window.print();
-        }
+        // Optionally auto-print when the page loads if you want
+        // window.onload = function() { window.print(); };
     </script>
 </body>
 </html>

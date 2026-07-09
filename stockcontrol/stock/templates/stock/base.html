@@ -183,56 +183,62 @@
                         <small>Pharmacy Management</small>
                     </div>
                     <ul class="nav flex-column">
-                        <!-- Dashboard -->
+                        <!-- Dashboard (always visible) -->
                         <li class="nav-item">
                             <a class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}" href="{% url 'stock:dashboard' %}">
                                 <i class="fas fa-tachometer-alt"></i> Dashboard
                             </a>
                         </li>
 
-                        <!-- Medicines -->
-                        <li class="nav-item">
-                            <a class="nav-link {% if 'drug' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'stock:drug_list' %}">
-                                <i class="fas fa-capsules"></i> Medicines
-                            </a>
-                        </li>
+                        <!-- ======================================== -->
+                        <!-- Medicines – visible only to admin/manager -->
+                        <!-- ======================================== -->
+                        {% with user_groups=user.groups.all|join:',' %}
+                            {% if user.is_superuser or 'admin' in user_groups or 'manager' in user_groups %}
+                                <li class="nav-item">
+                                    <a class="nav-link {% if 'drug' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'stock:drug_list' %}">
+                                        <i class="fas fa-capsules"></i> Medicines
+                                    </a>
+                                </li>
+                            {% endif %}
+                        {% endwith %}
 
-                        <!-- Chronic Patients -->
+                        <!-- Chronic Patients (always visible) -->
                         <li class="nav-item">
                             <a class="nav-link {% if 'patient' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'stock:patient_list' %}">
                                 <i class="fas fa-heartbeat"></i> Chronic Patients
                             </a>
                         </li>
 
-                        <!-- Suppliers -->
+                        <!-- Suppliers (always visible) -->
                         <li class="nav-item">
                             <a class="nav-link {% if 'supplier' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'stock:supplier_list' %}">
                                 <i class="fas fa-truck"></i> Suppliers
                             </a>
                         </li>
 
-                        <!-- Invoices -->
+                        <!-- Invoices (always visible) -->
                         <li class="nav-item">
                             <a class="nav-link {% if 'invoice' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'stock:invoice_list' %}">
                                 <i class="fas fa-file-invoice"></i> Invoices
                             </a>
                         </li>
 
-                        <!-- Receipts -->
+                        <!-- Receipts (always visible) -->
                         <li class="nav-item">
                             <a class="nav-link {% if 'receipt' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'stock:receipt_list' %}">
                                 <i class="fas fa-receipt"></i> Receipts
                             </a>
                         </li>
 
-                        <!-- New Sale -->
+                        <!-- New Sale (always visible) -->
                         <li class="nav-item">
                             <a class="nav-link {% if 'create_sale' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'stock:create_sale' %}">
                                 <i class="fas fa-cash-register"></i> New Sale
                             </a>
                         </li>
 
-                        <!-- Reports -->
+                        <!-- Reports (always visible) -->
                         <li class="nav-item">
                             <a class="nav-link {% if 'reports' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'stock:reports_dashboard' %}">
                                 <i class="fas fa-chart-bar"></i> Reports
@@ -242,16 +248,20 @@
                         <!-- Divider -->
                         <li><hr class="nav-divider"></li>
 
-                        <!-- Users (Admin only) -->
-                        {% if user.is_superuser %}
-                        <li class="nav-item">
-                            <a class="nav-link {% if 'user' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'stock:user_list' %}">
-                                <i class="fas fa-users"></i> Users
-                            </a>
-                        </li>
-                        {% endif %}
+                        <!-- ======================================== -->
+                        <!-- Users – visible only to admin/manager    -->
+                        <!-- ======================================== -->
+                        {% with user_groups=user.groups.all|join:',' %}
+                            {% if user.is_superuser or 'admin' in user_groups or 'manager' in user_groups %}
+                                <li class="nav-item">
+                                    <a class="nav-link {% if 'user' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'stock:user_list' %}">
+                                        <i class="fas fa-users"></i> Users
+                                    </a>
+                                </li>
+                            {% endif %}
+                        {% endwith %}
 
-                        <!-- Logout -->
+                        <!-- Logout (always visible) -->
                         <li class="nav-item">
                             <a class="nav-link" href="{% url 'stock:logout' %}">
                                 <i class="fas fa-sign-out-alt"></i> Logout

@@ -18,6 +18,13 @@ from decimal import Decimal
 from .models import Drug, Supplier, Invoice, Category, InvoiceItem, Sale, SaleItem, Receipt, Report, ChronicPatient, PatientMedication, PatientVisit
 
 
+def is_admin_or_manager(user):
+    """Return True if user is superuser or belongs to 'admin' or 'manager' group."""
+    if user.is_superuser:
+        return True
+    return user.groups.filter(name__in=['admin', 'manager']).exists()
+
+
 # ============================================================
 # AUTHENTICATION VIEWS
 # ============================================================
@@ -122,67 +129,209 @@ def get_drugs_api(request):
 
 @login_required
 def complete_sale(request):
-    """API endpoint to complete a drug sale and update stock"""
+    """
+    API endpoint to complete a drug sale and update stock
+    Supports multiple data formats for maximum compatibility
+    """
     if request.method != 'POST':
         return JsonResponse({
             'success': False,
-            'message': 'Invalid request method',
+            'message': 'Invalid request method. Use POST.',
         }, status=400)
 
     try:
+        # Log the request data for debugging
+        print("=" * 60)
+        print("COMPLETE SALE REQUEST RECEIVED")
+        print(f"Request method: {request.method}")
+        print(f"Content-Type: {request.content_type}")
+
+        # Parse JSON
         data = json.loads(request.body)
-        drug_id = data.get('drug_id')
-        quantity = int(data.get('quantity', 0))
+        print(f"Parsed data: {json.dumps(data, indent=2)}")
+        print("=" * 60)
+
+        # Extract items - support multiple formats
+        items = []
+
+        # Format 1: {'items': [{'drug_id': 1, 'quantity': 2}, ...]}
+        if 'items' in data and isinstance(data['items'], list):
+            items = data['items']
+            print(f"Format 1: Found {len(items)} items in 'items' array")
+
+        # Format 2: {'drug_id': 1, 'quantity': 2, ...} (single item)
+        elif 'drug_id' in data or 'drug_name' in data:
+            item = {}
+            if 'drug_id' in data:
+                item['drug_id'] = data['drug_id']
+            if 'drug_name' in data:
+                item['drug_name'] = data['drug_name']
+            if 'name' in data:
+                item['drug_name'] = data['name']
+            item['quantity'] = data.get('quantity', 0)
+            items.append(item)
+            print(f"Format 2: Single item: {item}")
+
+        # Format 3: {'cart': [{'drug_name': 'ibuprofen', 'qty': 2}, ...]}
+        elif 'cart' in data and isinstance(data['cart'], list):
+            for cart_item in data['cart']:
+                item = {}
+                if 'drug_id' in cart_item:
+                    item['drug_id'] = cart_item['drug_id']
+                if 'drug_name' in cart_item:
+                    item['drug_name'] = cart_item['drug_name']
+                if 'name' in cart_item:
+                    item['drug_name'] = cart_item['name']
+                item['quantity'] = cart_item.get('quantity', cart_item.get('qty', 0))
+                items.append(item)
+            print(f"Format 3: Found {len(items)} items in 'cart' array")
+
+        if not items:
+            return JsonResponse({
+                'success': False,
+                'message': 'No items found in request. Expected "items" array, "cart" array, or single item with drug_id/name.',
+                'received_data': data,
+                'available_keys': list(data.keys())
+            }, status=400)
+
+        # Extract other data
+        customer_name = data.get('customer_name', 'Walk-in Customer')
+        customer_phone = data.get('customer_phone', '')
+        amount_paid = float(data.get('amount_paid', 0))
         payment_method = data.get('payment_method', 'cash')
+        sale_type = data.get('sale_type', 'retail')
 
-        # Validate input
-        if not drug_id:
+        sale_items = []
+        total_amount = 0
+
+        # Process each item
+        for idx, item in enumerate(items):
+            drug_id = item.get('drug_id')
+            drug_name = item.get('drug_name') or item.get('name')
+            quantity = int(item.get('quantity', 0))
+
+            print(f"Processing item {idx + 1}: drug_id={drug_id}, drug_name={drug_name}, quantity={quantity}")
+
+            if quantity <= 0:
+                print(f"  ⚠️ Skipping item with quantity {quantity}")
+                continue
+
+            # Find the drug
+            drug = None
+
+            # First try by ID
+            if drug_id:
+                try:
+                    drug = Drug.objects.get(id=drug_id)
+                    print(f"  ✅ Found by ID {drug_id}: {drug.name}")
+                except Drug.DoesNotExist:
+                    print(f"  ❌ No drug with ID {drug_id}")
+
+            # Then try by name
+            if not drug and drug_name:
+                # Try exact match first
+                try:
+                    drug = Drug.objects.get(name__iexact=drug_name)
+                    print(f"  ✅ Found by exact name: {drug.name}")
+                except Drug.DoesNotExist:
+                    # Try contains match
+                    drug = Drug.objects.filter(
+                        Q(name__icontains=drug_name) |
+                        Q(generic_name__icontains=drug_name)
+                    ).first()
+                    if drug:
+                        print(f"  ✅ Found by contains match: {drug.name}")
+                    else:
+                        print(f"  ❌ No drug with name containing '{drug_name}'")
+
+            if not drug:
+                # Get list of available drugs for debugging
+                available_drugs = list(Drug.objects.all().values_list('name', flat=True)[:20])
+                return JsonResponse({
+                    'success': False,
+                    'message': f'Drug not found: {drug_name or drug_id}',
+                    'search_term': drug_name or drug_id,
+                    'available_drugs': available_drugs,
+                    'total_drugs': Drug.objects.count()
+                }, status=404)
+
+            # Check stock
+            if drug.stock_quantity < quantity:
+                return JsonResponse({
+                    'success': False,
+                    'message': f'Insufficient stock for {drug.name}. Available: {drug.stock_quantity}, Requested: {quantity}',
+                    'drug_id': drug.id,
+                    'drug_name': drug.name,
+                    'available': drug.stock_quantity,
+                    'requested': quantity
+                }, status=400)
+
+            # Update stock
+            drug.stock_quantity -= quantity
+            drug.save()
+            print(f"  ✅ Updated stock for {drug.name}: {drug.stock_quantity} remaining")
+
+            # Calculate total
+            item_total = drug.selling_price * quantity
+            total_amount += item_total
+
+            sale_items.append({
+                'drug_id': drug.id,
+                'drug_name': drug.name,
+                'quantity': quantity,
+                'unit_price': float(drug.selling_price),
+                'total': float(item_total)
+            })
+
+        if not sale_items:
             return JsonResponse({
                 'success': False,
-                'message': 'Drug ID is required',
+                'message': 'No valid items to process after validation'
             }, status=400)
 
-        if quantity <= 0:
-            return JsonResponse({
-                'success': False,
-                'message': 'Quantity must be greater than 0',
-            }, status=400)
+        # Calculate change
+        change_due = amount_paid - total_amount if amount_paid > total_amount else 0
 
-        # Get the drug
-        drug = get_object_or_404(Drug, id=drug_id)
+        # Create receipt
+        receipt = Receipt.objects.create(
+            customer_name=customer_name,
+            customer_phone=customer_phone,
+            total_amount=total_amount,
+            amount_paid=amount_paid,
+            change_due=change_due,
+            payment_method=payment_method,
+            items=sale_items,
+            created_by=request.user
+        )
 
-        # Check if enough stock
-        if drug.stock_quantity < quantity:
-            return JsonResponse({
-                'success': False,
-                'message': f'Insufficient stock! Available: {drug.stock_quantity}',
-            }, status=400)
-
-        # Update stock
-        drug.stock_quantity -= quantity
-        drug.save()
+        print(f"✅ Sale completed successfully!")
+        print(f"   Receipt #{receipt.receipt_number}")
+        print(f"   Total: UGX {total_amount}")
+        print("=" * 60)
 
         return JsonResponse({
             'success': True,
-            'message': f'Sold {quantity} of {drug.name}',
-            'stock_remaining': drug.stock_quantity,
-            'drug_name': drug.name,
-            'quantity_sold': quantity,
-            'payment_method': payment_method,
-            'total_amount': float(drug.selling_price) * quantity
+            'message': 'Sale completed successfully!',
+            'receipt_id': receipt.id,
+            'receipt_number': receipt.receipt_number,
+            'total_amount': float(total_amount),
+            'amount_paid': float(amount_paid),
+            'change_due': float(change_due),
+            'items': sale_items,
+            'receipt_url': f'/receipts/{receipt.id}/'
         })
 
-    except json.JSONDecodeError:
+    except json.JSONDecodeError as e:
+        print(f"❌ JSON Decode Error: {e}")
         return JsonResponse({
             'success': False,
-            'message': 'Invalid JSON data'
+            'message': f'Invalid JSON data: {str(e)}',
+            'received': request.body.decode('utf-8', errors='ignore')
         }, status=400)
-    except Drug.DoesNotExist:
-        return JsonResponse({
-            'success': False,
-            'message': 'Drug not found'
-        }, status=404)
     except Exception as e:
+        print(f"❌ Sale error: {str(e)}")
+        import traceback
+        traceback.print_exc()
         return JsonResponse({
             'success': False,
             'message': f'Error processing sale: {str(e)}'
@@ -225,10 +374,11 @@ def drug_list(request):
 
 
 # ============================================================
-# DRUG CREATE - FIXED
+# DRUG CREATE - FIXED + RESTRICTED
 # ============================================================
 
 @login_required
+@user_passes_test(is_admin_or_manager)   # <-- ADDED
 def drug_create(request):
     """Create a new drug/medicine"""
     categories = Category.objects.all()
@@ -353,10 +503,11 @@ def drug_create(request):
 
 
 # ============================================================
-# DRUG EDIT - FIXED
+# DRUG EDIT - FIXED + RESTRICTED
 # ============================================================
 
 @login_required
+@user_passes_test(is_admin_or_manager)   # <-- ADDED
 def drug_edit(request, drug_id):
     """Edit an existing drug/medicine"""
     drug = get_object_or_404(Drug, id=drug_id)
@@ -476,10 +627,11 @@ def drug_edit(request, drug_id):
 
 
 # ============================================================
-# DRUG DELETE - FIXED
+# DRUG DELETE - FIXED + RESTRICTED
 # ============================================================
 
 @login_required
+@user_passes_test(is_admin_or_manager)   # <-- ADDED
 def drug_delete(request, drug_id):
     """Delete a drug/medicine"""
     drug = get_object_or_404(Drug, id=drug_id)
@@ -495,6 +647,87 @@ def drug_delete(request, drug_id):
             messages.error(request, f'Error deleting drug: {str(e)}')
 
     return render(request, 'stock/drug_confirm_delete.html', {'drug': drug})
+
+
+# ============================================================
+# ADD STOCK TO DRUG - RESTRICTED
+# ============================================================
+
+@login_required
+@user_passes_test(is_admin_or_manager)   # <-- ADDED
+def add_stock_to_drug(request):
+    """
+    Add stock to an existing drug, linked to an invoice.
+    """
+    drugs = Drug.objects.all().order_by('name')
+    invoices = Invoice.objects.all().order_by('-invoice_date')
+    selected_drug = None
+
+    # Pre-select drug if drug_id is passed in GET
+    drug_id = request.GET.get('drug_id')
+    if drug_id:
+        try:
+            selected_drug = Drug.objects.get(id=drug_id)
+        except Drug.DoesNotExist:
+            pass
+
+    if request.method == 'POST':
+        drug_id = request.POST.get('drug_id')
+        invoice_id = request.POST.get('invoice_id')
+        quantity = int(request.POST.get('quantity', 0))
+        cost_price = float(request.POST.get('cost_price', 0))
+        selling_price = float(request.POST.get('selling_price', 0))
+        batch_no = request.POST.get('batch_no', '')
+        expiry_date = request.POST.get('expiry_date')
+        pack_size = int(request.POST.get('pack_size', 1))
+
+        # Validate
+        if not drug_id or not invoice_id or quantity <= 0:
+            messages.error(request, 'Please fill all required fields.')
+            return render(request, 'stock/add_stock_to_drug.html', {
+                'drugs': drugs,
+                'invoices': invoices,
+                'selected_drug': selected_drug,
+            })
+
+        drug = get_object_or_404(Drug, id=drug_id)
+        invoice = get_object_or_404(Invoice, id=invoice_id)
+
+        # Update drug stock
+        drug.stock_quantity += quantity
+        if cost_price > 0:
+            drug.cost_price = cost_price
+        if selling_price > 0:
+            drug.selling_price = selling_price
+        if batch_no:
+            drug.batch_no = batch_no
+        if expiry_date:
+            drug.expiry_date = expiry_date
+        if pack_size:
+            drug.pack_size = pack_size
+        drug.save()
+
+        # Create an InvoiceItem for this stock addition
+        InvoiceItem.objects.create(
+            invoice=invoice,
+            drug=drug,
+            quantity=quantity,
+            unit_price=cost_price,
+            total=quantity * cost_price
+        )
+        # Update invoice total
+        invoice.total_amount = invoice.items.aggregate(Sum('total'))['total__sum'] or 0
+        invoice.save()
+
+        messages.success(request, f'Added {quantity} units of "{drug.name}" to stock via Invoice #{invoice.invoice_number}.')
+        return redirect('stock:drug_list')
+
+    context = {
+        'drugs': drugs,
+        'invoices': invoices,
+        'selected_drug': selected_drug,
+    }
+    return render(request, 'stock/add_stock_to_drug.html', context)
 
 
 # ============================================================
@@ -754,39 +987,39 @@ def reports_dashboard(request):
     week_start = today - timedelta(days=today.weekday())
     month_start = today.replace(day=1)
     year_start = today.replace(month=1, day=1)
-    
+
     # Daily Sales
     daily_receipts = Receipt.objects.filter(created_at__date=today)
     daily_total = daily_receipts.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
     daily_count = daily_receipts.count()
-    
+
     # Weekly Sales
     weekly_receipts = Receipt.objects.filter(created_at__date__gte=week_start, created_at__date__lte=today)
     weekly_total = weekly_receipts.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
     weekly_count = weekly_receipts.count()
-    
+
     # Monthly Sales
     monthly_receipts = Receipt.objects.filter(created_at__date__gte=month_start, created_at__date__lte=today)
     monthly_total = monthly_receipts.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
     monthly_count = monthly_receipts.count()
-    
+
     # Annual Sales
     annual_receipts = Receipt.objects.filter(created_at__date__gte=year_start, created_at__date__lte=today)
     annual_total = annual_receipts.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
     annual_count = annual_receipts.count()
-    
+
     # Get recent receipts
     recent_receipts = Receipt.objects.all().order_by('-created_at')[:20]
-    
+
     # Get recent invoices
     recent_invoices = Invoice.objects.all().order_by('-created_at')[:10]
-    
+
     # Payment method breakdown for today
     payment_breakdown = daily_receipts.values('payment_method').annotate(
         total=Sum('total_amount'),
         count=Count('id')
     )
-    
+
     # Top selling drugs
     top_drugs = []
     for receipt in Receipt.objects.all()[:100]:
@@ -797,7 +1030,7 @@ def reports_dashboard(request):
                     'quantity': item.get('quantity', 0),
                     'total': item.get('total', 0)
                 })
-    
+
     # Aggregate top drugs
     drug_summary = {}
     for drug in top_drugs:
@@ -807,10 +1040,10 @@ def reports_dashboard(request):
             drug_summary[name]['total'] += drug['total']
         else:
             drug_summary[name] = {'quantity': drug['quantity'], 'total': drug['total']}
-    
+
     # Sort and get top 10
     top_selling = sorted(drug_summary.items(), key=lambda x: x[1]['quantity'], reverse=True)[:10]
-    
+
     context = {
         'daily_total': daily_total,
         'daily_count': daily_count,
@@ -829,7 +1062,7 @@ def reports_dashboard(request):
         'month_start': month_start,
         'year_start': year_start,
     }
-    
+
     return render(request, 'stock/reports_dashboard.html', context)
 
 
@@ -838,18 +1071,18 @@ def generate_report_api(request):
     """API to generate and send email report"""
     if request.method != 'POST':
         return JsonResponse({'success': False, 'message': 'Invalid method'}, status=400)
-    
+
     try:
         data = json.loads(request.body)
         report_type = data.get('report_type', 'daily')
         email = data.get('email', 'kiyimbahenry314@gmail.com')
-        
+
         # Generate report data
         report_data = generate_report_data(report_type)
-        
+
         # Send email
         success = send_report_email(report_data, email, report_type)
-        
+
         if success:
             # Save report to database
             report = Report.objects.create(
@@ -859,7 +1092,7 @@ def generate_report_api(request):
                 sent_to_email=True,
                 email_sent_at=timezone.now()
             )
-            
+
             return JsonResponse({
                 'success': True,
                 'message': f'{report_type.capitalize()} report sent to {email}',
@@ -870,7 +1103,7 @@ def generate_report_api(request):
                 'success': False,
                 'message': 'Failed to send email. Please check email settings.'
             }, status=500)
-            
+
     except Exception as e:
         return JsonResponse({'success': False, 'message': str(e)}, status=500)
 
@@ -886,7 +1119,7 @@ def generate_report_data(report_type):
         'payment_breakdown': [],
         'top_products': []
     }
-    
+
     # Set date range based on report type
     if report_type == 'daily':
         start_date = today
@@ -907,23 +1140,23 @@ def generate_report_data(report_type):
     else:
         start_date = today
         end_date = today
-    
+
     # Get receipts within date range
     receipts = Receipt.objects.filter(
         created_at__date__gte=start_date,
         created_at__date__lte=end_date
     )
-    
+
     # Sales summary
     total_sales = receipts.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
     total_transactions = receipts.count()
     total_items_sold = 0
-    
+
     for receipt in receipts:
         if receipt.items:
             for item in receipt.items:
                 total_items_sold += item.get('quantity', 0)
-    
+
     report_data['sales'] = {
         'total_amount': float(total_sales),
         'total_transactions': total_transactions,
@@ -932,20 +1165,20 @@ def generate_report_data(report_type):
         'start_date': start_date.strftime('%Y-%m-%d'),
         'end_date': end_date.strftime('%Y-%m-%d'),
     }
-    
+
     # Payment breakdown
     payment_breakdown = receipts.values('payment_method').annotate(
         total=Sum('total_amount'),
         count=Count('id')
     )
-    
+
     for item in payment_breakdown:
         report_data['payment_breakdown'].append({
             'method': item['payment_method'] or 'unknown',
             'total': float(item['total']),
             'count': item['count']
         })
-    
+
     # Top selling products
     product_sales = {}
     for receipt in receipts:
@@ -959,7 +1192,7 @@ def generate_report_data(report_type):
                     product_sales[name]['total'] += total
                 else:
                     product_sales[name] = {'quantity': quantity, 'total': total}
-    
+
     # Get top 10
     sorted_products = sorted(product_sales.items(), key=lambda x: x[1]['quantity'], reverse=True)[:10]
     for name, data in sorted_products:
@@ -968,20 +1201,20 @@ def generate_report_data(report_type):
             'quantity': data['quantity'],
             'total': float(data['total'])
         })
-    
+
     # Invoice summary
     invoices = Invoice.objects.filter(
         created_at__date__gte=start_date,
         created_at__date__lte=end_date
     )
-    
+
     report_data['invoices'] = {
         'total_invoices': invoices.count(),
         'total_invoice_value': float(invoices.aggregate(Sum('total_amount'))['total_amount__sum'] or 0),
         'pending_count': invoices.filter(status='pending').count(),
         'paid_count': invoices.filter(status='paid').count(),
     }
-    
+
     return report_data
 
 
@@ -990,14 +1223,14 @@ def send_report_email(report_data, email, report_type):
     try:
         # Create email subject
         subject = f"Miyabala Pharmacy - {report_type.capitalize()} Report"
-        
+
         # Create email body
         html_message = render_to_string('stock/report_email.html', {
             'report_data': report_data,
             'report_type': report_type.capitalize(),
             'site_url': 'http://127.0.0.1:8000'
         })
-        
+
         # Send email
         send_mail(
             subject,
@@ -1007,9 +1240,9 @@ def send_report_email(report_data, email, report_type):
             html_message=html_message,
             fail_silently=False,
         )
-        
+
         return True
-        
+
     except Exception as e:
         print(f"Error sending email: {e}")
         return False
@@ -1020,10 +1253,10 @@ def send_auto_reports():
     try:
         # Generate daily report
         report_data = generate_report_data('daily')
-        
+
         # Send to main email
         success = send_report_email(report_data, 'kiyimbahenry314@gmail.com', 'daily')
-        
+
         if success:
             # Save report
             admin_user = User.objects.filter(is_superuser=True).first()
@@ -1037,7 +1270,7 @@ def send_auto_reports():
             print(f"✅ Daily report sent successfully at {timezone.now()}")
         else:
             print(f"❌ Failed to send daily report at {timezone.now()}")
-            
+
     except Exception as e:
         print(f"❌ Error sending auto report: {e}")
 
@@ -1055,74 +1288,60 @@ def invoice_list(request):
 
 @login_required
 def invoice_create(request):
-    """Create a new invoice"""
+    """Create a new invoice (simplified version)"""
     suppliers = Supplier.objects.all()
-    drugs = Drug.objects.filter(stock_quantity__gt=0)
+    invoices = Invoice.objects.all()
 
     if request.method == 'POST':
         try:
+            invoice_number = request.POST.get('invoice_number')
             supplier_id = request.POST.get('supplier')
             invoice_date = request.POST.get('invoice_date')
-            invoice_number = request.POST.get('invoice_number')
-            notes = request.POST.get('notes')
+            payment_mode = request.POST.get('payment_mode', 'cash')
+            total_items = int(request.POST.get('total_items', 0))
+            notes = request.POST.get('notes', '')
 
-            # Get drug items from POST
-            drug_ids = request.POST.getlist('drug_ids')
-            quantities = request.POST.getlist('quantities')
-            unit_prices = request.POST.getlist('unit_prices')
-
-            if not drug_ids or not supplier_id:
-                messages.error(request, 'Please select a supplier and at least one drug.')
+            # Validation: only check for required fields
+            if not invoice_number:
+                messages.error(request, 'Invoice Number is required.')
                 return render(request, 'stock/invoice_form.html', {
                     'suppliers': suppliers,
-                    'drugs': drugs,
-                    'is_edit': False
+                    'invoices': invoices,
                 })
 
-            # Create invoice
+            if not supplier_id:
+                messages.error(request, 'Please select a supplier.')
+                return render(request, 'stock/invoice_form.html', {
+                    'suppliers': suppliers,
+                    'invoices': invoices,
+                })
+
+            # Create the invoice
             invoice = Invoice.objects.create(
-                supplier_id=supplier_id,
                 invoice_number=invoice_number,
-                invoice_date=invoice_date or timezone.now().date(),
+                supplier_id=supplier_id,
+                invoice_date=invoice_date,
+                payment_mode=payment_mode,
+                total_items=total_items,
+                total_amount=0,  # Will be updated when adding drugs
                 notes=notes,
                 created_by=request.user
             )
 
-            # Create invoice items
-            total_amount = 0
-            for i in range(len(drug_ids)):
-                if drug_ids[i] and quantities[i] and unit_prices[i]:
-                    drug = Drug.objects.get(id=drug_ids[i])
-                    quantity = int(quantities[i])
-                    unit_price = float(unit_prices[i])
-                    total = quantity * unit_price
-                    total_amount += total
-
-                    InvoiceItem.objects.create(
-                        invoice=invoice,
-                        drug=drug,
-                        quantity=quantity,
-                        unit_price=unit_price,
-                        total=total
-                    )
-
-                    # Update drug stock
-                    drug.stock_quantity += quantity
-                    drug.save()
-
-            invoice.total_amount = total_amount
-            invoice.save()
-
-            messages.success(request, f'Invoice #{invoice.invoice_number} created successfully!')
+            messages.success(request, f'Invoice "{invoice.invoice_number}" created successfully!')
             return redirect('stock:invoice_list')
 
         except Exception as e:
             messages.error(request, f'Error creating invoice: {str(e)}')
+            return render(request, 'stock/invoice_form.html', {
+                'suppliers': suppliers,
+                'invoices': invoices,
+            })
 
+    # GET request – show the form
     context = {
         'suppliers': suppliers,
-        'drugs': drugs,
-        'is_edit': False,
+        'invoices': invoices,
     }
     return render(request, 'stock/invoice_form.html', context)
 
@@ -1222,6 +1441,17 @@ def user_list(request):
 @user_passes_test(is_admin)
 def user_create(request):
     """Create a new user (admin only)"""
+
+    # ===== ADD THIS LINE =====
+    ROLE_CHOICES = [
+        ('admin', 'Admin'),
+        ('manager', 'Manager'),
+        ('pharmacist', 'Pharmacist'),
+        ('cashier', 'Cashier'),
+        ('dispenser', 'Dispenser'),
+        ('viewer', 'Viewer (Read-only)'),
+    ]
+
     if request.method == 'POST':
         try:
             username = request.POST.get('username')
@@ -1229,10 +1459,14 @@ def user_create(request):
             password = request.POST.get('password')
             is_staff = request.POST.get('is_staff') == 'on'
             is_superuser = request.POST.get('is_superuser') == 'on'
+            role = request.POST.get('role')  # 👈 capture role from dropdown
 
             if User.objects.filter(username=username).exists():
                 messages.error(request, 'Username already exists.')
-                return render(request, 'stock/user_form.html', {'is_edit': False})
+                return render(request, 'stock/user_form.html', {
+                    'is_edit': False,
+                    'role_choices': ROLE_CHOICES,   # 👈 pass to template
+                })
 
             user = User.objects.create_user(
                 username=username,
@@ -1243,13 +1477,31 @@ def user_create(request):
             user.is_superuser = is_superuser
             user.save()
 
+            # ===== Assign user to a group based on role =====
+            if role:
+                from django.contrib.auth.models import Group
+                group, _ = Group.objects.get_or_create(name=role)
+                user.groups.add(group)
+
             messages.success(request, f'User "{username}" created successfully!')
             return redirect('stock:user_list')
 
         except Exception as e:
             messages.error(request, f'Error creating user: {str(e)}')
 
-    return render(request, 'stock/user_form.html', {'is_edit': False})
+    # GET request – show the form
+    return render(request, 'stock/user_form.html', {
+        'is_edit': False,
+        'role_choices': ROLE_CHOICES,   # 👈 always pass to template
+    })
+
+
+@login_required
+@user_passes_test(is_admin)
+def user_detail(request, user_id):
+    """View user details (admin only) - ADDED THIS MISSING VIEW"""
+    user = get_object_or_404(User, id=user_id)
+    return render(request, 'stock/user_detail.html', {'user': user})
 
 
 @login_required
@@ -1258,34 +1510,81 @@ def user_edit(request, user_id):
     """Edit a user (admin only)"""
     user = get_object_or_404(User, id=user_id)
 
+    # ===== ROLE CHOICES =====
+    ROLE_CHOICES = [
+        ('admin', 'Admin'),
+        ('manager', 'Manager'),
+        ('pharmacist', 'Pharmacist'),
+        ('cashier', 'Cashier'),
+        ('dispenser', 'Dispenser'),
+        ('viewer', 'Viewer (Read-only)'),
+    ]
+
+    # Get current role (assuming it's stored in a group)
+    current_role = user.groups.first().name if user.groups.exists() else ''
+
     if request.method == 'POST':
         try:
-            user.username = request.POST.get('username')
-            user.email = request.POST.get('email')
-            user.is_staff = request.POST.get('is_staff') == 'on'
-            user.is_superuser = request.POST.get('is_superuser') == 'on'
+            username = request.POST.get('username')
+            email = request.POST.get('email')
+            first_name = request.POST.get('first_name', '')
+            last_name = request.POST.get('last_name', '')
+            role = request.POST.get('role')
+            password = request.POST.get('password1')
+            confirm_password = request.POST.get('password2')
 
-            password = request.POST.get('password')
+            if password and password != confirm_password:
+                messages.error(request, 'Passwords do not match.')
+                return render(request, 'stock/user_form.html', {
+                    'is_edit': True,
+                    'user': user,
+                    'role_choices': ROLE_CHOICES,
+                    'user_role': current_role,
+                })
+
+            if User.objects.exclude(id=user.id).filter(username=username).exists():
+                messages.error(request, 'Username already taken.')
+                return render(request, 'stock/user_form.html', {
+                    'is_edit': True,
+                    'user': user,
+                    'role_choices': ROLE_CHOICES,
+                    'user_role': current_role,
+                })
+
+            user.username = username
+            user.email = email
+            user.first_name = first_name
+            user.last_name = last_name
             if password:
                 user.set_password(password)
-
             user.save()
-            messages.success(request, f'User "{user.username}" updated successfully!')
+
+            # Update role (remove old groups, add new one)
+            if role:
+                user.groups.clear()
+                from django.contrib.auth.models import Group
+                group, _ = Group.objects.get_or_create(name=role)
+                user.groups.add(group)
+
+            messages.success(request, f'User "{username}" updated successfully!')
             return redirect('stock:user_list')
 
         except Exception as e:
             messages.error(request, f'Error updating user: {str(e)}')
 
     return render(request, 'stock/user_form.html', {
+        'is_edit': True,
         'user': user,
-        'is_edit': True
+        'role_choices': ROLE_CHOICES,
+        'user_role': current_role,
+        'title': 'Edit User',
     })
 
 
 @login_required
-@user_passes_test(is_admin)
+@user_passes_test(is_admin_or_manager)   # already using the combined check
 def user_delete(request, user_id):
-    """Delete a user (admin only)"""
+    """Delete a user (admin or manager)"""
     user = get_object_or_404(User, id=user_id)
 
     if request.method == 'POST':
@@ -1308,7 +1607,7 @@ def user_delete(request, user_id):
 def patient_list(request):
     """List all chronic patients"""
     patients = ChronicPatient.objects.all().select_related('created_by')
-    
+
     # Search functionality
     search_query = request.GET.get('search')
     if search_query:
@@ -1319,12 +1618,12 @@ def patient_list(request):
             Q(phone__icontains=search_query) |
             Q(location__icontains=search_query)
         )
-    
+
     # Filter by disease type
     disease_filter = request.GET.get('disease')
     if disease_filter:
         patients = patients.filter(disease_type=disease_filter)
-    
+
     context = {
         'patients': patients,
         'search_query': search_query,
@@ -1356,7 +1655,7 @@ def patient_create(request):
             medications = request.POST.get('medications', '').strip()
             dosage = request.POST.get('dosage', '').strip()
             next_appointment = request.POST.get('next_appointment') or None
-            
+
             # Validation
             errors = []
             if not first_name:
@@ -1367,7 +1666,7 @@ def patient_create(request):
                 errors.append('Disease type is required.')
             if disease_type == 'OTHER' and not other_disease:
                 errors.append('Please specify the disease type.')
-            
+
             if errors:
                 for error in errors:
                     messages.error(request, error)
@@ -1375,7 +1674,7 @@ def patient_create(request):
                     'disease_choices': ChronicPatient.DISEASE_CHOICES,
                     'is_edit': False
                 })
-            
+
             # Create patient
             patient = ChronicPatient.objects.create(
                 first_name=first_name,
@@ -1396,15 +1695,15 @@ def patient_create(request):
                 next_appointment=next_appointment,
                 created_by=request.user
             )
-            
+
             messages.success(request, f'Patient "{patient.first_name} {patient.last_name}" registered successfully!')
             return redirect('stock:patient_list')
-            
+
         except Exception as e:
             messages.error(request, f'Error creating patient: {str(e)}')
             import traceback
             traceback.print_exc()
-    
+
     context = {
         'disease_choices': ChronicPatient.DISEASE_CHOICES,
         'is_edit': False,
@@ -1416,7 +1715,7 @@ def patient_create(request):
 def patient_edit(request, patient_id):
     """Edit a chronic patient"""
     patient = get_object_or_404(ChronicPatient, id=patient_id)
-    
+
     if request.method == 'POST':
         try:
             # Get form data
@@ -1437,15 +1736,15 @@ def patient_edit(request, patient_id):
             patient.dosage = request.POST.get('dosage', '').strip()
             patient.next_appointment = request.POST.get('next_appointment') or None
             patient.is_active = request.POST.get('is_active') == 'on'
-            
+
             patient.save()
-            
+
             messages.success(request, f'Patient "{patient.first_name} {patient.last_name}" updated successfully!')
             return redirect('stock:patient_list')
-            
+
         except Exception as e:
             messages.error(request, f'Error updating patient: {str(e)}')
-    
+
     context = {
         'patient': patient,
         'disease_choices': ChronicPatient.DISEASE_CHOICES,
@@ -1465,7 +1764,7 @@ def patient_detail(request, patient_id):
 def patient_delete(request, patient_id):
     """Delete a patient"""
     patient = get_object_or_404(ChronicPatient, id=patient_id)
-    
+
     if request.method == 'POST':
         try:
             patient_name = f"{patient.first_name} {patient.last_name}"
@@ -1474,7 +1773,7 @@ def patient_delete(request, patient_id):
             return redirect('stock:patient_list')
         except Exception as e:
             messages.error(request, f'Error deleting patient: {str(e)}')
-    
+
     return render(request, 'stock/patient_confirm_delete.html', {'patient': patient})
 
 
@@ -1482,7 +1781,7 @@ def patient_delete(request, patient_id):
 def patient_add_medication(request, patient_id):
     """Add medication to patient"""
     patient = get_object_or_404(ChronicPatient, id=patient_id)
-    
+
     if request.method == 'POST':
         try:
             medication_name = request.POST.get('medication_name', '').strip()
@@ -1490,7 +1789,7 @@ def patient_add_medication(request, patient_id):
             frequency = request.POST.get('frequency', '').strip()
             duration = request.POST.get('duration', '').strip()
             notes = request.POST.get('notes', '').strip()
-            
+
             if not medication_name:
                 messages.error(request, 'Medication name is required.')
             else:
@@ -1503,12 +1802,12 @@ def patient_add_medication(request, patient_id):
                     notes=notes
                 )
                 messages.success(request, f'Medication "{medication_name}" added successfully!')
-                
+
         except Exception as e:
             messages.error(request, f'Error adding medication: {str(e)}')
-        
+
         return redirect('stock:patient_detail', patient_id=patient_id)
-    
+
     return redirect('stock:patient_detail', patient_id=patient_id)
 
 
@@ -1517,9 +1816,78 @@ def patient_remove_medication(request, medication_id):
     """Remove medication from patient"""
     medication = get_object_or_404(PatientMedication, id=medication_id)
     patient_id = medication.patient.id
-    
+
     if request.method == 'POST':
         medication.delete()
         messages.success(request, 'Medication removed successfully!')
-    
+
     return redirect('stock:patient_detail', patient_id=patient_id)
+
+
+# ============================================================
+# HELPER FUNCTION TO CREATE TEST DRUGS
+# ============================================================
+
+def create_test_drugs():
+    """Create test drugs if none exist"""
+    from django.contrib.auth.models import User
+
+    # Check if drugs exist
+    if Drug.objects.count() > 0:
+        print(f"✅ {Drug.objects.count()} drugs already exist")
+        return
+
+    # Get or create categories
+    categories_data = [
+        'Antibiotic', 'Painkiller', 'Anti-fungals',
+        'Beauty and Cosmetics', 'Neuro Care', 'Anti-diabetics',
+        'Anti-hypertensives', 'Cough, Cold and Flu', 'Supplements',
+        'PUD', 'Vitamins and Minerals', 'Anti-infectives'
+    ]
+
+    for name in categories_data:
+        Category.objects.get_or_create(name=name)
+
+    # Get first category
+    category = Category.objects.first()
+
+    # Get admin user
+    admin = User.objects.filter(is_superuser=True).first()
+    if not admin:
+        admin = User.objects.first()
+
+    if not admin:
+        print("❌ No user found to assign as creator")
+        return
+
+    # Create test drugs
+    test_drugs = [
+        {'name': 'ibuprofen', 'generic_name': 'ibuprofen', 'selling_price': 4000, 'stock_quantity': 100},
+        {'name': 'paracetamol', 'generic_name': 'paracetamol', 'selling_price': 4000, 'stock_quantity': 50},
+        {'name': 'amoxicillin', 'generic_name': 'amoxicillin', 'selling_price': 5000, 'stock_quantity': 30},
+        {'name': 'metformin', 'generic_name': 'metformin', 'selling_price': 3000, 'stock_quantity': 45},
+        {'name': 'amlodipine', 'generic_name': 'amlodipine', 'selling_price': 3500, 'stock_quantity': 25},
+    ]
+
+    created_count = 0
+    for drug_data in test_drugs:
+        drug, created = Drug.objects.get_or_create(
+            name=drug_data['name'],
+            defaults={
+                'generic_name': drug_data.get('generic_name', drug_data['name']),
+                'category': category,
+                'selling_price': drug_data['selling_price'],
+                'cost_price': drug_data['selling_price'] * 0.6,
+                'stock_quantity': drug_data['stock_quantity'],
+                'reorder_level': 10,
+                'pack_size': 1,
+                'dosage': 'Standard',
+                'created_by': admin
+            }
+        )
+        if created:
+            created_count += 1
+            print(f"✅ Created drug: {drug.name}")
+
+    print(f"✅ Created {created_count} test drugs")
+    print(f"Total drugs now: {Drug.objects.count()}")

@@ -9,16 +9,26 @@
         <div class="card shadow">
             <div class="card-header d-flex justify-content-between align-items-center">
                 <h4><i class="fas fa-capsules"></i> Medicines List</h4>
-                <a href="{% url 'stock:drug_create' %}" class="btn btn-primary">
-                    <i class="fas fa-plus-circle"></i> Add New Drug
-                </a>
+                <div>
+                    <!-- NEW: Add Invoice button -->
+                    <a href="{% url 'stock:invoice_create' %}" class="btn btn-warning me-2">
+                        <i class="fas fa-file-invoice"></i> Add Invoice
+                    </a>
+                    <!-- NEW: Add Existing Drug button -->
+                    <a href="{% url 'stock:add_stock_to_drug' %}" class="btn btn-info me-2">
+                        <i class="fas fa-boxes"></i> Add Existing Drug
+                    </a>
+                    <a href="{% url 'stock:drug_create' %}" class="btn btn-primary">
+                        <i class="fas fa-plus-circle"></i> Add New Drug
+                    </a>
+                </div>
             </div>
             <div class="card-body">
                 <!-- Search -->
                 <div class="row mb-3">
                     <div class="col-md-6">
                         <form method="GET" class="d-flex">
-                            <input type="text" name="search" class="form-control me-2" 
+                            <input type="text" name="search" class="form-control me-2"
                                    placeholder="Search medicines..." value="{{ search_query }}">
                             <button type="submit" class="btn btn-primary">
                                 <i class="fas fa-search"></i>
@@ -26,7 +36,7 @@
                         </form>
                     </div>
                 </div>
-                
+
                 <!-- Table -->
                 <div class="table-responsive">
                     <table class="table table-hover">
@@ -52,10 +62,13 @@
                                 <td>{{ drug.brand|default:'-' }}</td>
                                 <td>{{ drug.get_dosage_display|default:'-' }}</td>
                                 <td>{{ drug.pack_size }}</td>
+                                <!-- NEW: Stock quantity is clickable -->
                                 <td>
-                                    <span class="badge {% if drug.is_low_stock %}bg-danger{% else %}bg-success{% endif %}">
+                                    <a href="{% url 'stock:add_stock_to_drug' %}?drug_id={{ drug.id }}"
+                                       class="badge {% if drug.is_low_stock %}bg-danger{% else %}bg-success{% endif %}"
+                                       style="text-decoration: none; color: white; cursor: pointer;">
                                         {{ drug.stock_quantity }}
-                                    </span>
+                                    </a>
                                 </td>
                                 <td>UGX {{ drug.cost_price|floatformat:2 }}</td>
                                 <td>UGX {{ drug.selling_price|floatformat:2 }}</td>
@@ -72,13 +85,13 @@
                                     <a href="{% url 'stock:drug_edit' drug.id %}" class="btn btn-sm btn-warning">
                                         <i class="fas fa-edit"></i>
                                     </a>
-                                    <button class="btn btn-sm btn-danger" data-bs-toggle="modal" 
+                                    <button class="btn btn-sm btn-danger" data-bs-toggle="modal"
                                             data-bs-target="#deleteModal{{ drug.id }}">
                                         <i class="fas fa-trash"></i>
                                     </button>
                                 </td>
                             </tr>
-                            
+
                             <!-- Delete Modal -->
                             <div class="modal fade" id="deleteModal{{ drug.id }}" tabindex="-1">
                                 <div class="modal-dialog">

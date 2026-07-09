@@ -1,0 +1,135 @@
+{% extends 'stock/base.html' %}
+{% load static %}
+
+{% block title %}Add Existing Drug Stock{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card shadow">
+            <div class="card-header">
+                <h4><i class="fas fa-boxes"></i> Add Stock to Existing Drug</h4>
+            </div>
+            <div class="card-body">
+                <form method="POST">
+                    {% csrf_token %}
+
+                    <div class="row">
+                        <!-- Left Column -->
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label required-field">Select Drug</label>
+                                <select name="drug_id" class="form-select" required>
+                                    <option value="">-- Search for drug --</option>
+                                    {% for drug in drugs %}
+                                        <option value="{{ drug.id }}">{{ drug.name }} ({{ drug.generic_name }}) – Stock: {{ drug.stock_quantity }}</option>
+                                    {% endfor %}
+                                </select>
+                                <small class="text-muted">Select the drug you want to add stock to</small>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label required-field">Quantity Added</label>
+                                <input type="number" name="quantity" class="form-control" min="1" required>
+                                <small class="text-muted">Number of units added</small>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label required-field">Cost Price (UGX per unit)</label>
+                                <input type="number" step="0.01" name="cost_price" class="form-control" required>
+                                <small class="text-muted">Price per unit for this purchase</small>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label required-field">Selling Price (UGX per unit)</label>
+                                <input type="number" step="0.01" name="selling_price" class="form-control" required>
+                                <small class="text-muted">Price per unit to sell</small>
+                            </div>
+                        </div>
+
+                        <!-- Right Column -->
+                        <div class="col-md-6">
+                            <div class="mb-3">
+                                <label class="form-label required-field">Invoice</label>
+                                <select name="invoice_id" class="form-select" required>
+                                    <option value="">-- Select Invoice --</option>
+                                    {% for invoice in invoices %}
+                                        <option value="{{ invoice.id }}">{{ invoice.invoice_number }} – {{ invoice.supplier.name }} ({{ invoice.invoice_date|date:"Y-m-d" }})</option>
+                                    {% endfor %}
+                                </select>
+                                <small class="text-muted">Select the invoice this stock purchase belongs to</small>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label">Batch No.</label>
+                                <input type="text" name="batch_no" class="form-control" placeholder="Optional">
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label required-field">Expiry Date</label>
+                                <input type="date" name="expiry_date" class="form-control" required>
+                            </div>
+
+                            <div class="mb-3">
+                                <label class="form-label required-field">Pack Size</label>
+                                <input type="number" name="pack_size" class="form-control" value="1" min="1" required>
+                                <small class="text-muted">Units per packet (if applicable)</small>
+                            </div>
+
+                            <!-- Supplier will be auto-filled from invoice -->
+                            <div class="mb-3">
+                                <label class="form-label">Supplier (auto-filled from invoice)</label>
+                                <input type="text" id="supplier_display" class="form-control" readonly style="background: #f5f5f5;">
+                                <small class="text-muted">Supplier is determined by the selected invoice</small>
+                            </div>
+                        </div>
+                    </div>
+
+                    <hr>
+
+                    <div class="d-flex justify-content-end gap-2">
+                        <a href="{% url 'stock:drug_list' %}" class="btn btn-secondary">
+                            <i class="fas fa-times"></i> Cancel
+                        </a>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Add Stock
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    // Auto-fill supplier when invoice is selected
+    document.addEventListener('DOMContentLoaded', function() {
+        const invoiceSelect = document.querySelector('select[name="invoice_id"]');
+        const supplierDisplay = document.getElementById('supplier_display');
+
+        // Store supplier name in data attribute on each option
+        const invoiceOptions = invoiceSelect.options;
+        for (let i = 0; i < invoiceOptions.length; i++) {
+            const opt = invoiceOptions[i];
+            const text = opt.textContent;
+            // Extract supplier name from text: "INV-001 – SupplierName (date)"
+            const parts = text.split(' – ');
+            if (parts.length > 1) {
+                const supplierPart = parts[1].split(' (')[0];
+                opt.dataset.supplier = supplierPart.trim();
+            }
+        }
+
+        invoiceSelect.addEventListener('change', function() {
+            const selectedOption = this.options[this.selectedIndex];
+            const supplierName = selectedOption.dataset.supplier || '';
+            supplierDisplay.value = supplierName;
+        });
+
+        // Trigger on page load if an invoice is pre-selected
+        if (invoiceSelect.value) {
+            invoiceSelect.dispatchEvent(new Event('change'));
+        }
+    });
+</script>
+{% endblock %}

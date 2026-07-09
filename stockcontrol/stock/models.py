@@ -40,7 +40,7 @@ class Supplier(models.Model):
 # DRUG (MEDICINE) MODEL
 class Drug(models.Model):
     """Medicine/Drug model"""
-    
+
     # Dosage Form Choices
     DOSAGE_CHOICES = [
         ('tablet', 'Tablet'),
@@ -150,7 +150,6 @@ class Drug(models.Model):
             return ((self.selling_price - self.cost_price) / self.cost_price) * 100
         return 0
 
-    # ========== FIXED: Commented out auto-calculation ==========
     def save(self, *args, **kwargs):
         """Save the drug"""
         # Commented out to fix the multiplication error
@@ -170,13 +169,20 @@ class Invoice(models.Model):
         ('canceled', 'Canceled'),
     ]
 
+    PAYMENT_MODE_CHOICES = [
+        ('cash', 'Cash'),
+        ('credit', 'Credit'),
+    ]
+
     invoice_number = models.CharField(max_length=50, unique=True)
     supplier = models.ForeignKey(Supplier, on_delete=models.PROTECT, related_name='invoices')
     invoice_date = models.DateField()
     due_date = models.DateField(blank=True, null=True)
     total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    total_items = models.PositiveIntegerField(default=0, help_text="Total number of items on this invoice")
     paid_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
+    payment_mode = models.CharField(max_length=10, choices=PAYMENT_MODE_CHOICES, default='cash')
     notes = models.TextField(blank=True, null=True)
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -213,7 +219,8 @@ class InvoiceItem(models.Model):
         return f"{self.drug.name} x {self.quantity} - {self.invoice.invoice_number}"
 
     def save(self, *args, **kwargs):
-        self.total = Decimal(self.quantity) * self.unit_price
+        # FIX: Convert both to Decimal to avoid float multiplication error
+        self.total = Decimal(self.quantity) * Decimal(self.unit_price)
         super().save(*args, **kwargs)
 
 
@@ -271,7 +278,8 @@ class SaleItem(models.Model):
         return f"{self.drug.name} x {self.quantity} - {self.sale.sale_number}"
 
     def save(self, *args, **kwargs):
-        self.total = Decimal(self.quantity) * self.unit_price
+        # FIX: Convert both to Decimal to avoid float multiplication error
+        self.total = Decimal(self.quantity) * Decimal(self.unit_price)
         super().save(*args, **kwargs)
 
 
@@ -347,7 +355,7 @@ class Report(models.Model):
         ('monthly', 'Monthly Report'),
         ('annual', 'Annual Report'),
     ]
-    
+
     report_type = models.CharField(max_length=20, choices=REPORT_TYPES)
     report_date = models.DateField(auto_now_add=True)
     data = models.JSONField(default=dict)
@@ -355,10 +363,10 @@ class Report(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     sent_to_email = models.BooleanField(default=False)
     email_sent_at = models.DateTimeField(null=True, blank=True)
-    
+
     class Meta:
         ordering = ['-created_at']
-    
+
     def __str__(self):
         return f"{self.get_report_type_display()} - {self.report_date}"
 
@@ -368,7 +376,7 @@ class Report(models.Model):
 
 class ChronicPatient(models.Model):
     """Model for chronic disease patients"""
-    
+
     DISEASE_CHOICES = [
         ('HIV', 'HIV/AIDS'),
         ('HYPERTENSION', 'Hypertension'),
@@ -381,7 +389,7 @@ class ChronicPatient(models.Model):
         ('HEART', 'Heart Disease'),
         ('OTHER', 'Other'),
     ]
-    
+
     patient_id = models.CharField(max_length=50, unique=True, blank=True)
     first_name = models.CharField(max_length=100)
     last_name = models.CharField(max_length=100)
@@ -393,23 +401,23 @@ class ChronicPatient(models.Model):
     location = models.TextField(blank=True)
     village = models.CharField(max_length=100, blank=True)
     district = models.CharField(max_length=100, blank=True)
-    
+
     # Disease Information
     disease_type = models.CharField(max_length=20, choices=DISEASE_CHOICES)
     other_disease = models.CharField(max_length=100, blank=True, help_text="Specify if disease is 'Other'")
     diagnosis_date = models.DateField(null=True, blank=True)
-    
+
     # Treatment Information
     medications = models.TextField(blank=True, help_text="List of medications the patient is taking")
     dosage = models.TextField(blank=True, help_text="Dosage information for each medication")
     next_appointment = models.DateField(null=True, blank=True)
-    
+
     # Status
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='patients_created')
-    
+
     class Meta:
         ordering = ['-created_at']
         indexes = [
@@ -417,10 +425,10 @@ class ChronicPatient(models.Model):
             models.Index(fields=['first_name', 'last_name']),
             models.Index(fields=['disease_type']),
         ]
-    
+
     def __str__(self):
         return f"{self.patient_id} - {self.first_name} {self.last_name} ({self.get_disease_type_display()})"
-    
+
     def save(self, *args, **kwargs):
         if not self.patient_id:
             # Generate patient ID: CHR-YYYY-XXXX
@@ -443,10 +451,10 @@ class PatientMedication(models.Model):
     notes = models.TextField(blank=True)
     is_active = models.BooleanField(default=True)
     created_at = models.DateTimeField(auto_now_add=True)
-    
+
     class Meta:
         ordering = ['-created_at']
-    
+
     def __str__(self):
         return f"{self.patient.first_name} {self.patient.last_name} - {self.medication_name}"
 
@@ -466,9 +474,9 @@ class PatientVisit(models.Model):
     notes = models.TextField(blank=True)
     next_appointment = models.DateField(null=True, blank=True)
     created_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='patient_visits')
-    
+
     class Meta:
         ordering = ['-visit_date']
-    
+
     def __str__(self):
         return f"{self.patient.first_name} {self.patient.last_name} - {self.visit_date.strftime('%Y-%m-%d')}"

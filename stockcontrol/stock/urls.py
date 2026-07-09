@@ -20,7 +20,9 @@ urlpatterns = [
     # DRUG (MEDICINE) URLs
     # ============================================================
     path('drugs/', views.drug_list, name='drug_list'),
+    path('medicines/', views.drug_list, name='medicine_list'),
     path('drugs/create/', views.drug_create, name='drug_create'),
+    path('add-stock-to-drug/', views.add_stock_to_drug, name='add_stock_to_drug'),
     path('drugs/<int:drug_id>/edit/', views.drug_edit, name='drug_edit'),
     path('drugs/<int:drug_id>/delete/', views.drug_delete, name='drug_delete'),
 
@@ -63,7 +65,7 @@ urlpatterns = [
     path('receipts/<int:receipt_id>/', views.receipt_detail, name='receipt_detail'),
     path('receipts/<int:receipt_id>/print/', views.print_receipt, name='print_receipt'),
     path('sale/create/', views.create_sale_receipt, name='create_sale'),
-
+    path('api/complete-sale/', views.complete_sale, name='complete_sale'),
     # ============================================================
     # REPORT URLs - ADDED
     # ============================================================
@@ -83,6 +85,7 @@ urlpatterns = [
     # ============================================================
     path('users/', views.user_list, name='user_list'),
     path('users/create/', views.user_create, name='user_create'),
-    path('users/<int:user_id>/edit/', views.user_edit, name='user_edit'),
-    path('users/<int:user_id>/delete/', views.user_delete, name='user_delete'),
+    path('users/<int:user_id>/', views.user_detail, name='user_detail'),  # Changed pk to user_id
+    path('users/<int:user_id>/edit/', views.user_edit, name='user_edit'),  # Changed pk to user_id and update to edit
+    path('users/<int:user_id>/delete/', views.user_delete, name='user_delete'),  # Changed pk to user_id
 ]
