@@ -1,0 +1,15 @@
+.git
+.gitignore
+README.md
+.env
+*.pyc
+*.pyo
+*.pyd
+__pycache__/
+*.db
+db.sqlite3
+*.sqlite3
+*.log
+Dockerfile
+.dockerignore
+stockcontrol/static/
