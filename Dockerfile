@@ -24,10 +24,10 @@ COPY stockcontrol/ .
 # Create static directory
 RUN mkdir -p staticfiles
 
-# Collect static files - NOW THIS WILL WORK!
-RUN python manage.py collectstatic --noinput
+# Collect static files
+RUN python3 manage.py collectstatic --noinput
 
 EXPOSE 8080
 
 # Run migrations and start server
-CMD ["sh", "-c", "python manage.py migrate --noinput && gunicorn --bind 0.0.0.0:8080 stockcontrol.wsgi:application"]
+CMD ["sh", "-c", "python3 manage.py migrate --noinput && gunicorn --bind 0.0.0.0:8080 stockcontrol.wsgi:application"]
