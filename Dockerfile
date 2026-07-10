@@ -1,12 +1,11 @@
-# Use Python 3.14-slim or fallback to 3.13-slim
 FROM python:3.14-slim
 
-# Set environment variables
+# Cloud Run specific settings
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV DJANGO_SETTINGS_MODULE=stockcontrol.settings_cloud
+ENV CLOUD_RUN=true
 
-# Set work directory
 WORKDIR /app
 
 # Install system dependencies
@@ -15,21 +14,20 @@ RUN apt-get update && apt-get install -y \
     postgresql-client \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements and install dependencies
+# Install Python dependencies
 COPY stockcontrol/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy the Django project
+# Copy application
 COPY stockcontrol/ .
 
-# Create directory for static files (if it doesn't exist)
+# Create static directory
 RUN mkdir -p staticfiles
 
-# Collect static files
+# Collect static files - NOW THIS WILL WORK!
 RUN python manage.py collectstatic --noinput
 
-# Expose port
 EXPOSE 8080
 
-# Run with gunicorn using cloud settings
-CMD ["gunicorn", "--bind", "0.0.0.0:8080", "stockcontrol.wsgi:application"]
+# Run migrations and start server
+CMD ["sh", "-c", "python manage.py migrate --noinput && gunicorn --bind 0.0.0.0:8080 stockcontrol.wsgi:application"]
