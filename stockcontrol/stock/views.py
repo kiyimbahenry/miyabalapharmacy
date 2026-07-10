@@ -1538,17 +1538,17 @@ def is_admin(user):
 
 
 @login_required
-@user_passes_test(is_admin)
+@user_passes_test(is_admin_or_manager)
 def user_list(request):
-    """List all users (admin only)"""
+    """List all users (admin or manager)"""
     users = User.objects.all()
     return render(request, 'stock/user_list.html', {'users': users})
 
 
 @login_required
-@user_passes_test(is_admin)
+@user_passes_test(is_admin_or_manager)
 def user_create(request):
-    """Create a new user (admin only)"""
+    """Create a new user (admin or manager)"""
 
     ROLE_CHOICES = [
         ('admin', 'Admin'),
@@ -1602,7 +1602,7 @@ def user_create(request):
 
 
 @login_required
-@user_passes_test(is_admin)
+@user_passes_test(is_admin_or_manager)
 def user_detail(request, user_id):
     """View user details (admin only)"""
     user = get_object_or_404(User, id=user_id)
@@ -1610,9 +1610,9 @@ def user_detail(request, user_id):
 
 
 @login_required
-@user_passes_test(is_admin)
+@user_passes_test(is_admin_or_manager)
 def user_edit(request, user_id):
-    """Edit a user (admin only)"""
+    """Edit a user (admin or manager)"""
     user = get_object_or_404(User, id=user_id)
 
     ROLE_CHOICES = [
