@@ -45,8 +45,8 @@
                         <div class="mt-4">
                             <h5>Invoice Items</h5>
                             <div class="mb-2">
-                                <button type="button" class="btn btn-success btn-sm" id="addItemBtn">
-                                    <i class="fas fa-plus"></i> Add Item
+                                <button type="button" class="btn btn-success btn-sm" id="addExistingDrugBtn">
+                                    <i class="fas fa-plus"></i> Add Existing Drug
                                 </button>
                                 <button type="button" class="btn btn-info btn-sm" data-bs-toggle="modal" data-bs-target="#newDrugModal">
                                     <i class="fas fa-plus-circle"></i> Add New Drug
@@ -64,28 +64,7 @@
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        <tr>
-                                            <td>
-                                                <select name="drug[]" class="form-control drug-select">
-                                                    <option value="">-- Select Drug --</option>
-                                                    {% for drug in drugs %}
-                                                    <option value="{{ drug.id }}">{{ drug.name }}</option>
-                                                    {% endfor %}
-                                                </select>
-                                            </td>
-                                            <td>
-                                                <input type="number" name="quantity[]" class="form-control quantity" value="1" min="1">
-                                            </td>
-                                            <td>
-                                                <input type="number" name="unit_price[]" class="form-control unit-price" value="0" step="0.01">
-                                            </td>
-                                            <td>
-                                                <input type="number" name="item_total[]" class="form-control item-total" value="0" step="0.01" readonly>
-                                            </td>
-                                            <td>
-                                                <button type="button" class="btn btn-danger btn-sm remove-item">Remove</button>
-                                            </td>
-                                        </tr>
+                                        <!-- Rows will be added dynamically via JavaScript -->
                                     </tbody>
                                 </table>
                             </div>
@@ -109,7 +88,86 @@
     </div>
 </div>
 
-<!-- Modal: Add New Drug (UPDATED) -->
+<!-- Modal: Add Existing Drug -->
+<div class="modal fade" id="addExistingDrugModal" tabindex="-1" aria-labelledby="addExistingDrugModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="addExistingDrugModalLabel">Add Existing Drug to Invoice</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="addExistingDrugForm">
+                    {% csrf_token %}
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="existing_drug">Drug *</label>
+                                <select class="form-control" id="existing_drug" name="drug_id" required>
+                                    <option value="">-- Select Drug --</option>
+                                    {% for drug in drugs %}
+                                    <option value="{{ drug.id }}">{{ drug.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="batch_no_modal">Batch Number</label>
+                                <input type="text" class="form-control" id="batch_no_modal" name="batch_no" placeholder="Batch/Lot number">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="pack_size_modal">Pack Size *</label>
+                                <input type="number" class="form-control" id="pack_size_modal" name="pack_size" value="1" min="1" required>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="packets_modal">Number of Packets *</label>
+                                <input type="number" class="form-control" id="packets_modal" name="packets" value="1" min="1" required>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="cost_price_modal">Cost Price (per packet) *</label>
+                                <input type="number" class="form-control" id="cost_price_modal" name="cost_price" step="0.01" required>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="selling_price_modal">Selling Price (per unit) *</label>
+                                <input type="number" class="form-control" id="selling_price_modal" name="selling_price" step="0.01" required>
+                                <small class="form-text text-muted">
+                                    Auto-calculated as (Cost Price / Pack Size) × 1.5 (you can adjust but not below cost per unit)
+                                </small>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="total_quantity_modal">Total Quantity</label>
+                                <input type="number" class="form-control" id="total_quantity_modal" name="total_quantity" readonly>
+                                <small class="form-text text-muted">Packets × Pack Size (auto-calculated)</small>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+                <div id="modalError" class="text-danger mt-2" style="display:none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" id="addDrugToInvoiceBtn">Add to Invoice</button>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Add New Drug (unchanged, already in previous version) -->
 <div class="modal fade" id="newDrugModal" tabindex="-1" aria-labelledby="newDrugModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
@@ -168,28 +226,28 @@
                     <div class="row">
                         <div class="col-md-4">
                             <div class="form-group">
-                                <label for="cost_price">Cost Price *</label>
-                                <input type="number" class="form-control" id="cost_price" name="cost_price" step="0.01" required>
+                                <label for="cost_price_new">Cost Price *</label>
+                                <input type="number" class="form-control" id="cost_price_new" name="cost_price" step="0.01" required>
                             </div>
                         </div>
                         <div class="col-md-4">
                             <div class="form-group">
-                                <label for="selling_price">Selling Price</label>
-                                <input type="number" class="form-control" id="selling_price" name="selling_price" step="0.01">
+                                <label for="selling_price_new">Selling Price</label>
+                                <input type="number" class="form-control" id="selling_price_new" name="selling_price" step="0.01">
                             </div>
                         </div>
                         <div class="col-md-4">
                             <div class="form-group">
-                                <label for="pack_size">Pack Size *</label>
-                                <input type="number" class="form-control" id="pack_size" name="pack_size" value="1" min="1" required>
+                                <label for="pack_size_new">Pack Size *</label>
+                                <input type="number" class="form-control" id="pack_size_new" name="pack_size" value="1" min="1" required>
                             </div>
                         </div>
                     </div>
                     <div class="row">
                         <div class="col-md-6">
                             <div class="form-group">
-                                <label for="category">Category *</label>
-                                <select class="form-control" id="category" name="category_id" required>
+                                <label for="category_new">Category *</label>
+                                <select class="form-control" id="category_new" name="category_id" required>
                                     <option value="">-- Select Category --</option>
                                     {% for category in categories %}
                                     <option value="{{ category.id }}">{{ category.name }}</option>
@@ -199,8 +257,8 @@
                         </div>
                         <div class="col-md-6">
                             <div class="form-group">
-                                <label for="supplier_id">Supplier</label>
-                                <select class="form-control" id="supplier_id" name="supplier_id">
+                                <label for="supplier_id_new">Supplier</label>
+                                <select class="form-control" id="supplier_id_new" name="supplier_id">
                                     <option value="">-- Select Supplier --</option>
                                     {% for supplier in suppliers %}
                                     <option value="{{ supplier.id }}">{{ supplier.name }}</option>
@@ -212,43 +270,40 @@
                     <div class="row">
                         <div class="col-md-6">
                             <div class="form-group">
-                                <label for="batch_no">Batch Number</label>
-                                <input type="text" class="form-control" id="batch_no" name="batch_no" placeholder="Batch/Lot number">
+                                <label for="batch_no_new">Batch Number</label>
+                                <input type="text" class="form-control" id="batch_no_new" name="batch_no" placeholder="Batch/Lot number">
                             </div>
                         </div>
                         <div class="col-md-6">
                             <div class="form-group">
-                                <label for="expiry_date">Expiry Date</label>
-                                <input type="date" class="form-control" id="expiry_date" name="expiry_date">
+                                <label for="expiry_date_new">Expiry Date</label>
+                                <input type="date" class="form-control" id="expiry_date_new" name="expiry_date">
                             </div>
                         </div>
                     </div>
                     <div class="row">
                         <div class="col-md-4">
                             <div class="form-group">
-                                <label for="packets">Number of Packets *</label>
-                                <input type="number" class="form-control" id="packets" name="packets" value="1" min="1" required>
-                                <small class="form-text text-muted">How many packets/boxes brought</small>
+                                <label for="packets_new">Number of Packets *</label>
+                                <input type="number" class="form-control" id="packets_new" name="packets" value="1" min="1" required>
                             </div>
                         </div>
                         <div class="col-md-4">
                             <div class="form-group">
-                                <label for="pack_size_calc">Pack Size</label>
-                                <input type="number" class="form-control" id="pack_size_calc" name="pack_size_calc" value="1" min="1" readonly>
-                                <small class="form-text text-muted">Auto-filled from pack size above</small>
+                                <label for="pack_size_new2">Pack Size</label>
+                                <input type="number" class="form-control" id="pack_size_new2" name="pack_size_new2" value="1" min="1" readonly>
                             </div>
                         </div>
                         <div class="col-md-4">
                             <div class="form-group">
-                                <label for="total_quantity">Total Stock Quantity *</label>
-                                <input type="number" class="form-control" id="total_quantity" name="total_quantity" value="0" readonly>
-                                <small class="form-text text-muted">Packets × Pack Size (auto-calculated)</small>
+                                <label for="total_quantity_new">Total Stock Quantity *</label>
+                                <input type="number" class="form-control" id="total_quantity_new" name="total_quantity" readonly>
                             </div>
                         </div>
                     </div>
                 </form>
-                <div id="drugFormError" class="text-danger mt-2" style="display:none;"></div>
-                <div id="drugFormSuccess" class="text-success mt-2" style="display:none;"></div>
+                <div id="newDrugError" class="text-danger mt-2" style="display:none;"></div>
+                <div id="newDrugSuccess" class="text-success mt-2" style="display:none;"></div>
             </div>
             <div class="modal-footer">
                 <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
@@ -261,51 +316,123 @@
 {% block extra_js %}
 <script>
     $(document).ready(function() {
-        // Auto-calculate total quantity
-        function calculateTotalQuantity() {
-            var packets = parseInt($('#packets').val()) || 0;
-            var packSize = parseInt($('#pack_size').val()) || 0;
-            var totalQuantity = packets * packSize;
-            $('#pack_size_calc').val(packSize);
-            $('#total_quantity').val(totalQuantity);
+        // ---- Auto-calculate selling price in "Add Existing Drug" modal ----
+        function calculateExistingDrugSellingPrice() {
+            var costPrice = parseFloat($('#cost_price_modal').val()) || 0;
+            var packSize = parseInt($('#pack_size_modal').val()) || 1;
+            var packets = parseInt($('#packets_modal').val()) || 1;
+            var totalQty = packets * packSize;
+            $('#total_quantity_modal').val(totalQty);
+            if (costPrice > 0 && packSize > 0) {
+                var perUnitCost = costPrice / packSize;
+                var suggestedSelling = perUnitCost * 1.5;
+                $('#selling_price_modal').val(suggestedSelling.toFixed(2));
+            }
         }
+        $('#cost_price_modal, #pack_size_modal, #packets_modal').on('input', calculateExistingDrugSellingPrice);
 
-        // Trigger calculation on change
-        $('#packets, #pack_size').on('input', function() {
-            calculateTotalQuantity();
+        // ---- Add Existing Drug button click ----
+        $('#addExistingDrugBtn').click(function() {
+            $('#addExistingDrugModal').modal('show');
+            // Pre-fill from drug's default pack size? We can leave empty.
+            calculateExistingDrugSellingPrice();
         });
 
-        // Initial calculation
-        calculateTotalQuantity();
+        // ---- Add to Invoice (from modal) ----
+        $('#addDrugToInvoiceBtn').click(function() {
+            var drugId = $('#existing_drug').val();
+            var drugName = $('#existing_drug option:selected').text();
+            var batchNo = $('#batch_no_modal').val();
+            var packSize = parseInt($('#pack_size_modal').val()) || 1;
+            var packets = parseInt($('#packets_modal').val()) || 1;
+            var costPrice = parseFloat($('#cost_price_modal').val()) || 0;
+            var sellingPrice = parseFloat($('#selling_price_modal').val()) || 0;
+            var totalQty = packets * packSize;
 
-        // Add item row
-        $('#addItemBtn').click(function() {
-            var newRow = $('#invoiceItemsTable tbody tr:first').clone();
-            newRow.find('input').val('');
-            newRow.find('select').val('');
-            newRow.find('.item-total').val('0');
-            $('#invoiceItemsTable tbody').append(newRow);
+            if (!drugId) {
+                $('#modalError').text('Please select a drug.').show();
+                return;
+            }
+            if (sellingPrice <= 0) {
+                $('#modalError').text('Selling price must be greater than 0.').show();
+                return;
+            }
+            // Check that selling price is not less than cost per unit
+            var perUnitCost = costPrice / packSize;
+            if (sellingPrice < perUnitCost) {
+                $('#modalError').text('Selling price cannot be less than cost per unit (' + perUnitCost.toFixed(2) + ').').show();
+                return;
+            }
+            $('#modalError').hide();
+
+            // Add row to table
+            var rowHtml = `
+                <tr>
+                    <td>
+                        <select name="drug[]" class="form-control drug-select">
+                            <option value="${drugId}" selected>${drugName}</option>
+                        </select>
+                        <input type="hidden" name="batch[]" value="${batchNo}">
+                        <input type="hidden" name="pack_size[]" value="${packSize}">
+                        <input type="hidden" name="packets[]" value="${packets}">
+                    </td>
+                    <td><input type="number" name="quantity[]" class="form-control quantity" value="${totalQty}" min="1"></td>
+                    <td><input type="number" name="unit_price[]" class="form-control unit-price" value="${sellingPrice.toFixed(2)}" step="0.01"></td>
+                    <td><input type="number" name="item_total[]" class="form-control item-total" value="${(totalQty * sellingPrice).toFixed(2)}" step="0.01" readonly></td>
+                    <td><button type="button" class="btn btn-danger btn-sm remove-item">Remove</button></td>
+                </tr>
+            `;
+            $('#invoiceItemsTable tbody').append(rowHtml);
+            // Update total items count
+            updateTotalItems();
+            // Close modal
+            $('#addExistingDrugModal').modal('hide');
+            // Reset form
+            $('#addExistingDrugForm')[0].reset();
+            calculateExistingDrugSellingPrice();
         });
 
-        // Remove item row
+        // ---- Update total items count ----
+        function updateTotalItems() {
+            var totalQty = 0;
+            $('#invoiceItemsTable tbody .quantity').each(function() {
+                totalQty += parseInt($(this).val()) || 0;
+            });
+            $('#id_total_items').val(totalQty);
+        }
+        // Listen for changes in quantity fields
+        $(document).on('input', '.quantity, .unit-price', function() {
+            var row = $(this).closest('tr');
+            var quantity = parseFloat(row.find('.quantity').val()) || 0;
+            var unitPrice = parseFloat(row.find('.unit-price').val()) || 0;
+            row.find('.item-total').val((quantity * unitPrice).toFixed(2));
+            updateTotalItems();
+        });
+
+        // ---- Remove row ----
         $(document).on('click', '.remove-item', function() {
             if ($('#invoiceItemsTable tbody tr').length > 1) {
                 $(this).closest('tr').remove();
+                updateTotalItems();
             } else {
                 alert('You must have at least one item.');
             }
         });
 
-        // Calculate item total
-        $(document).on('input', '.quantity, .unit-price', function() {
-            var row = $(this).closest('tr');
-            var quantity = parseFloat(row.find('.quantity').val()) || 0;
-            var unitPrice = parseFloat(row.find('.unit-price').val()) || 0;
-            var total = quantity * unitPrice;
-            row.find('.item-total').val(total.toFixed(2));
-        });
+        // ---- Add New Drug (AJAX) ----
+        // (Keep the existing code for the new drug modal, it's already present in the template)
+        // We'll just ensure it works.
 
-        // Save new drug via AJAX
+        // ---- Auto-calculate for new drug modal ----
+        function calculateNewDrugTotals() {
+            var packets = parseInt($('#packets_new').val()) || 0;
+            var packSize = parseInt($('#pack_size_new').val()) || 1;
+            $('#pack_size_new2').val(packSize);
+            $('#total_quantity_new').val(packets * packSize);
+        }
+        $('#packets_new, #pack_size_new').on('input', calculateNewDrugTotals);
+        calculateNewDrugTotals();
+
         $('#saveNewDrugBtn').click(function() {
             var formData = $('#newDrugForm').serialize();
             $.ajax({
@@ -314,22 +441,23 @@
                 data: formData,
                 success: function(response) {
                     if (response.success) {
-                        $('#drugFormSuccess').text('Drug added successfully!').show();
-                        $('#drugFormError').hide();
+                        $('#newDrugSuccess').text('Drug added successfully!').show();
+                        $('#newDrugError').hide();
                         var newOption = $('<option></option>')
                             .val(response.drug_id)
                             .text(response.drug_name);
+                        // Add to all drug dropdowns (both existing drug modal and any future rows)
                         $('.drug-select').append(newOption);
+                        $('#existing_drug').append(newOption.clone());
                         $('#newDrugForm')[0].reset();
-                        // Reset calculation
-                        calculateTotalQuantity();
+                        calculateNewDrugTotals();
                         setTimeout(function() {
                             $('#newDrugModal').modal('hide');
-                            $('#drugFormSuccess').hide();
+                            $('#newDrugSuccess').hide();
                         }, 1500);
                     } else {
-                        $('#drugFormError').text(response.error || 'Failed to add drug.').show();
-                        $('#drugFormSuccess').hide();
+                        $('#newDrugError').text(response.error || 'Failed to add drug.').show();
+                        $('#newDrugSuccess').hide();
                     }
                 },
                 error: function(xhr) {
@@ -337,19 +465,42 @@
                     if (xhr.responseJSON && xhr.responseJSON.error) {
                         errorMsg = xhr.responseJSON.error;
                     }
-                    $('#drugFormError').text(errorMsg).show();
-                    $('#drugFormSuccess').hide();
+                    $('#newDrugError').text(errorMsg).show();
+                    $('#newDrugSuccess').hide();
                 }
             });
         });
 
-        // Reset modal when closed
+        // ---- Reset modals when closed ----
+        $('#addExistingDrugModal').on('hidden.bs.modal', function() {
+            $('#addExistingDrugForm')[0].reset();
+            $('#modalError').hide();
+        });
         $('#newDrugModal').on('hidden.bs.modal', function() {
             $('#newDrugForm')[0].reset();
-            $('#drugFormError').hide();
-            $('#drugFormSuccess').hide();
-            calculateTotalQuantity();
+            $('#newDrugError').hide();
+            $('#newDrugSuccess').hide();
+            calculateNewDrugTotals();
         });
+
+        // ---- Initial: add one default row? We'll leave empty, user adds via modal.
+        // But we need at least one row? The form can be submitted with no items? That's not allowed. We'll add a placeholder or let the user add.
+        // We'll add an empty row with "No items" message? Better to have a row with "Please add items" message.
+        // We'll add a message row if table is empty.
+        function checkEmptyTable() {
+            if ($('#invoiceItemsTable tbody tr').length === 0) {
+                $('#invoiceItemsTable tbody').append('<tr><td colspan="5" class="text-center text-muted">No items added. Click "Add Existing Drug" or "Add New Drug" to add items.</td></tr>');
+            }
+        }
+        checkEmptyTable();
+
+        // Also, when adding rows, remove the empty message.
+        $(document).on('click', '#addExistingDrugBtn, #addItemBtn', function() {
+            $('#invoiceItemsTable tbody .text-muted').closest('tr').remove();
+        });
+
+        // Update total items on page load (if any rows)
+        updateTotalItems();
     });
 </script>
 {% endblock %}
