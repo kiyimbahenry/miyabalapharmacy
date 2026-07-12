@@ -24,10 +24,10 @@ COPY stockcontrol/ .
 # Create static directory
 RUN mkdir -p staticfiles
 
-# Collect static files
-RUN python3 manage.py collectstatic --noinput
+# ❌ REMOVED: RUN python3 manage.py collectstatic --noinput
+# (Now runs at startup so DATABASE_URL is available)
 
 EXPOSE 8080
 
-# Run migrations, create superuser, and start server
-CMD ["sh", "-c", "python3 manage.py migrate --noinput && python3 manage.py createsuperuser --noinput --username $DJANGO_SUPERUSER_USERNAME --email $DJANGO_SUPERUSER_EMAIL || true && gunicorn --bind 0.0.0.0:8080 stockcontrol.wsgi:application"]
+# Run migrations, collect static files, and start server
+CMD ["sh", "-c", "python3 manage.py migrate --noinput && python3 manage.py collectstatic --noinput && gunicorn --bind 0.0.0.0:8080 stockcontrol.wsgi:application"]
