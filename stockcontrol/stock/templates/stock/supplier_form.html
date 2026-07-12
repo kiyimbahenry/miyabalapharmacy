@@ -6,7 +6,7 @@
 {% block content %}
 <div class="container-fluid">
     <div class="row">
-        <div class="col-md-12">
+        <div class="col-md-8 mx-auto">
             <div class="card shadow">
                 <div class="card-header">
                     <h4 class="card-title">
@@ -18,75 +18,40 @@
                     <form method="post">
                         {% csrf_token %}
                         
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="id_name">Supplier Name <span class="text-danger">*</span></label>
-                                    {{ form.name }}
-                                    {% if form.name.errors %}
-                                        <div class="text-danger">{{ form.name.errors }}</div>
-                                    {% endif %}
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="id_contact_person">Contact Person</label>
-                                    {{ form.contact_person }}
-                                    {% if form.contact_person.errors %}
-                                        <div class="text-danger">{{ form.contact_person.errors }}</div>
-                                    {% endif %}
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="id_phone">Phone Number</label>
-                                    {{ form.phone }}
-                                    {% if form.phone.errors %}
-                                        <div class="text-danger">{{ form.phone.errors }}</div>
-                                    {% endif %}
-                                </div>
-                            </div>
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="id_email">Email Address</label>
-                                    {{ form.email }}
-                                    {% if form.email.errors %}
-                                        <div class="text-danger">{{ form.email.errors }}</div>
-                                    {% endif %}
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="row">
-                            <div class="col-md-12">
-                                <div class="form-group">
-                                    <label for="id_address">Physical Address</label>
-                                    {{ form.address }}
-                                    {% if form.address.errors %}
-                                        <div class="text-danger">{{ form.address.errors }}</div>
-                                    {% endif %}
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="row">
-                            <div class="col-md-6">
-                                <div class="form-group">
-                                    <label for="id_tax_id">Tax ID</label>
-                                    {{ form.tax_id }}
-                                    {% if form.tax_id.errors %}
-                                        <div class="text-danger">{{ form.tax_id.errors }}</div>
-                                    {% endif %}
-                                    <small class="form-text text-muted">Optional – if applicable</small>
-                                </div>
-                            </div>
-                        </div>
+                        <table class="table table-bordered">
+                            <tbody>
+                                <tr>
+                                    <td style="width: 30%;"><label for="id_name" class="fw-bold">Supplier Name <span class="text-danger">*</span></label></td>
+                                    <td style="width: 70%;">{{ form.name }}</td>
+                                </tr>
+                                <tr>
+                                    <td><label for="id_contact_person" class="fw-bold">Contact Person</label></td>
+                                    <td>{{ form.contact_person }}</td>
+                                </tr>
+                                <tr>
+                                    <td><label for="id_phone" class="fw-bold">Phone Number</label></td>
+                                    <td>{{ form.phone }}</td>
+                                </tr>
+                                <tr>
+                                    <td><label for="id_email" class="fw-bold">Email Address</label></td>
+                                    <td>{{ form.email }}</td>
+                                </tr>
+                                <tr>
+                                    <td><label for="id_address" class="fw-bold">Physical Address</label></td>
+                                    <td>{{ form.address }}</td>
+                                </tr>
+                                <tr>
+                                    <td><label for="id_tax_id" class="fw-bold">Tax ID</label></td>
+                                    <td>
+                                        {{ form.tax_id }}
+                                        <small class="form-text text-muted">Optional – if applicable</small>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
 
                         <div class="row mt-3">
-                            <div class="col-md-12">
+                            <div class="col-md-12 text-center">
                                 <button type="submit" class="btn btn-primary">
                                     <i class="fas fa-save"></i> 
                                     {% if supplier %}Update Supplier{% else %}Create Supplier{% endif %}
