@@ -1362,8 +1362,8 @@ def invoice_list(request):
 def invoice_create(request):
     """Create a new invoice - Admin/Manager only"""
     suppliers = Supplier.objects.all()
-    categories = Category.objects.all()  # For the modal dropdown
-    drugs = Drug.objects.all()           # For the dropdown in the modal
+    categories = Category.objects.all()
+    drugs = Drug.objects.all()
 
     if request.method == 'POST':
         form = InvoiceForm(request.POST)
@@ -1372,6 +1372,32 @@ def invoice_create(request):
             invoice.total_amount = 0  # Will be updated when adding drugs
             invoice.created_by = request.user
             invoice.save()
+
+            # Process invoice items
+            drug_ids = request.POST.getlist('drug[]')
+            quantities = request.POST.getlist('quantity[]')
+            unit_prices = request.POST.getlist('unit_price[]')
+
+            total_amount = 0
+            for drug_id, quantity, unit_price in zip(drug_ids, quantities, unit_prices):
+                if drug_id and int(quantity) > 0 and float(unit_price) > 0:
+                    drug = Drug.objects.get(id=int(drug_id))
+                    qty = int(quantity)
+                    price = float(unit_price)
+                    item_total = qty * price
+                    InvoiceItem.objects.create(
+                        invoice=invoice,
+                        drug=drug,
+                        quantity=qty,
+                        unit_price=price,
+                        total=item_total
+                    )
+                    total_amount += item_total
+
+            # Update invoice total amount
+            invoice.total_amount = total_amount
+            invoice.save()
+
             messages.success(request, f'Invoice "{invoice.invoice_number}" created successfully!')
             return redirect('stock:invoice_list')
         else:

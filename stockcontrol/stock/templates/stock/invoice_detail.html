@@ -1,0 +1,58 @@
+{% extends 'stock/base.html' %}
+{% load static %}
+
+{% block title %}Invoice Details{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card">
+                <div class="card-header">
+                    <h4>Invoice Details</h4>
+                </div>
+                <div class="card-body">
+                    <div class="row">
+                        <div class="col-md-6">
+                            <table class="table table-bordered">
+                                <tr><th>Invoice Number</th><td>{{ invoice.invoice_number }}</td></tr>
+                                <tr><th>Supplier</th><td>{{ invoice.supplier.name }}</td></tr>
+                                <tr><th>Invoice Date</th><td>{{ invoice.invoice_date|date:"d/m/Y" }}</td></tr>
+                                <tr><th>Payment Mode</th><td>{{ invoice.payment_mode|title }}</td></tr>
+                                <tr><th>Total Items</th><td>{{ invoice.total_items }}</td></tr>
+                                <tr><th>Total Cost</th><td>{{ invoice.total_cost|floatformat:2 }}</td></tr>
+                                <tr><th>Total Amount</th><td>{{ invoice.total_amount|floatformat:2 }}</td></tr>
+                                <tr><th>Status</th><td>{{ invoice.status|title }}</td></tr>
+                            </table>
+                        </div>
+                    </div>
+                    <h5>Invoice Items</h5>
+                    <table class="table table-bordered">
+                        <thead>
+                            <tr>
+                                <th>Drug</th>
+                                <th>Quantity</th>
+                                <th>Unit Price</th>
+                                <th>Total</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% for item in items %}
+                            <tr>
+                                <td>{{ item.drug.name }}</td>
+                                <td>{{ item.quantity }}</td>
+                                <td>{{ item.unit_price|floatformat:2 }}</td>
+                                <td>{{ item.total|floatformat:2 }}</td>
+                            </tr>
+                            {% empty %}
+                            <tr><td colspan="4">No items on this invoice.</td></tr>
+                            {% endfor %}
+                        </tbody>
+                    </table>
+                    <a href="{% url 'stock:invoice_list' %}" class="btn btn-secondary">Back to Invoices</a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
