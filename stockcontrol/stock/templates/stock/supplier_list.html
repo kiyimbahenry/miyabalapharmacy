@@ -1,0 +1,87 @@
+{% extends 'stock/base.html' %}
+{% load static %}
+
+{% block title %}Suppliers List{% endblock %}
+
+{% block content %}
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-md-12">
+            <div class="card shadow">
+                <div class="card-header d-flex justify-content-between align-items-center">
+                    <h4><i class="fas fa-truck"></i> Suppliers</h4>
+                    <a href="{% url 'stock:supplier_create' %}" class="btn btn-primary">
+                        <i class="fas fa-plus-circle"></i> Add Supplier
+                    </a>
+                </div>
+                <div class="card-body">
+                    <div class="table-responsive">
+                        <table class="table table-hover table-bordered">
+                            <thead class="table-light">
+                                <tr>
+                                    <th>#</th>
+                                    <th>Name</th>
+                                    <th>Contact Person</th>
+                                    <th>Phone</th>
+                                    <th>Email</th>
+                                    <th>Address</th>
+                                    <th>Tax ID</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for supplier in suppliers %}
+                                <tr>
+                                    <td>{{ forloop.counter }}</td>
+                                    <td><strong>{{ supplier.name }}</strong></td>
+                                    <td>{{ supplier.contact_person|default:"—" }}</td>
+                                    <td>{{ supplier.phone|default:"—" }}</td>
+                                    <td>{{ supplier.email|default:"—" }}</td>
+                                    <td>{{ supplier.address|default:"—" }}</td>
+                                    <td>{{ supplier.tax_id|default:"—" }}</td>
+                                    <td>
+                                        <a href="{% url 'stock:supplier_edit' supplier.id %}" class="btn btn-sm btn-info">
+                                            <i class="fas fa-edit"></i>
+                                        </a>
+                                        <button class="btn btn-sm btn-danger" data-bs-toggle="modal" 
+                                                data-bs-target="#deleteModal{{ supplier.id }}">
+                                            <i class="fas fa-trash"></i>
+                                        </button>
+                                    </td>
+                                </tr>
+
+                                <!-- Delete Modal -->
+                                <div class="modal fade" id="deleteModal{{ supplier.id }}" tabindex="-1">
+                                    <div class="modal-dialog">
+                                        <div class="modal-content">
+                                            <div class="modal-header">
+                                                <h5 class="modal-title">Delete Supplier</h5>
+                                                <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                            </div>
+                                            <div class="modal-body">
+                                                Are you sure you want to delete <strong>{{ supplier.name }}</strong>?
+                                            </div>
+                                            <div class="modal-footer">
+                                                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancel</button>
+                                                <form method="POST" action="{% url 'stock:supplier_delete' supplier.id %}">
+                                                    {% csrf_token %}
+                                                    <button type="submit" class="btn btn-danger">Delete</button>
+                                                </form>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% empty %}
+                                <tr>
+                                    <td colspan="8" class="text-center">No suppliers found. <a href="{% url 'stock:supplier_create' %}">Add one now</a>.</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
