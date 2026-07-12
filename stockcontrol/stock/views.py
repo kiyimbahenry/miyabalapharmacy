@@ -21,7 +21,7 @@ from .models import (
     Drug, Supplier, Invoice, Category, InvoiceItem,
     Sale, SaleItem, Receipt, Report, ChronicPatient,
     PatientMedication, PatientVisit,
-    ReturnedDrug, StockMovement   # <-- added
+    ReturnedDrug, StockMovement
 )
 
 
@@ -37,24 +37,37 @@ def is_admin_or_manager(user):
 # ============================================================
 
 def login_view(request):
-    """User login view"""
+    """User login view - supports both username and email"""
     if request.user.is_authenticated:
         return redirect('stock:dashboard')
 
     if request.method == 'POST':
-        username = request.POST.get('username')
+        username_or_email = request.POST.get('username')
         password = request.POST.get('password')
 
-        if username and password:
-            user = authenticate(request, username=username, password=password)
+        if username_or_email and password:
+            user = None
+            
+            # Try to find user by email first
+            if '@' in username_or_email:
+                try:
+                    user_obj = User.objects.get(email=username_or_email)
+                    user = authenticate(request, username=user_obj.username, password=password)
+                except User.DoesNotExist:
+                    pass
+            
+            # If not found by email, try by username
+            if not user:
+                user = authenticate(request, username=username_or_email, password=password)
+            
             if user is not None:
                 login(request, user)
                 next_url = request.GET.get('next', '/')
                 return redirect(next_url)
             else:
-                messages.error(request, 'Invalid username or password.')
+                messages.error(request, 'Invalid email/username or password.')
         else:
-            messages.error(request, 'Please enter both username and password.')
+            messages.error(request, 'Please enter both email/username and password.')
 
     return render(request, 'stock/login.html')
 
@@ -1452,8 +1465,9 @@ def invoice_list(request):
 
 
 @login_required
+@user_passes_test(is_admin_or_manager)
 def invoice_create(request):
-    """Create a new invoice (simplified version)"""
+    """Create a new invoice - Admin/Manager only"""
     suppliers = Supplier.objects.all()
     invoices = Invoice.objects.all()
     drugs = Drug.objects.all()  # For the dropdown in the modal
@@ -1528,8 +1542,9 @@ def invoice_detail(request, invoice_id):
 
 
 @login_required
+@user_passes_test(is_admin_or_manager)
 def invoice_delete(request, invoice_id):
-    """Delete an invoice"""
+    """Delete an invoice - Admin/Manager only"""
     invoice = get_object_or_404(Invoice, id=invoice_id)
 
     if request.method == 'POST':

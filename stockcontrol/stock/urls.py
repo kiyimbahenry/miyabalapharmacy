@@ -1,4 +1,5 @@
 from django.urls import path
+from django.contrib.auth import views as auth_views
 from . import views
 
 app_name = 'stock'
@@ -9,6 +10,35 @@ urlpatterns = [
     # ============================================================
     path('login/', views.login_view, name='login'),
     path('logout/', views.logout_view, name='logout'),
+
+    # ============================================================
+    # PASSWORD RESET URLs - ADDED
+    # ============================================================
+    path('password-reset/',
+         auth_views.PasswordResetView.as_view(
+             template_name='stock/password_reset.html',
+             email_template_name='stock/password_reset_email.html',
+             subject_template_name='stock/password_reset_subject.txt'
+         ),
+         name='password_reset'),
+
+    path('password-reset/done/',
+         auth_views.PasswordResetDoneView.as_view(
+             template_name='stock/password_reset_done.html'
+         ),
+         name='password_reset_done'),
+
+    path('password-reset-confirm/<uidb64>/<token>/',
+         auth_views.PasswordResetConfirmView.as_view(
+             template_name='stock/password_reset_confirm.html'
+         ),
+         name='password_reset_confirm'),
+
+    path('password-reset-complete/',
+         auth_views.PasswordResetCompleteView.as_view(
+             template_name='stock/password_reset_complete.html'
+         ),
+         name='password_reset_complete'),
 
     # ============================================================
     # DASHBOARD
@@ -27,7 +57,7 @@ urlpatterns = [
     path('drugs/<int:drug_id>/delete/', views.drug_delete, name='drug_delete'),
 
     # ============================================================
-    # CHRONIC PATIENT URLs - ADDED
+    # CHRONIC PATIENT URLs
     # ============================================================
     path('patients/', views.patient_list, name='patient_list'),
     path('patients/create/', views.patient_create, name='patient_create'),
@@ -69,8 +99,9 @@ urlpatterns = [
     path('api/complete-sale/', views.complete_sale, name='complete_sale'),
     path('returns/', views.return_list, name='return_list'),
     path('returns/create/', views.return_create, name='return_create'),
+
     # ============================================================
-    # REPORT URLs - ADDED
+    # REPORT URLs
     # ============================================================
     path('reports/', views.reports_dashboard, name='reports_dashboard'),
     path('api/generate-report/', views.generate_report_api, name='generate_report_api'),
@@ -88,7 +119,7 @@ urlpatterns = [
     # ============================================================
     path('users/', views.user_list, name='user_list'),
     path('users/create/', views.user_create, name='user_create'),
-    path('users/<int:user_id>/', views.user_detail, name='user_detail'),  # Changed pk to user_id
-    path('users/<int:user_id>/edit/', views.user_edit, name='user_edit'),  # Changed pk to user_id and update to edit
-    path('users/<int:user_id>/delete/', views.user_delete, name='user_delete'),  # Changed pk to user_id
+    path('users/<int:user_id>/', views.user_detail, name='user_detail'),
+    path('users/<int:user_id>/edit/', views.user_edit, name='user_edit'),
+    path('users/<int:user_id>/delete/', views.user_delete, name='user_delete'),
 ]
