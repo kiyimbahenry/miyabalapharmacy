@@ -1,58 +1,195 @@
 {% extends 'stock/base.html' %}
 {% load static %}
 
-{% block title %}Login{% endblock %}
+{% block title %}Login - Miyabala Pharmacy{% endblock %}
 
 {% block content %}
-<div class="container">
-    <div class="row justify-content-center mt-5">
-        <div class="col-md-6 col-lg-4">
-            <div class="card shadow">
-                <div class="card-header text-center bg-primary text-white">
-                    <h4><i class="fas fa-user-circle"></i> Miyabala Pharmacy</h4>
+<style>
+    /* Full-page background gradient */
+    body {
+        background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0;
+        padding: 0;
+        font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    }
+    .login-card {
+        background: #ffffff;
+        border-radius: 20px;
+        box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+        padding: 40px 35px;
+        width: 100%;
+        max-width: 420px;
+        transition: transform 0.3s ease;
+    }
+    .login-card:hover {
+        transform: translateY(-5px);
+    }
+    .login-logo {
+        text-align: center;
+        margin-bottom: 25px;
+    }
+    .login-logo i {
+        font-size: 4rem;
+        color: #1e3c72;
+        background: #f0f4ff;
+        padding: 20px;
+        border-radius: 50%;
+        box-shadow: 0 5px 15px rgba(30, 60, 114, 0.2);
+    }
+    .login-title {
+        text-align: center;
+        font-weight: 700;
+        color: #1e3c72;
+        margin-bottom: 5px;
+        font-size: 1.8rem;
+    }
+    .login-subtitle {
+        text-align: center;
+        color: #6c757d;
+        font-size: 0.9rem;
+        margin-bottom: 30px;
+    }
+    .form-control {
+        border-radius: 10px;
+        padding: 12px 15px;
+        border: 1px solid #ddd;
+        transition: border-color 0.3s;
+    }
+    .form-control:focus {
+        border-color: #1e3c72;
+        box-shadow: 0 0 0 3px rgba(30, 60, 114, 0.1);
+    }
+    .input-group-text {
+        background: #f8f9fa;
+        border: 1px solid #ddd;
+        border-right: none;
+        border-radius: 10px 0 0 10px;
+        color: #6c757d;
+    }
+    .input-group .form-control {
+        border-left: none;
+        border-radius: 0 10px 10px 0;
+    }
+    .input-group {
+        margin-bottom: 15px;
+    }
+    .btn-login {
+        background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+        border: none;
+        border-radius: 10px;
+        padding: 12px;
+        font-weight: 600;
+        font-size: 1.1rem;
+        color: white;
+        width: 100%;
+        transition: opacity 0.3s;
+        margin-top: 10px;
+    }
+    .btn-login:hover {
+        opacity: 0.9;
+    }
+    .form-check-label {
+        font-size: 0.9rem;
+        color: #555;
+    }
+    .forgot-link {
+        color: #1e3c72;
+        text-decoration: none;
+        font-size: 0.9rem;
+        font-weight: 500;
+    }
+    .forgot-link:hover {
+        text-decoration: underline;
+    }
+    .login-footer {
+        text-align: center;
+        margin-top: 25px;
+        font-size: 0.8rem;
+        color: #adb5bd;
+    }
+    .alert {
+        border-radius: 10px;
+        margin-bottom: 20px;
+    }
+    /* override body from base */
+    .container-fluid {
+        padding: 0;
+        margin: 0;
+    }
+    .row {
+        margin: 0;
+        min-height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+    }
+    .col-12 {
+        display: flex;
+        justify-content: center;
+        padding: 20px;
+    }
+</style>
+
+<div class="container-fluid">
+    <div class="row">
+        <div class="col-12">
+            <div class="login-card">
+                <!-- Logo / Icon -->
+                <div class="login-logo">
+                    <i class="fas fa-capsules"></i>
                 </div>
-                <div class="card-body">
-                    {% if messages %}
-                        {% for message in messages %}
-                            <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-                                {{ message }}
-                                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                            </div>
-                        {% endfor %}
-                    {% endif %}
+                <h2 class="login-title">Miyabala Pharmacy</h2>
+                <p class="login-subtitle">Welcome back! Please log in to your account.</p>
 
-                    <form method="post">
-                        {% csrf_token %}
-                        <div class="form-group mb-3">
-                            <label for="username">Email or Username</label>
-                            <input type="text" class="form-control" id="username" name="username" 
-                                   placeholder="Enter email or username" required>
-                            <small class="form-text text-muted">Use your email address or username</small>
+                <!-- Display messages -->
+                {% if messages %}
+                    {% for message in messages %}
+                        <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
+                            {{ message }}
+                            <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
                         </div>
+                    {% endfor %}
+                {% endif %}
 
-                        <div class="form-group mb-3">
-                            <label for="password">Password</label>
-                            <input type="password" class="form-control" id="password" name="password" 
-                                   placeholder="Enter password" required>
+                <form method="post">
+                    {% csrf_token %}
+                    <!-- Email/Username -->
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="fas fa-user"></i></span>
+                        <input type="text" class="form-control" id="username" name="username"
+                               placeholder="Email or Username" value="{{ request.POST.username }}" required>
+                    </div>
+
+                    <!-- Password -->
+                    <div class="input-group">
+                        <span class="input-group-text"><i class="fas fa-lock"></i></span>
+                        <input type="password" class="form-control" id="password" name="password"
+                               placeholder="Password" required>
+                    </div>
+
+                    <!-- Remember me & Forgot Password -->
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <div class="form-check">
+                            <input type="checkbox" class="form-check-input" id="remember" name="remember">
+                            <label class="form-check-label" for="remember">Remember me</label>
                         </div>
+                        <a href="{% url 'stock:password_reset' %}" class="forgot-link">
+                            <i class="fas fa-key"></i> Forgot Password?
+                        </a>
+                    </div>
 
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <div>
-                                <input type="checkbox" id="remember" name="remember">
-                                <label for="remember">Remember me</label>
-                            </div>
-                            <a href="{% url 'stock:password_reset' %}" class="text-primary">
-                                <i class="fas fa-key"></i> Forgot Password?
-                            </a>
-                        </div>
+                    <!-- Login Button -->
+                    <button type="submit" class="btn btn-login">
+                        <i class="fas fa-sign-in-alt me-2"></i> Login
+                    </button>
+                </form>
 
-                        <button type="submit" class="btn btn-primary w-100">
-                            <i class="fas fa-sign-in-alt"></i> Login
-                        </button>
-                    </form>
-                </div>
-                <div class="card-footer text-center text-muted">
-                    <small>&copy; 2026 Miyabala Pharmacy Management System</small>
+                <div class="login-footer">
+                    &copy; 2026 Miyabala Pharmacy Management System
                 </div>
             </div>
         </div>
