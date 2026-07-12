@@ -68,6 +68,14 @@
                         <div class="row mt-4">
                             <div class="col-md-12">
                                 <h5>Invoice Items</h5>
+                                <div class="mb-2">
+                                    <button type="button" class="btn btn-success btn-sm" id="addItemBtn">
+                                        <i class="fas fa-plus"></i> Add Item
+                                    </button>
+                                    <button type="button" class="btn btn-info btn-sm" data-bs-toggle="modal" data-bs-target="#newDrugModal">
+                                        <i class="fas fa-plus-circle"></i> Add New Drug
+                                    </button>
+                                </div>
                                 <table class="table table-bordered" id="invoiceItemsTable">
                                     <thead>
                                         <tr>
@@ -102,15 +110,6 @@
                                             </td>
                                         </tr>
                                     </tbody>
-                                    <tfoot>
-                                        <tr>
-                                            <td colspan="4">
-                                                <button type="button" class="btn btn-success" id="addItemBtn">
-                                                    <i class="fas fa-plus"></i> Add Item
-                                                </button>
-                                            </td>
-                                        </tr>
-                                    </tfoot>
                                 </table>
                             </div>
                         </div>
@@ -127,6 +126,121 @@
                         </div>
                     </form>
                 </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Modal: Add New Drug -->
+<div class="modal fade" id="newDrugModal" tabindex="-1" aria-labelledby="newDrugModalLabel" aria-hidden="true">
+    <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h5 class="modal-title" id="newDrugModalLabel">Add New Drug</h5>
+                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+            </div>
+            <div class="modal-body">
+                <form id="newDrugForm">
+                    {% csrf_token %}
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="drug_name">Drug Name *</label>
+                                <input type="text" class="form-control" id="drug_name" name="name" required>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="generic_name">Generic Name</label>
+                                <input type="text" class="form-control" id="generic_name" name="generic_name">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="dosage">Dosage *</label>
+                                <select class="form-control" id="dosage" name="dosage" required>
+                                    <option value="">-- Select --</option>
+                                    <option value="tablet">Tablet</option>
+                                    <option value="capsules">Capsules</option>
+                                    <option value="injection">Injection</option>
+                                    <option value="syrup">Syrup</option>
+                                    <option value="suspension">Suspension</option>
+                                    <option value="drops">Drops</option>
+                                    <option value="ointment">Ointment</option>
+                                    <option value="cream">Cream</option>
+                                    <option value="jerry">Jerry</option>
+                                    <option value="oil">Oil</option>
+                                    <option value="spray">Spray</option>
+                                    <option value="gel">Gel</option>
+                                    <option value="powder">Powder</option>
+                                    <option value="liquid">Liquid</option>
+                                    <option value="balm">Balm</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="strength">Strength</label>
+                                <input type="text" class="form-control" id="strength" name="strength" placeholder="e.g., 500mg">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="cost_price">Cost Price *</label>
+                                <input type="number" class="form-control" id="cost_price" name="cost_price" step="0.01" required>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="selling_price">Selling Price</label>
+                                <input type="number" class="form-control" id="selling_price" name="selling_price" step="0.01">
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="pack_size">Pack Size</label>
+                                <input type="number" class="form-control" id="pack_size" name="pack_size" value="1">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="supplier_id">Supplier</label>
+                                <select class="form-control" id="supplier_id" name="supplier">
+                                    <option value="">-- Select Supplier --</option>
+                                    {% for supplier in suppliers %}
+                                    <option value="{{ supplier.id }}">{{ supplier.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="expiry_date">Expiry Date</label>
+                                <input type="date" class="form-control" id="expiry_date" name="expiry_date">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-12">
+                            <div class="form-group">
+                                <label for="description">Description</label>
+                                <textarea class="form-control" id="description" name="description" rows="2"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                </form>
+                <div id="drugFormError" class="text-danger mt-2" style="display:none;"></div>
+                <div id="drugFormSuccess" class="text-success mt-2" style="display:none;"></div>
+            </div>
+            <div class="modal-footer">
+                <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Close</button>
+                <button type="button" class="btn btn-primary" id="saveNewDrugBtn">Save Drug</button>
             </div>
         </div>
     </div>
@@ -160,6 +274,52 @@
             var unitPrice = parseFloat(row.find('.unit-price').val()) || 0;
             var total = quantity * unitPrice;
             row.find('.item-total').val(total.toFixed(2));
+        });
+
+        // Save new drug via AJAX
+        $('#saveNewDrugBtn').click(function() {
+            var formData = $('#newDrugForm').serialize();
+            $.ajax({
+                url: "{% url 'stock:drug_create_ajax' %}",
+                method: 'POST',
+                data: formData,
+                success: function(response) {
+                    if (response.success) {
+                        $('#drugFormSuccess').text('Drug added successfully!').show();
+                        $('#drugFormError').hide();
+                        // Add new drug to all dropdowns
+                        var newOption = $('<option></option>')
+                            .val(response.drug_id)
+                            .text(response.drug_name);
+                        $('.drug-select').append(newOption);
+                        // Reset form
+                        $('#newDrugForm')[0].reset();
+                        // Close modal after a moment
+                        setTimeout(function() {
+                            $('#newDrugModal').modal('hide');
+                            $('#drugFormSuccess').hide();
+                        }, 1500);
+                    } else {
+                        $('#drugFormError').text(response.error || 'Failed to add drug.').show();
+                        $('#drugFormSuccess').hide();
+                    }
+                },
+                error: function(xhr) {
+                    var errorMsg = 'An error occurred. Please try again.';
+                    if (xhr.responseJSON && xhr.responseJSON.error) {
+                        errorMsg = xhr.responseJSON.error;
+                    }
+                    $('#drugFormError').text(errorMsg).show();
+                    $('#drugFormSuccess').hide();
+                }
+            });
+        });
+
+        // Reset modal when closed
+        $('#newDrugModal').on('hidden.bs.modal', function() {
+            $('#newDrugForm')[0].reset();
+            $('#drugFormError').hide();
+            $('#drugFormSuccess').hide();
         });
     });
 </script>

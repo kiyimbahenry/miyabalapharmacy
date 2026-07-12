@@ -10,6 +10,7 @@ from django.core.exceptions import ValidationError
 from django.core.mail import send_mail
 from django.conf import settings
 from django.template.loader import render_to_string
+from django.views.decorators.http import require_POST
 import json
 import traceback
 from datetime import datetime, timedelta
@@ -506,6 +507,62 @@ def drug_create(request):
         'is_edit': False,
     }
     return render(request, 'stock/drug_form.html', context)
+
+
+# ============================================================
+# DRUG CREATE AJAX - FOR INVOICE MODAL
+# ============================================================
+
+@login_required
+@require_POST
+def drug_create_ajax(request):
+    """
+    AJAX endpoint to create a new drug from the invoice form modal
+    """
+    try:
+        name = request.POST.get('name')
+        generic_name = request.POST.get('generic_name', '')
+        dosage = request.POST.get('dosage')
+        strength = request.POST.get('strength', '')
+        cost_price = float(request.POST.get('cost_price', 0))
+        selling_price = float(request.POST.get('selling_price', 0))
+        pack_size = int(request.POST.get('pack_size', 1))
+        supplier_id = request.POST.get('supplier_id')
+        expiry_date = request.POST.get('expiry_date')
+        description = request.POST.get('description', '')
+
+        # Validation
+        if not name:
+            return JsonResponse({'success': False, 'error': 'Drug name is required.'})
+        if not dosage:
+            return JsonResponse({'success': False, 'error': 'Dosage is required.'})
+        if cost_price <= 0:
+            return JsonResponse({'success': False, 'error': 'Cost price must be greater than 0.'})
+
+        # Create the drug
+        drug = Drug.objects.create(
+            name=name,
+            generic_name=generic_name,
+            dosage=dosage,
+            strength=strength,
+            cost_price=cost_price,
+            selling_price=selling_price if selling_price > 0 else cost_price * 1.5,
+            pack_size=pack_size,
+            supplier_id=supplier_id if supplier_id else None,
+            expiry_date=expiry_date if expiry_date else None,
+            description=description,
+            stock_quantity=0,  # New drug starts with 0 stock
+            created_by=request.user
+        )
+
+        return JsonResponse({
+            'success': True,
+            'drug_id': drug.id,
+            'drug_name': drug.name
+        })
+
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)})
 
 
 # ============================================================
@@ -1399,6 +1456,7 @@ def invoice_create(request):
     """Create a new invoice (simplified version)"""
     suppliers = Supplier.objects.all()
     invoices = Invoice.objects.all()
+    drugs = Drug.objects.all()  # For the dropdown in the modal
 
     if request.method == 'POST':
         try:
@@ -1407,7 +1465,7 @@ def invoice_create(request):
             invoice_date = request.POST.get('invoice_date')
             payment_mode = request.POST.get('payment_mode', 'cash')
             total_items = int(request.POST.get('total_items', 0))
-            total_cost = float(request.POST.get('total_cost', 0))  # ✅ NEW
+            total_cost = float(request.POST.get('total_cost', 0))
 
             # Validation: check required fields
             if not invoice_number:
@@ -1415,6 +1473,7 @@ def invoice_create(request):
                 return render(request, 'stock/invoice_form.html', {
                     'suppliers': suppliers,
                     'invoices': invoices,
+                    'drugs': drugs,
                 })
 
             if not supplier_id:
@@ -1422,17 +1481,18 @@ def invoice_create(request):
                 return render(request, 'stock/invoice_form.html', {
                     'suppliers': suppliers,
                     'invoices': invoices,
+                    'drugs': drugs,
                 })
 
-            # ✅ Create the invoice with total_cost
+            # Create the invoice with total_cost
             invoice = Invoice.objects.create(
                 invoice_number=invoice_number,
                 supplier_id=supplier_id,
                 invoice_date=invoice_date,
                 payment_mode=payment_mode,
                 total_items=total_items,
-                total_cost=total_cost,        # ✅ NEW
-                total_amount=0,               # Will be updated when adding drugs
+                total_cost=total_cost,
+                total_amount=0,  # Will be updated when adding drugs
                 created_by=request.user
             )
 
@@ -1444,12 +1504,14 @@ def invoice_create(request):
             return render(request, 'stock/invoice_form.html', {
                 'suppliers': suppliers,
                 'invoices': invoices,
+                'drugs': drugs,
             })
 
     # GET request – show the form
     context = {
         'suppliers': suppliers,
         'invoices': invoices,
+        'drugs': drugs,  # For the modal dropdown
     }
     return render(request, 'stock/invoice_form.html', context)
 
