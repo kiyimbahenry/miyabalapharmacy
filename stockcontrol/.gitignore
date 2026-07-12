@@ -1,2 +1,18 @@
+# Python
+*.pyc
+__pycache__/
+*.sqlite3
+db.sqlite3
+
+# Environment
 .env
-.env
+*.env
+
+# Static files (optional, if you collect them locally)
+/staticfiles/
+
+# IDE / OS
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
