@@ -15,67 +15,44 @@
                     <form method="post" id="invoiceForm">
                         {% csrf_token %}
 
-                        <div class="row">
-                            <div class="col-md-4">
-                                <div class="form-group">
-                                    <label for="invoice_number">Invoice Number *</label>
-                                    {{ form.invoice_number }}
-                                    <small class="form-text text-muted">Can include letters and numbers</small>
-                                </div>
-                            </div>
-
-                            <div class="col-md-4">
-                                <div class="form-group">
-                                    <label for="supplier">Supplier *</label>
-                                    {{ form.supplier }}
-                                </div>
-                            </div>
-
-                            <div class="col-md-4">
-                                <div class="form-group">
-                                    <label for="invoice_date">Purchase Date *</label>
-                                    {{ form.invoice_date }}
-                                </div>
-                            </div>
+                        <!-- HEADER FIELDS IN A TABLE -->
+                        <div class="table-responsive">
+                            <table class="table table-bordered" id="headerTable">
+                                <tbody>
+                                    <tr>
+                                        <td style="width: 20%;"><label for="invoice_number" class="fw-bold">Invoice Number <span class="text-danger">*</span></label></td>
+                                        <td style="width: 30%;">{{ form.invoice_number }}</td>
+                                        <td style="width: 20%;"><label for="supplier" class="fw-bold">Supplier <span class="text-danger">*</span></label></td>
+                                        <td style="width: 30%;">{{ form.supplier }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><label for="invoice_date" class="fw-bold">Purchase Date <span class="text-danger">*</span></label></td>
+                                        <td>{{ form.invoice_date }}</td>
+                                        <td><label for="payment_mode" class="fw-bold">Payment Mode <span class="text-danger">*</span></label></td>
+                                        <td>{{ form.payment_mode }}</td>
+                                    </tr>
+                                    <tr>
+                                        <td><label for="total_items" class="fw-bold">Total Number of Items <span class="text-danger">*</span></label></td>
+                                        <td>{{ form.total_items }}</td>
+                                        <td><label for="total_cost" class="fw-bold">Total Cost (UGX) <span class="text-danger">*</span></label></td>
+                                        <td>{{ form.total_cost }}</td>
+                                    </tr>
+                                </tbody>
+                            </table>
                         </div>
 
-                        <div class="row">
-                            <div class="col-md-4">
-                                <div class="form-group">
-                                    <label for="payment_mode">Payment Mode *</label>
-                                    {{ form.payment_mode }}
-                                </div>
+                        <!-- INVOICE ITEMS TABLE -->
+                        <div class="mt-4">
+                            <h5>Invoice Items</h5>
+                            <div class="mb-2">
+                                <button type="button" class="btn btn-success btn-sm" id="addItemBtn">
+                                    <i class="fas fa-plus"></i> Add Item
+                                </button>
+                                <button type="button" class="btn btn-info btn-sm" data-bs-toggle="modal" data-bs-target="#newDrugModal">
+                                    <i class="fas fa-plus-circle"></i> Add New Drug
+                                </button>
                             </div>
-
-                            <div class="col-md-4">
-                                <div class="form-group">
-                                    <label for="total_items">Total Number of Items *</label>
-                                    {{ form.total_items }}
-                                    <small class="form-text text-muted">Enter total number of items on this invoice</small>
-                                </div>
-                            </div>
-
-                            <div class="col-md-4">
-                                <div class="form-group">
-                                    <label for="total_cost">Total Cost (UGX) *</label>
-                                    {{ form.total_cost }}
-                                    <small class="form-text text-muted">Enter the total cost of all items</small>
-                                </div>
-                            </div>
-                        </div>
-
-                        <!-- Invoice Items Table -->
-                        <div class="row mt-4">
-                            <div class="col-md-12">
-                                <h5>Invoice Items</h5>
-                                <div class="mb-2">
-                                    <button type="button" class="btn btn-success btn-sm" id="addItemBtn">
-                                        <i class="fas fa-plus"></i> Add Item
-                                    </button>
-                                    <button type="button" class="btn btn-info btn-sm" data-bs-toggle="modal" data-bs-target="#newDrugModal">
-                                        <i class="fas fa-plus-circle"></i> Add New Drug
-                                    </button>
-                                </div>
+                            <div class="table-responsive">
                                 <table class="table table-bordered" id="invoiceItemsTable">
                                     <thead>
                                         <tr>
@@ -114,6 +91,7 @@
                             </div>
                         </div>
 
+                        <!-- ACTION BUTTONS -->
                         <div class="row mt-3">
                             <div class="col-md-12">
                                 <button type="submit" class="btn btn-primary">
@@ -131,7 +109,7 @@
     </div>
 </div>
 
-<!-- Modal: Add New Drug -->
+<!-- Modal: Add New Drug (same as before) -->
 <div class="modal fade" id="newDrugModal" tabindex="-1" aria-labelledby="newDrugModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
@@ -211,7 +189,7 @@
                         <div class="col-md-6">
                             <div class="form-group">
                                 <label for="supplier_id">Supplier</label>
-                                <select class="form-control" id="supplier_id" name="supplier">
+                                <select class="form-control" id="supplier_id" name="supplier_id">
                                     <option value="">-- Select Supplier --</option>
                                     {% for supplier in suppliers %}
                                     <option value="{{ supplier.id }}">{{ supplier.name }}</option>
@@ -287,14 +265,11 @@
                     if (response.success) {
                         $('#drugFormSuccess').text('Drug added successfully!').show();
                         $('#drugFormError').hide();
-                        // Add new drug to all dropdowns
                         var newOption = $('<option></option>')
                             .val(response.drug_id)
                             .text(response.drug_name);
                         $('.drug-select').append(newOption);
-                        // Reset form
                         $('#newDrugForm')[0].reset();
-                        // Close modal after a moment
                         setTimeout(function() {
                             $('#newDrugModal').modal('hide');
                             $('#drugFormSuccess').hide();
