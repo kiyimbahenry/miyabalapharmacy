@@ -23,7 +23,7 @@ from .models import (
     PatientMedication, PatientVisit,
     ReturnedDrug, StockMovement
 )
-# ===== FORM IMPORTS (ADDED SupplierForm) =====
+# ===== FORM IMPORTS =====
 from .forms import SupplierForm, InvoiceForm, DrugForm, StockMovementForm
 
 
@@ -483,7 +483,7 @@ def drug_create(request):
 
 
 # ============================================================
-# DRUG CREATE AJAX - FOR INVOICE MODAL
+# DRUG CREATE AJAX - FOR INVOICE MODAL (UPDATED)
 # ============================================================
 
 @login_required
@@ -491,6 +491,7 @@ def drug_create(request):
 def drug_create_ajax(request):
     """
     AJAX endpoint to create a new drug from the invoice form modal
+    Now includes: category, batch_no, packets × pack_size = total_quantity
     """
     try:
         name = request.POST.get('name')
@@ -501,16 +502,29 @@ def drug_create_ajax(request):
         selling_price = float(request.POST.get('selling_price', 0))
         pack_size = int(request.POST.get('pack_size', 1))
         supplier_id = request.POST.get('supplier_id')
+        category_id = request.POST.get('category_id')
         expiry_date = request.POST.get('expiry_date')
-        description = request.POST.get('description', '')
+        batch_no = request.POST.get('batch_no', '')
+        packets = int(request.POST.get('packets', 1))
 
+        # Calculate total stock quantity: packets × pack size
+        total_quantity = packets * pack_size
+
+        # Validation
         if not name:
             return JsonResponse({'success': False, 'error': 'Drug name is required.'})
         if not dosage:
             return JsonResponse({'success': False, 'error': 'Dosage is required.'})
         if cost_price <= 0:
             return JsonResponse({'success': False, 'error': 'Cost price must be greater than 0.'})
+        if not category_id:
+            return JsonResponse({'success': False, 'error': 'Category is required.'})
+        if pack_size <= 0:
+            return JsonResponse({'success': False, 'error': 'Pack size must be greater than 0.'})
+        if packets <= 0:
+            return JsonResponse({'success': False, 'error': 'Number of packets must be greater than 0.'})
 
+        # Create the drug
         drug = Drug.objects.create(
             name=name,
             generic_name=generic_name,
@@ -519,17 +533,19 @@ def drug_create_ajax(request):
             cost_price=cost_price,
             selling_price=selling_price if selling_price > 0 else cost_price * 1.5,
             pack_size=pack_size,
+            stock_quantity=total_quantity,  # Total = packets × pack_size
             supplier_id=supplier_id if supplier_id else None,
+            category_id=category_id,
             expiry_date=expiry_date if expiry_date else None,
-            description=description,
-            stock_quantity=0,
+            batch_no=batch_no,
             created_by=request.user
         )
 
         return JsonResponse({
             'success': True,
             'drug_id': drug.id,
-            'drug_name': drug.name
+            'drug_name': drug.name,
+            'stock_quantity': drug.stock_quantity
         })
 
     except Exception as e:
@@ -1346,7 +1362,8 @@ def invoice_list(request):
 def invoice_create(request):
     """Create a new invoice - Admin/Manager only"""
     suppliers = Supplier.objects.all()
-    drugs = Drug.objects.all()  # For the dropdown in the modal
+    categories = Category.objects.all()  # For the modal dropdown
+    drugs = Drug.objects.all()           # For the dropdown in the modal
 
     if request.method == 'POST':
         form = InvoiceForm(request.POST)
@@ -1358,21 +1375,21 @@ def invoice_create(request):
             messages.success(request, f'Invoice "{invoice.invoice_number}" created successfully!')
             return redirect('stock:invoice_list')
         else:
-            # Form invalid – re‑render with errors
             messages.error(request, 'Please correct the errors below.')
             return render(request, 'stock/invoice_form.html', {
                 'form': form,
                 'suppliers': suppliers,
                 'drugs': drugs,
+                'categories': categories,
             })
     else:
-        # GET request – show empty form
         form = InvoiceForm()
 
     context = {
         'form': form,
         'suppliers': suppliers,
         'drugs': drugs,
+        'categories': categories,
     }
     return render(request, 'stock/invoice_form.html', context)
 

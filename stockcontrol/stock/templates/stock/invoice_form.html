@@ -109,7 +109,7 @@
     </div>
 </div>
 
-<!-- Modal: Add New Drug (same as before) -->
+<!-- Modal: Add New Drug (UPDATED) -->
 <div class="modal fade" id="newDrugModal" tabindex="-1" aria-labelledby="newDrugModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
@@ -180,12 +180,23 @@
                         </div>
                         <div class="col-md-4">
                             <div class="form-group">
-                                <label for="pack_size">Pack Size</label>
-                                <input type="number" class="form-control" id="pack_size" name="pack_size" value="1">
+                                <label for="pack_size">Pack Size *</label>
+                                <input type="number" class="form-control" id="pack_size" name="pack_size" value="1" min="1" required>
                             </div>
                         </div>
                     </div>
                     <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="category">Category *</label>
+                                <select class="form-control" id="category" name="category_id" required>
+                                    <option value="">-- Select Category --</option>
+                                    {% for category in categories %}
+                                    <option value="{{ category.id }}">{{ category.name }}</option>
+                                    {% endfor %}
+                                </select>
+                            </div>
+                        </div>
                         <div class="col-md-6">
                             <div class="form-group">
                                 <label for="supplier_id">Supplier</label>
@@ -197,6 +208,14 @@
                                 </select>
                             </div>
                         </div>
+                    </div>
+                    <div class="row">
+                        <div class="col-md-6">
+                            <div class="form-group">
+                                <label for="batch_no">Batch Number</label>
+                                <input type="text" class="form-control" id="batch_no" name="batch_no" placeholder="Batch/Lot number">
+                            </div>
+                        </div>
                         <div class="col-md-6">
                             <div class="form-group">
                                 <label for="expiry_date">Expiry Date</label>
@@ -205,10 +224,25 @@
                         </div>
                     </div>
                     <div class="row">
-                        <div class="col-md-12">
+                        <div class="col-md-4">
                             <div class="form-group">
-                                <label for="description">Description</label>
-                                <textarea class="form-control" id="description" name="description" rows="2"></textarea>
+                                <label for="packets">Number of Packets *</label>
+                                <input type="number" class="form-control" id="packets" name="packets" value="1" min="1" required>
+                                <small class="form-text text-muted">How many packets/boxes brought</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="pack_size_calc">Pack Size</label>
+                                <input type="number" class="form-control" id="pack_size_calc" name="pack_size_calc" value="1" min="1" readonly>
+                                <small class="form-text text-muted">Auto-filled from pack size above</small>
+                            </div>
+                        </div>
+                        <div class="col-md-4">
+                            <div class="form-group">
+                                <label for="total_quantity">Total Stock Quantity *</label>
+                                <input type="number" class="form-control" id="total_quantity" name="total_quantity" value="0" readonly>
+                                <small class="form-text text-muted">Packets × Pack Size (auto-calculated)</small>
                             </div>
                         </div>
                     </div>
@@ -227,6 +261,23 @@
 {% block extra_js %}
 <script>
     $(document).ready(function() {
+        // Auto-calculate total quantity
+        function calculateTotalQuantity() {
+            var packets = parseInt($('#packets').val()) || 0;
+            var packSize = parseInt($('#pack_size').val()) || 0;
+            var totalQuantity = packets * packSize;
+            $('#pack_size_calc').val(packSize);
+            $('#total_quantity').val(totalQuantity);
+        }
+
+        // Trigger calculation on change
+        $('#packets, #pack_size').on('input', function() {
+            calculateTotalQuantity();
+        });
+
+        // Initial calculation
+        calculateTotalQuantity();
+
         // Add item row
         $('#addItemBtn').click(function() {
             var newRow = $('#invoiceItemsTable tbody tr:first').clone();
@@ -270,6 +321,8 @@
                             .text(response.drug_name);
                         $('.drug-select').append(newOption);
                         $('#newDrugForm')[0].reset();
+                        // Reset calculation
+                        calculateTotalQuantity();
                         setTimeout(function() {
                             $('#newDrugModal').modal('hide');
                             $('#drugFormSuccess').hide();
@@ -295,6 +348,7 @@
             $('#newDrugForm')[0].reset();
             $('#drugFormError').hide();
             $('#drugFormSuccess').hide();
+            calculateTotalQuantity();
         });
     });
 </script>
