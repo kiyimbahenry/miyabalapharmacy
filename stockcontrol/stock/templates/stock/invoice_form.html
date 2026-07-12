@@ -64,7 +64,10 @@
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        <!-- Rows will be added dynamically via JavaScript -->
+                                        <!-- Placeholder row if empty -->
+                                        <tr id="emptyRow">
+                                            <td colspan="5" class="text-center text-muted">No items added. Click "Add Existing Drug" or "Add New Drug" to add items.</td>
+                                        </tr>
                                     </tbody>
                                 </table>
                             </div>
@@ -167,7 +170,7 @@
     </div>
 </div>
 
-<!-- Modal: Add New Drug (unchanged, already in previous version) -->
+<!-- Modal: Add New Drug (with Brand Name label) -->
 <div class="modal fade" id="newDrugModal" tabindex="-1" aria-labelledby="newDrugModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
@@ -181,7 +184,7 @@
                     <div class="row">
                         <div class="col-md-6">
                             <div class="form-group">
-                                <label for="drug_name">Drug Name *</label>
+                                <label for="drug_name">Brand Name *</label>   <!-- Changed label -->
                                 <input type="text" class="form-control" id="drug_name" name="name" required>
                             </div>
                         </div>
@@ -316,6 +319,7 @@
 {% block extra_js %}
 <script>
     $(document).ready(function() {
+
         // ---- Auto-calculate selling price in "Add Existing Drug" modal ----
         function calculateExistingDrugSellingPrice() {
             var costPrice = parseFloat($('#cost_price_modal').val()) || 0;
@@ -334,7 +338,6 @@
         // ---- Add Existing Drug button click ----
         $('#addExistingDrugBtn').click(function() {
             $('#addExistingDrugModal').modal('show');
-            // Pre-fill from drug's default pack size? We can leave empty.
             calculateExistingDrugSellingPrice();
         });
 
@@ -357,7 +360,6 @@
                 $('#modalError').text('Selling price must be greater than 0.').show();
                 return;
             }
-            // Check that selling price is not less than cost per unit
             var perUnitCost = costPrice / packSize;
             if (sellingPrice < perUnitCost) {
                 $('#modalError').text('Selling price cannot be less than cost per unit (' + perUnitCost.toFixed(2) + ').').show();
@@ -365,7 +367,10 @@
             }
             $('#modalError').hide();
 
-            // Add row to table
+            // Remove placeholder row if present
+            $('#emptyRow').remove();
+
+            // Build row HTML with hidden fields for batch, pack_size, packets
             var rowHtml = `
                 <tr>
                     <td>
@@ -383,7 +388,6 @@
                 </tr>
             `;
             $('#invoiceItemsTable tbody').append(rowHtml);
-            // Update total items count
             updateTotalItems();
             // Close modal
             $('#addExistingDrugModal').modal('hide');
@@ -400,7 +404,8 @@
             });
             $('#id_total_items').val(totalQty);
         }
-        // Listen for changes in quantity fields
+
+        // ---- Recalculate row totals and total items ----
         $(document).on('input', '.quantity, .unit-price', function() {
             var row = $(this).closest('tr');
             var quantity = parseFloat(row.find('.quantity').val()) || 0;
@@ -411,19 +416,20 @@
 
         // ---- Remove row ----
         $(document).on('click', '.remove-item', function() {
-            if ($('#invoiceItemsTable tbody tr').length > 1) {
-                $(this).closest('tr').remove();
-                updateTotalItems();
-            } else {
-                alert('You must have at least one item.');
+            var row = $(this).closest('tr');
+            row.remove();
+            // If no rows left, add placeholder
+            if ($('#invoiceItemsTable tbody tr').length === 0) {
+                $('#invoiceItemsTable tbody').append(`
+                    <tr id="emptyRow">
+                        <td colspan="5" class="text-center text-muted">No items added. Click "Add Existing Drug" or "Add New Drug" to add items.</td>
+                    </tr>
+                `);
             }
+            updateTotalItems();
         });
 
         // ---- Add New Drug (AJAX) ----
-        // (Keep the existing code for the new drug modal, it's already present in the template)
-        // We'll just ensure it works.
-
-        // ---- Auto-calculate for new drug modal ----
         function calculateNewDrugTotals() {
             var packets = parseInt($('#packets_new').val()) || 0;
             var packSize = parseInt($('#pack_size_new').val()) || 1;
@@ -483,24 +489,14 @@
             calculateNewDrugTotals();
         });
 
-        // ---- Initial: add one default row? We'll leave empty, user adds via modal.
-        // But we need at least one row? The form can be submitted with no items? That's not allowed. We'll add a placeholder or let the user add.
-        // We'll add an empty row with "No items" message? Better to have a row with "Please add items" message.
-        // We'll add a message row if table is empty.
-        function checkEmptyTable() {
-            if ($('#invoiceItemsTable tbody tr').length === 0) {
-                $('#invoiceItemsTable tbody').append('<tr><td colspan="5" class="text-center text-muted">No items added. Click "Add Existing Drug" or "Add New Drug" to add items.</td></tr>');
-            }
+        // Initial: if table empty, ensure placeholder
+        if ($('#invoiceItemsTable tbody tr').length === 0) {
+            $('#invoiceItemsTable tbody').append(`
+                <tr id="emptyRow">
+                    <td colspan="5" class="text-center text-muted">No items added. Click "Add Existing Drug" or "Add New Drug" to add items.</td>
+                </tr>
+            `);
         }
-        checkEmptyTable();
-
-        // Also, when adding rows, remove the empty message.
-        $(document).on('click', '#addExistingDrugBtn, #addItemBtn', function() {
-            $('#invoiceItemsTable tbody .text-muted').closest('tr').remove();
-        });
-
-        // Update total items on page load (if any rows)
-        updateTotalItems();
     });
 </script>
 {% endblock %}

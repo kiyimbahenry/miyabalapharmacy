@@ -1369,7 +1369,7 @@ def invoice_create(request):
         form = InvoiceForm(request.POST)
         if form.is_valid():
             invoice = form.save(commit=False)
-            invoice.total_amount = 0  # Will be updated when adding drugs
+            invoice.total_amount = 0  # Will be updated from items
             invoice.created_by = request.user
             invoice.save()
 
@@ -1377,24 +1377,25 @@ def invoice_create(request):
             drug_ids = request.POST.getlist('drug[]')
             quantities = request.POST.getlist('quantity[]')
             unit_prices = request.POST.getlist('unit_price[]')
+            # Note: item_total is not needed as we can calculate
 
             total_amount = 0
-            for drug_id, quantity, unit_price in zip(drug_ids, quantities, unit_prices):
-                if drug_id and int(quantity) > 0 and float(unit_price) > 0:
-                    drug = Drug.objects.get(id=int(drug_id))
-                    qty = int(quantity)
-                    price = float(unit_price)
-                    item_total = qty * price
+            for i in range(len(drug_ids)):
+                drug_id = drug_ids[i]
+                quantity = int(quantities[i])
+                unit_price = float(unit_prices[i])
+                if drug_id and quantity > 0 and unit_price > 0:
+                    # Create InvoiceItem
                     InvoiceItem.objects.create(
                         invoice=invoice,
-                        drug=drug,
-                        quantity=qty,
-                        unit_price=price,
-                        total=item_total
+                        drug_id=drug_id,
+                        quantity=quantity,
+                        unit_price=unit_price,
+                        total=quantity * unit_price
                     )
-                    total_amount += item_total
+                    total_amount += quantity * unit_price
 
-            # Update invoice total amount
+            # Update invoice total_amount
             invoice.total_amount = total_amount
             invoice.save()
 
