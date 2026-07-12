@@ -1346,59 +1346,32 @@ def invoice_list(request):
 def invoice_create(request):
     """Create a new invoice - Admin/Manager only"""
     suppliers = Supplier.objects.all()
-    invoices = Invoice.objects.all()
     drugs = Drug.objects.all()  # For the dropdown in the modal
 
     if request.method == 'POST':
-        try:
-            invoice_number = request.POST.get('invoice_number')
-            supplier_id = request.POST.get('supplier')
-            invoice_date = request.POST.get('invoice_date')
-            payment_mode = request.POST.get('payment_mode', 'cash')
-            total_items = int(request.POST.get('total_items', 0))
-            total_cost = float(request.POST.get('total_cost', 0))
-
-            if not invoice_number:
-                messages.error(request, 'Invoice Number is required.')
-                return render(request, 'stock/invoice_form.html', {
-                    'suppliers': suppliers,
-                    'invoices': invoices,
-                    'drugs': drugs,
-                })
-
-            if not supplier_id:
-                messages.error(request, 'Please select a supplier.')
-                return render(request, 'stock/invoice_form.html', {
-                    'suppliers': suppliers,
-                    'invoices': invoices,
-                    'drugs': drugs,
-                })
-
-            invoice = Invoice.objects.create(
-                invoice_number=invoice_number,
-                supplier_id=supplier_id,
-                invoice_date=invoice_date,
-                payment_mode=payment_mode,
-                total_items=total_items,
-                total_cost=total_cost,
-                total_amount=0,
-                created_by=request.user
-            )
-
+        form = InvoiceForm(request.POST)
+        if form.is_valid():
+            invoice = form.save(commit=False)
+            invoice.total_amount = 0  # Will be updated when adding drugs
+            invoice.created_by = request.user
+            invoice.save()
             messages.success(request, f'Invoice "{invoice.invoice_number}" created successfully!')
             return redirect('stock:invoice_list')
-
-        except Exception as e:
-            messages.error(request, f'Error creating invoice: {str(e)}')
+        else:
+            # Form invalid – re‑render with errors
+            messages.error(request, 'Please correct the errors below.')
             return render(request, 'stock/invoice_form.html', {
+                'form': form,
                 'suppliers': suppliers,
-                'invoices': invoices,
                 'drugs': drugs,
             })
+    else:
+        # GET request – show empty form
+        form = InvoiceForm()
 
     context = {
+        'form': form,
         'suppliers': suppliers,
-        'invoices': invoices,
         'drugs': drugs,
     }
     return render(request, 'stock/invoice_form.html', context)
