@@ -1,7 +1,7 @@
 {% extends 'stock/base.html' %}
 {% load static %}
 
-{% block title %}Create Invoice{% endblock %}
+{% block title %}{% if invoice %}Edit Invoice{% else %}Create Invoice{% endif %}{% endblock %}
 
 {% block content %}
 <div class="container-fluid">
@@ -9,7 +9,7 @@
         <div class="col-md-12">
             <div class="card">
                 <div class="card-header">
-                    <h4 class="card-title">Create New Invoice</h4>
+                    <h4 class="card-title">{% if invoice %}Edit Invoice{% else %}Create New Invoice{% endif %}</h4>
                 </div>
                 <div class="card-body">
                     <form method="post" id="invoiceForm">
@@ -64,8 +64,30 @@
                                         </tr>
                                     </thead>
                                     <tbody>
-                                        <!-- Placeholder row if empty -->
-                                        <tr id="emptyRow">
+                                        <!-- Existing items when editing -->
+                                        {% if invoice %}
+                                            {% for item in items %}
+                                            <tr>
+                                                <td>
+                                                    <select name="drug[]" class="form-control drug-select">
+                                                        <option value="">-- Select Drug --</option>
+                                                        {% for drug in drugs %}
+                                                        <option value="{{ drug.id }}" {% if drug.id == item.drug.id %}selected{% endif %}>{{ drug.name }}</option>
+                                                        {% endfor %}
+                                                    </select>
+                                                    <input type="hidden" name="batch[]" value="">
+                                                    <input type="hidden" name="pack_size[]" value="">
+                                                    <input type="hidden" name="packets[]" value="">
+                                                </td>
+                                                <td><input type="number" name="quantity[]" class="form-control quantity" value="{{ item.quantity }}" min="1"></td>
+                                                <td><input type="number" name="unit_price[]" class="form-control unit-price" value="{{ item.unit_price }}" step="0.01"></td>
+                                                <td><input type="number" name="item_total[]" class="form-control item-total" value="{{ item.total }}" step="0.01" readonly></td>
+                                                <td><button type="button" class="btn btn-danger btn-sm remove-item">Remove</button></td>
+                                            </tr>
+                                            {% endfor %}
+                                        {% endif %}
+                                        <!-- Placeholder row (shown only when no items) -->
+                                        <tr id="emptyRow" {% if items %}style="display:none;"{% endif %}>
                                             <td colspan="5" class="text-center text-muted">No items added. Click "Add Existing Drug" or "Add New Drug" to add items.</td>
                                         </tr>
                                     </tbody>
@@ -77,7 +99,7 @@
                         <div class="row mt-3">
                             <div class="col-md-12">
                                 <button type="submit" class="btn btn-primary">
-                                    <i class="fas fa-save"></i> Create Invoice
+                                    <i class="fas fa-save"></i> {% if invoice %}Update Invoice{% else %}Create Invoice{% endif %}
                                 </button>
                                 <a href="{% url 'stock:invoice_list' %}" class="btn btn-secondary">
                                     <i class="fas fa-times"></i> Cancel
@@ -184,7 +206,7 @@
                     <div class="row">
                         <div class="col-md-6">
                             <div class="form-group">
-                                <label for="drug_name">Brand Name *</label>   <!-- Changed label -->
+                                <label for="drug_name">Brand Name *</label>
                                 <input type="text" class="form-control" id="drug_name" name="name" required>
                             </div>
                         </div>
@@ -489,14 +511,31 @@
             calculateNewDrugTotals();
         });
 
-        // Initial: if table empty, ensure placeholder
-        if ($('#invoiceItemsTable tbody tr').length === 0) {
-            $('#invoiceItemsTable tbody').append(`
-                <tr id="emptyRow">
-                    <td colspan="5" class="text-center text-muted">No items added. Click "Add Existing Drug" or "Add New Drug" to add items.</td>
-                </tr>
-            `);
+        // Ensure placeholder is shown if no items initially (including edit mode with no items)
+        if ($('#invoiceItemsTable tbody tr:not(#emptyRow)').length === 0) {
+            if ($('#emptyRow').length === 0) {
+                $('#invoiceItemsTable tbody').append(`
+                    <tr id="emptyRow">
+                        <td colspan="5" class="text-center text-muted">No items added. Click "Add Existing Drug" or "Add New Drug" to add items.</td>
+                    </tr>
+                `);
+            } else {
+                $('#emptyRow').show();
+            }
+        } else {
+            $('#emptyRow').hide();
         }
+
+        // Whenever a new row is added, hide the placeholder if it exists.
+        // The add button already removes it, but for initial rows we hide it.
+
+        // Also, when in edit mode, existing rows already have the correct data.
+        // The total items field will be updated by the JavaScript.
+        // We need to ensure that the total_items field is not overridden by the automatic update if the user manually types.
+        // The updateTotalItems function sets the value, but we can leave it as is.
+        // The user can manually edit the total_items field; the JavaScript will overwrite it if they change quantities.
+        // We can optionally make it not auto-update, but we'll keep it as is.
+
     });
 </script>
 {% endblock %}

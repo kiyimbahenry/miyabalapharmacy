@@ -86,6 +86,7 @@ urlpatterns = [
     path('invoices/', views.invoice_list, name='invoice_list'),
     path('invoices/create/', views.invoice_create, name='invoice_create'),
     path('invoices/<int:invoice_id>/', views.invoice_detail, name='invoice_detail'),
+    path('invoices/<int:invoice_id>/edit/', views.invoice_edit, name='invoice_edit'),
     path('invoices/<int:invoice_id>/delete/', views.invoice_delete, name='invoice_delete'),
     path('drug/create/ajax/', views.drug_create_ajax, name='drug_create_ajax'),
 

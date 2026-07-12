@@ -1422,6 +1422,73 @@ def invoice_create(request):
 
 
 @login_required
+@user_passes_test(is_admin_or_manager)
+def invoice_edit(request, invoice_id):
+    """Edit an existing invoice - Admin/Manager only"""
+    invoice = get_object_or_404(Invoice, id=invoice_id)
+    suppliers = Supplier.objects.all()
+    categories = Category.objects.all()
+    drugs = Drug.objects.all()
+    existing_items = invoice.items.all()
+
+    if request.method == 'POST':
+        form = InvoiceForm(request.POST, instance=invoice)
+        if form.is_valid():
+            invoice = form.save(commit=False)
+            invoice.save()
+
+            # Delete existing items and recreate from POST
+            invoice.items.all().delete()
+
+            drug_ids = request.POST.getlist('drug[]')
+            quantities = request.POST.getlist('quantity[]')
+            unit_prices = request.POST.getlist('unit_price[]')
+
+            total_amount = 0
+            for i in range(len(drug_ids)):
+                drug_id = drug_ids[i]
+                quantity = int(quantities[i])
+                unit_price = float(unit_prices[i])
+                if drug_id and quantity > 0 and unit_price > 0:
+                    InvoiceItem.objects.create(
+                        invoice=invoice,
+                        drug_id=drug_id,
+                        quantity=quantity,
+                        unit_price=unit_price,
+                        total=quantity * unit_price
+                    )
+                    total_amount += quantity * unit_price
+
+            invoice.total_amount = total_amount
+            invoice.save()
+
+            messages.success(request, f'Invoice "{invoice.invoice_number}" updated successfully!')
+            return redirect('stock:invoice_list')
+        else:
+            messages.error(request, 'Please correct the errors below.')
+            return render(request, 'stock/invoice_form.html', {
+                'form': form,
+                'invoice': invoice,
+                'suppliers': suppliers,
+                'drugs': drugs,
+                'categories': categories,
+                'items': existing_items,
+            })
+    else:
+        form = InvoiceForm(instance=invoice)
+
+    context = {
+        'form': form,
+        'invoice': invoice,
+        'suppliers': suppliers,
+        'drugs': drugs,
+        'categories': categories,
+        'items': existing_items,
+    }
+    return render(request, 'stock/invoice_form.html', context)
+
+
+@login_required
 def invoice_detail(request, invoice_id):
     """View invoice details"""
     invoice = get_object_or_404(Invoice, id=invoice_id)

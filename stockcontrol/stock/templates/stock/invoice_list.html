@@ -47,11 +47,14 @@
                                 </td>
                                 <td>{{ invoice.invoice_date|date:"d/m/Y" }}</td>
                                 <td>
-                                    <a href="{% url 'stock:invoice_detail' invoice.id %}" class="btn btn-sm btn-info">
+                                    <a href="{% url 'stock:invoice_detail' invoice.id %}" class="btn btn-sm btn-info" title="View">
                                         <i class="fas fa-eye"></i>
                                     </a>
+                                    <a href="{% url 'stock:invoice_edit' invoice.id %}" class="btn btn-sm btn-warning" title="Edit">
+                                        <i class="fas fa-edit"></i>
+                                    </a>
                                     <button class="btn btn-sm btn-danger" data-bs-toggle="modal"
-                                            data-bs-target="#deleteModal{{ invoice.id }}">
+                                            data-bs-target="#deleteModal{{ invoice.id }}" title="Delete">
                                         <i class="fas fa-trash"></i>
                                     </button>
                                 </td>
