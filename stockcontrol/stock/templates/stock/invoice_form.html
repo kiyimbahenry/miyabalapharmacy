@@ -14,7 +14,7 @@
                 <div class="card-body">
                     <form method="post" id="invoiceForm">
                         {% csrf_token %}
-                        
+
                         <div class="row">
                             <div class="col-md-4">
                                 <div class="form-group">
@@ -23,14 +23,14 @@
                                     <small class="form-text text-muted">Can include letters and numbers</small>
                                 </div>
                             </div>
-                            
+
                             <div class="col-md-4">
                                 <div class="form-group">
                                     <label for="supplier">Supplier *</label>
                                     {{ form.supplier }}
                                 </div>
                             </div>
-                            
+
                             <div class="col-md-4">
                                 <div class="form-group">
                                     <label for="invoice_date">Purchase Date *</label>
@@ -38,7 +38,7 @@
                                 </div>
                             </div>
                         </div>
-                        
+
                         <div class="row">
                             <div class="col-md-4">
                                 <div class="form-group">
@@ -46,7 +46,7 @@
                                     {{ form.payment_mode }}
                                 </div>
                             </div>
-                            
+
                             <div class="col-md-4">
                                 <div class="form-group">
                                     <label for="total_items">Total Number of Items *</label>
@@ -54,7 +54,7 @@
                                     <small class="form-text text-muted">Enter total number of items on this invoice</small>
                                 </div>
                             </div>
-                            
+
                             <div class="col-md-4">
                                 <div class="form-group">
                                     <label for="total_cost">Total Cost (UGX) *</label>
@@ -63,7 +63,7 @@
                                 </div>
                             </div>
                         </div>
-                        
+
                         <!-- Invoice Items Table -->
                         <div class="row mt-4">
                             <div class="col-md-12">
@@ -114,13 +114,13 @@
                                 </table>
                             </div>
                         </div>
-                        
+
                         <div class="row mt-3">
                             <div class="col-md-12">
                                 <button type="submit" class="btn btn-primary">
                                     <i class="fas fa-save"></i> Create Invoice
                                 </button>
-                                <a href="{% url 'invoice_list' %}" class="btn btn-secondary">
+                                <a href="{% url 'stock:invoice_list' %}" class="btn btn-secondary">
                                     <i class="fas fa-times"></i> Cancel
                                 </a>
                             </div>
@@ -143,7 +143,7 @@
             newRow.find('.item-total').val('0');
             $('#invoiceItemsTable tbody').append(newRow);
         });
-        
+
         // Remove item row
         $(document).on('click', '.remove-item', function() {
             if ($('#invoiceItemsTable tbody tr').length > 1) {
@@ -152,7 +152,7 @@
                 alert('You must have at least one item.');
             }
         });
-        
+
         // Calculate item total
         $(document).on('input', '.quantity, .unit-price', function() {
             var row = $(this).closest('tr');

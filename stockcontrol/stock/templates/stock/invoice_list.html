@@ -35,7 +35,7 @@
                                 <td><strong>{{ invoice.invoice_number }}</strong></td>
                                 <td>{{ invoice.supplier.name }}</td>
                                 <td>{{ invoice.total_items }}</td>
-                                <td>{{ invoice.total_amount|floatformat:2 }}</td>
+                                <td>{{ invoice.total_cost|floatformat:2 }}</td>
                                 <td>
                                     {% if invoice.payment_mode == 'cash' %}
                                         <span class="badge bg-success">Cash</span>
