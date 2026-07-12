@@ -1872,11 +1872,20 @@ def create_test_drugs():
         print(f"✅ {Drug.objects.count()} drugs already exist")
         return
 
+    # Full list of categories as requested
     categories_data = [
-        'Antibiotic', 'Painkiller', 'Anti-fungals',
-        'Beauty and Cosmetics', 'Neuro Care', 'Anti-diabetics',
-        'Anti-hypertensives', 'Cough, Cold and Flu', 'Supplements',
-        'PUD', 'Vitamins and Minerals', 'Anti-infectives'
+        'Antibiotic',
+        'Anti-hypertensives',
+        'Anti-diabetics',
+        'Anti-Ulcer',
+        'Cough and Flu',
+        'Neuro Care',
+        'Anti-fungals',
+        'Anti-infectives',
+        'Painkillers',
+        'Beauty and Cosmetics',
+        'Vitamins and Minerals',
+        'Supplements'
     ]
 
     for name in categories_data:
