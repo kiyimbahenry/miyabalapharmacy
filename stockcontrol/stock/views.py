@@ -344,7 +344,7 @@ def complete_sale(request):
 
 @login_required
 def drug_list(request):
-    """List all drugs/medicines"""
+    """List all drugs/medicines with summary totals"""
     drugs = Drug.objects.all().select_related('category', 'supplier')
 
     category_id = request.GET.get('category')
@@ -362,11 +362,18 @@ def drug_list(request):
 
     categories = Category.objects.all()
 
+    # Compute total stock values (fixed syntax)
+    from django.db.models import Sum, F
+    total_cost_value = Drug.objects.aggregate(total=Sum(F('cost_price') * F('stock_quantity')))['total'] or 0
+    total_selling_value = Drug.objects.aggregate(total=Sum(F('selling_price') * F('stock_quantity')))['total'] or 0
+
     context = {
         'drugs': drugs,
         'categories': categories,
         'search_query': search_query,
-        'selected_category': category_id
+        'selected_category': category_id,
+        'total_cost_value': total_cost_value,
+        'total_selling_value': total_selling_value,
     }
     return render(request, 'stock/drug_list.html', context)
 
