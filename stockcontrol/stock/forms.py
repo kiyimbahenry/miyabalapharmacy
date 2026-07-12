@@ -20,13 +20,13 @@ class SupplierForm(forms.ModelForm):
 class InvoiceForm(forms.ModelForm):
     class Meta:
         model = Invoice
-        fields = ['invoice_number', 'supplier', 'invoice_date', 'payment_mode', 'notes']
+        fields = ['invoice_number', 'supplier', 'invoice_date', 'payment_mode', 'total_cost']
         widgets = {
             'invoice_number': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'INV-001'}),
             'supplier': forms.Select(attrs={'class': 'form-control'}),
             'invoice_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
             'payment_mode': forms.Select(attrs={'class': 'form-control'}),
-            'notes': forms.Textarea(attrs={'class': 'form-control', 'placeholder': 'Additional notes', 'rows': 3}),
+            'total_cost': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'Enter total cost', 'step': '0.01'}),
         }
 
 # ============ DRUG FORM ============

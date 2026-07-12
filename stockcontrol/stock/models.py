@@ -18,6 +18,7 @@ class Category(models.Model):
     def __str__(self):
         return self.name
 
+
 # SUPPLIER MODEL
 class Supplier(models.Model):
     """Supplier model"""
@@ -36,6 +37,7 @@ class Supplier(models.Model):
 
     def __str__(self):
         return self.name
+
 
 # DRUG (MEDICINE) MODEL
 class Drug(models.Model):
@@ -159,7 +161,7 @@ class Drug(models.Model):
         super().save(*args, **kwargs)
 
 
-# INVOICE MODEL
+# INVOICE MODEL (FIXED)
 class Invoice(models.Model):
     """Invoice model for purchases from suppliers"""
     STATUS_CHOICES = [
@@ -183,7 +185,9 @@ class Invoice(models.Model):
     paid_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     payment_mode = models.CharField(max_length=10, choices=PAYMENT_MODE_CHOICES, default='cash')
-    notes = models.TextField(blank=True, null=True)
+    
+    # ✅ CHANGED: Removed 'notes' and added 'total_cost'
+    total_cost = models.DecimalField(max_digits=12, decimal_places=2, default=0, help_text="Total cost of all items on this invoice")
 
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -219,7 +223,6 @@ class InvoiceItem(models.Model):
         return f"{self.drug.name} x {self.quantity} - {self.invoice.invoice_number}"
 
     def save(self, *args, **kwargs):
-        # FIX: Convert both to Decimal to avoid float multiplication error
         self.total = Decimal(self.quantity) * Decimal(self.unit_price)
         super().save(*args, **kwargs)
 
@@ -278,7 +281,6 @@ class SaleItem(models.Model):
         return f"{self.drug.name} x {self.quantity} - {self.sale.sale_number}"
 
     def save(self, *args, **kwargs):
-        # FIX: Convert both to Decimal to avoid float multiplication error
         self.total = Decimal(self.quantity) * Decimal(self.unit_price)
         super().save(*args, **kwargs)
 
@@ -309,8 +311,8 @@ class StockMovement(models.Model):
     def __str__(self):
         return f"{self.drug.name} x {self.quantity} - {self.movement_type}"
 
-# RECEIPT MODEL
 
+# RECEIPT MODEL
 class Receipt(models.Model):
     """Receipt model for tracking sales"""
     receipt_number = models.CharField(max_length=50, unique=True)
@@ -339,16 +341,13 @@ class Receipt(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.receipt_number:
-            # Generate receipt number: REC-YYYYMMDD-XXXX
             today = timezone.now().strftime('%Y%m%d')
             count = Receipt.objects.filter(created_at__date=timezone.now().date()).count() + 1
             self.receipt_number = f"REC-{today}-{str(count).zfill(4)}"
         super().save(*args, **kwargs)
 
-# ============================================================
-# RETURNED DRUG MODEL
-# ============================================================
 
+# RETURNED DRUG MODEL
 class ReturnedDrug(models.Model):
     """Record of drugs returned by customers after sale"""
     receipt = models.ForeignKey(Receipt, on_delete=models.CASCADE, related_name='returns')
@@ -368,12 +367,11 @@ class ReturnedDrug(models.Model):
         return f"{self.drug.name} x{self.quantity} (Receipt {self.receipt.receipt_number})"
 
     def save(self, *args, **kwargs):
-        # Auto‑calculate total_refund
         self.total_refund = self.quantity * self.unit_price
         super().save(*args, **kwargs)
 
-# REPORT MODEL
 
+# REPORT MODEL
 class Report(models.Model):
     """Report model for tracking system activities"""
     REPORT_TYPES = [
@@ -397,10 +395,8 @@ class Report(models.Model):
     def __str__(self):
         return f"{self.get_report_type_display()} - {self.report_date}"
 
-# ============================================================
-# CHRONIC PATIENT MODELS
-# ============================================================
 
+# CHRONIC PATIENT MODELS
 class ChronicPatient(models.Model):
     """Model for chronic disease patients"""
 
@@ -458,7 +454,6 @@ class ChronicPatient(models.Model):
 
     def save(self, *args, **kwargs):
         if not self.patient_id:
-            # Generate patient ID: CHR-YYYY-XXXX
             year = timezone.now().year
             count = ChronicPatient.objects.filter(created_at__year=year).count() + 1
             self.patient_id = f"CHR-{year}-{str(count).zfill(4)}"
