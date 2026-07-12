@@ -7,7 +7,7 @@ from .models import Supplier, Invoice, Drug, Category, StockMovement
 class SupplierForm(forms.ModelForm):
     class Meta:
         model = Supplier
-        fields = ['name', 'contact_person', 'phone', 'email', 'address', 'tax_id']   # ✅ added tax_id
+        fields = ['name', 'contact_person', 'phone', 'email', 'address', 'tax_id']
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Supplier name'}),
             'contact_person': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Contact person name'}),
@@ -21,12 +21,13 @@ class SupplierForm(forms.ModelForm):
 class InvoiceForm(forms.ModelForm):
     class Meta:
         model = Invoice
-        fields = ['invoice_number', 'supplier', 'invoice_date', 'payment_mode', 'total_cost']
+        fields = ['invoice_number', 'supplier', 'invoice_date', 'payment_mode', 'total_items', 'total_cost']
         widgets = {
             'invoice_number': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'INV-001'}),
             'supplier': forms.Select(attrs={'class': 'form-control'}),
             'invoice_date': forms.DateInput(attrs={'class': 'form-control', 'type': 'date'}),
             'payment_mode': forms.Select(attrs={'class': 'form-control'}),
+            'total_items': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': '0', 'min': '0'}),
             'total_cost': forms.NumberInput(attrs={'class': 'form-control', 'placeholder': 'Enter total cost', 'step': '0.01'}),
         }
 
