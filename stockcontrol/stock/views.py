@@ -1407,9 +1407,9 @@ def invoice_create(request):
             invoice_date = request.POST.get('invoice_date')
             payment_mode = request.POST.get('payment_mode', 'cash')
             total_items = int(request.POST.get('total_items', 0))
-            notes = request.POST.get('notes', '')
+            total_cost = float(request.POST.get('total_cost', 0))  # ✅ NEW
 
-            # Validation: only check for required fields
+            # Validation: check required fields
             if not invoice_number:
                 messages.error(request, 'Invoice Number is required.')
                 return render(request, 'stock/invoice_form.html', {
@@ -1424,15 +1424,15 @@ def invoice_create(request):
                     'invoices': invoices,
                 })
 
-            # Create the invoice
+            # ✅ Create the invoice with total_cost
             invoice = Invoice.objects.create(
                 invoice_number=invoice_number,
                 supplier_id=supplier_id,
                 invoice_date=invoice_date,
                 payment_mode=payment_mode,
                 total_items=total_items,
-                total_amount=0,  # Will be updated when adding drugs
-                notes=notes,
+                total_cost=total_cost,        # ✅ NEW
+                total_amount=0,               # Will be updated when adding drugs
                 created_by=request.user
             )
 
