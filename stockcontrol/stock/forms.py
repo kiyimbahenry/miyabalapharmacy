@@ -7,13 +7,14 @@ from .models import Supplier, Invoice, Drug, Category, StockMovement
 class SupplierForm(forms.ModelForm):
     class Meta:
         model = Supplier
-        fields = ['name', 'contact_person', 'phone', 'email', 'address']
+        fields = ['name', 'contact_person', 'phone', 'email', 'address', 'tax_id']   # ✅ added tax_id
         widgets = {
             'name': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Supplier name'}),
             'contact_person': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Contact person name'}),
             'phone': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Phone number'}),
             'email': forms.EmailInput(attrs={'class': 'form-control', 'placeholder': 'Email address'}),
-            'address': forms.Textarea(attrs={'class': 'form-control', 'placeholder': 'Physical address', 'rows': 3}),
+            'address': forms.Textarea(attrs={'class': 'form-control', 'placeholder': 'Physical address', 'rows': 2}),
+            'tax_id': forms.TextInput(attrs={'class': 'form-control', 'placeholder': 'Tax ID'}),
         }
 
 # ============ INVOICE FORM ============
@@ -63,19 +64,15 @@ class DrugForm(forms.ModelForm):
         selling_price = cleaned_data.get('selling_price')
         stock_quantity = cleaned_data.get('stock_quantity')
 
-        # Auto-calculate selling price if not set
         if cost_price and (not selling_price or selling_price == 0):
             cleaned_data['selling_price'] = cost_price * 1.5
 
-        # Validate stock quantity
         if stock_quantity is not None and stock_quantity < 0:
             raise forms.ValidationError("Stock quantity cannot be negative")
 
-        # Validate cost price
         if cost_price is not None and cost_price < 0:
             raise forms.ValidationError("Cost price cannot be negative")
 
-        # Validate selling price
         if selling_price is not None and selling_price < 0:
             raise forms.ValidationError("Selling price cannot be negative")
 

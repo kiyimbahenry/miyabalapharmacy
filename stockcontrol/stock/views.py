@@ -16,13 +16,15 @@ import traceback
 from datetime import datetime, timedelta
 from decimal import Decimal
 
-# ===== ADD MISSING IMPORTS =====
+# ===== IMPORTS =====
 from .models import (
     Drug, Supplier, Invoice, Category, InvoiceItem,
     Sale, SaleItem, Receipt, Report, ChronicPatient,
     PatientMedication, PatientVisit,
     ReturnedDrug, StockMovement
 )
+# ===== FORM IMPORTS (ADDED SupplierForm) =====
+from .forms import SupplierForm, InvoiceForm, DrugForm, StockMovementForm
 
 
 def is_admin_or_manager(user):
@@ -47,7 +49,7 @@ def login_view(request):
 
         if username_or_email and password:
             user = None
-            
+
             # Try to find user by email first
             if '@' in username_or_email:
                 try:
@@ -55,11 +57,11 @@ def login_view(request):
                     user = authenticate(request, username=user_obj.username, password=password)
                 except User.DoesNotExist:
                     pass
-            
+
             # If not found by email, try by username
             if not user:
                 user = authenticate(request, username=username_or_email, password=password)
-            
+
             if user is not None:
                 login(request, user)
                 next_url = request.GET.get('next', '/')
@@ -123,7 +125,6 @@ def get_drugs_api(request):
     API endpoint to get drugs sorted by expiry date (top 10 shortest expiry)
     """
     try:
-        # Get drugs sorted by expiry date (soonest first)
         drugs = Drug.objects.filter(expiry_date__isnull=False).order_by('expiry_date')[:10]
 
         data = []
@@ -160,26 +161,20 @@ def complete_sale(request):
         }, status=400)
 
     try:
-        # Log the request data for debugging
         print("=" * 60)
         print("COMPLETE SALE REQUEST RECEIVED")
         print(f"Request method: {request.method}")
         print(f"Content-Type: {request.content_type}")
 
-        # Parse JSON
         data = json.loads(request.body)
         print(f"Parsed data: {json.dumps(data, indent=2)}")
         print("=" * 60)
 
-        # Extract items - support multiple formats
         items = []
 
-        # Format 1: {'items': [{'drug_id': 1, 'quantity': 2}, ...]}
         if 'items' in data and isinstance(data['items'], list):
             items = data['items']
             print(f"Format 1: Found {len(items)} items in 'items' array")
-
-        # Format 2: {'drug_id': 1, 'quantity': 2, ...} (single item)
         elif 'drug_id' in data or 'drug_name' in data:
             item = {}
             if 'drug_id' in data:
@@ -191,8 +186,6 @@ def complete_sale(request):
             item['quantity'] = data.get('quantity', 0)
             items.append(item)
             print(f"Format 2: Single item: {item}")
-
-        # Format 3: {'cart': [{'drug_name': 'ibuprofen', 'qty': 2}, ...]}
         elif 'cart' in data and isinstance(data['cart'], list):
             for cart_item in data['cart']:
                 item = {}
@@ -214,7 +207,6 @@ def complete_sale(request):
                 'available_keys': list(data.keys())
             }, status=400)
 
-        # Extract other data
         customer_name = data.get('customer_name', 'Walk-in Customer')
         customer_phone = data.get('customer_phone', '')
         amount_paid = float(data.get('amount_paid', 0))
@@ -224,7 +216,6 @@ def complete_sale(request):
         sale_items = []
         total_amount = 0
 
-        # Process each item
         for idx, item in enumerate(items):
             drug_id = item.get('drug_id')
             drug_name = item.get('drug_name') or item.get('name')
@@ -236,10 +227,8 @@ def complete_sale(request):
                 print(f"  ⚠️ Skipping item with quantity {quantity}")
                 continue
 
-            # Find the drug
             drug = None
 
-            # First try by ID
             if drug_id:
                 try:
                     drug = Drug.objects.get(id=drug_id)
@@ -247,14 +236,11 @@ def complete_sale(request):
                 except Drug.DoesNotExist:
                     print(f"  ❌ No drug with ID {drug_id}")
 
-            # Then try by name
             if not drug and drug_name:
-                # Try exact match first
                 try:
                     drug = Drug.objects.get(name__iexact=drug_name)
                     print(f"  ✅ Found by exact name: {drug.name}")
                 except Drug.DoesNotExist:
-                    # Try contains match
                     drug = Drug.objects.filter(
                         Q(name__icontains=drug_name) |
                         Q(generic_name__icontains=drug_name)
@@ -265,7 +251,6 @@ def complete_sale(request):
                         print(f"  ❌ No drug with name containing '{drug_name}'")
 
             if not drug:
-                # Get list of available drugs for debugging
                 available_drugs = list(Drug.objects.all().values_list('name', flat=True)[:20])
                 return JsonResponse({
                     'success': False,
@@ -275,7 +260,6 @@ def complete_sale(request):
                     'total_drugs': Drug.objects.count()
                 }, status=404)
 
-            # Check stock
             if drug.stock_quantity < quantity:
                 return JsonResponse({
                     'success': False,
@@ -286,12 +270,10 @@ def complete_sale(request):
                     'requested': quantity
                 }, status=400)
 
-            # Update stock
             drug.stock_quantity -= quantity
             drug.save()
             print(f"  ✅ Updated stock for {drug.name}: {drug.stock_quantity} remaining")
 
-            # Calculate total
             item_total = drug.selling_price * quantity
             total_amount += item_total
 
@@ -309,10 +291,8 @@ def complete_sale(request):
                 'message': 'No valid items to process after validation'
             }, status=400)
 
-        # Calculate change
         change_due = amount_paid - total_amount if amount_paid > total_amount else 0
 
-        # Create receipt
         receipt = Receipt.objects.create(
             customer_name=customer_name,
             customer_phone=customer_phone,
@@ -367,12 +347,10 @@ def drug_list(request):
     """List all drugs/medicines"""
     drugs = Drug.objects.all().select_related('category', 'supplier')
 
-    # Filter by category if provided
     category_id = request.GET.get('category')
     if category_id:
         drugs = drugs.filter(category_id=category_id)
 
-    # Search functionality
     search_query = request.GET.get('search')
     if search_query:
         drugs = drugs.filter(
@@ -406,7 +384,6 @@ def drug_create(request):
 
     if request.method == 'POST':
         try:
-            # Get form data
             name = request.POST.get('name') or request.POST.get('generic_name')
             generic_name = request.POST.get('generic_name')
             brand = request.POST.get('brand')
@@ -414,7 +391,6 @@ def drug_create(request):
             strength = request.POST.get('strength')
             batch_no = request.POST.get('batch_no')
 
-            # FIX: Convert to proper types
             pack_size = int(request.POST.get('pack_size', 0))
             supplier_id = int(request.POST.get('supplier', 0))
             cost_price = float(request.POST.get('cost_price', 0))
@@ -424,43 +400,31 @@ def drug_create(request):
             reorder_level = int(request.POST.get('reorder_level', 10))
             expiry_date = request.POST.get('expiry_date')
 
-            # Debug - print to console
             print(f"Creating Drug: {generic_name}, Dosage: {dosage}, Pack Size: {pack_size}")
 
-            # ========== VALIDATION ==========
             errors = []
 
             if not generic_name:
                 errors.append('Generic Name is required.')
-
             if not dosage:
                 errors.append('Dosage is required.')
-
             if not supplier_id or supplier_id <= 0:
                 errors.append('Supplier is required.')
             else:
-                # Verify supplier exists
                 try:
                     supplier = Supplier.objects.get(id=supplier_id)
                 except Supplier.DoesNotExist:
                     errors.append('Selected supplier does not exist.')
-
             if cost_price <= 0:
                 errors.append('Cost Price must be greater than 0.')
-
             if selling_price <= 0:
                 errors.append('Selling Price must be greater than 0.')
-
             if pack_size <= 0:
                 errors.append('Pack Size must be greater than 0.')
-
             if stock_quantity < 0:
                 errors.append('Stock quantity cannot be negative.')
-
             if not expiry_date:
                 errors.append('Expiry Date is required.')
-
-            # Convert date format (dd/mm/yyyy to yyyy-mm-dd)
             if expiry_date and '/' in expiry_date:
                 try:
                     parts = expiry_date.split('/')
@@ -468,14 +432,11 @@ def drug_create(request):
                         expiry_date = f"{parts[2]}-{parts[1]}-{parts[0]}"
                 except:
                     errors.append('Invalid date format. Use dd/mm/yyyy')
-
-            # Verify category exists
             try:
                 category = Category.objects.get(id=category_id)
             except Category.DoesNotExist:
                 errors.append('Selected category does not exist.')
 
-            # If there are errors, show them and return
             if errors:
                 for error in errors:
                     messages.error(request, error)
@@ -485,7 +446,6 @@ def drug_create(request):
                     'is_edit': False
                 })
 
-            # ========== CREATE DRUG ==========
             drug = Drug.objects.create(
                 name=name or generic_name,
                 generic_name=generic_name,
@@ -544,7 +504,6 @@ def drug_create_ajax(request):
         expiry_date = request.POST.get('expiry_date')
         description = request.POST.get('description', '')
 
-        # Validation
         if not name:
             return JsonResponse({'success': False, 'error': 'Drug name is required.'})
         if not dosage:
@@ -552,7 +511,6 @@ def drug_create_ajax(request):
         if cost_price <= 0:
             return JsonResponse({'success': False, 'error': 'Cost price must be greater than 0.'})
 
-        # Create the drug
         drug = Drug.objects.create(
             name=name,
             generic_name=generic_name,
@@ -564,7 +522,7 @@ def drug_create_ajax(request):
             supplier_id=supplier_id if supplier_id else None,
             expiry_date=expiry_date if expiry_date else None,
             description=description,
-            stock_quantity=0,  # New drug starts with 0 stock
+            stock_quantity=0,
             created_by=request.user
         )
 
@@ -592,14 +550,12 @@ def drug_edit(request, drug_id):
 
     if request.method == 'POST':
         try:
-            # Get form data
             generic_name = request.POST.get('generic_name')
             brand = request.POST.get('brand')
             dosage = request.POST.get('dosage')
             strength = request.POST.get('strength')
             batch_no = request.POST.get('batch_no')
 
-            # FIX: Convert to proper types
             pack_size = int(request.POST.get('pack_size', 0))
             supplier_id = int(request.POST.get('supplier', 0))
             cost_price = float(request.POST.get('cost_price', 0))
@@ -610,15 +566,12 @@ def drug_edit(request, drug_id):
             expiry_date = request.POST.get('expiry_date')
             name = request.POST.get('name') or generic_name
 
-            # ========== VALIDATION ==========
             errors = []
 
             if not generic_name:
                 errors.append('Generic Name is required.')
-
             if not dosage:
                 errors.append('Dosage is required.')
-
             if not supplier_id or supplier_id <= 0:
                 errors.append('Supplier is required.')
             else:
@@ -626,23 +579,16 @@ def drug_edit(request, drug_id):
                     supplier = Supplier.objects.get(id=supplier_id)
                 except Supplier.DoesNotExist:
                     errors.append('Selected supplier does not exist.')
-
             if cost_price <= 0:
                 errors.append('Cost Price must be greater than 0.')
-
             if selling_price <= 0:
                 errors.append('Selling Price must be greater than 0.')
-
             if pack_size <= 0:
                 errors.append('Pack Size must be greater than 0.')
-
             if stock_quantity < 0:
                 errors.append('Stock quantity cannot be negative.')
-
             if not expiry_date:
                 errors.append('Expiry Date is required.')
-
-            # Convert date format (dd/mm/yyyy to yyyy-mm-dd)
             if expiry_date and '/' in expiry_date:
                 try:
                     parts = expiry_date.split('/')
@@ -650,7 +596,6 @@ def drug_edit(request, drug_id):
                         expiry_date = f"{parts[2]}-{parts[1]}-{parts[0]}"
                 except:
                     errors.append('Invalid date format. Use dd/mm/yyyy')
-
             try:
                 category = Category.objects.get(id=category_id)
             except Category.DoesNotExist:
@@ -666,7 +611,6 @@ def drug_edit(request, drug_id):
                     'is_edit': True
                 })
 
-            # ========== UPDATE DRUG ==========
             drug.generic_name = generic_name
             drug.brand = brand or ''
             drug.dosage = dosage
@@ -739,7 +683,6 @@ def add_stock_to_drug(request):
     invoices = Invoice.objects.all().order_by('-invoice_date')
     selected_drug = None
 
-    # Pre-select drug if drug_id is passed in GET
     drug_id = request.GET.get('drug_id')
     if drug_id:
         try:
@@ -757,7 +700,6 @@ def add_stock_to_drug(request):
         expiry_date = request.POST.get('expiry_date')
         pack_size = int(request.POST.get('pack_size', 1))
 
-        # Validate
         if not drug_id or not invoice_id or quantity <= 0:
             messages.error(request, 'Please fill all required fields.')
             return render(request, 'stock/add_stock_to_drug.html', {
@@ -769,7 +711,6 @@ def add_stock_to_drug(request):
         drug = get_object_or_404(Drug, id=drug_id)
         invoice = get_object_or_404(Invoice, id=invoice_id)
 
-        # Update drug stock
         drug.stock_quantity += quantity
         if cost_price > 0:
             drug.cost_price = cost_price
@@ -783,7 +724,6 @@ def add_stock_to_drug(request):
             drug.pack_size = pack_size
         drug.save()
 
-        # Create an InvoiceItem for this stock addition
         InvoiceItem.objects.create(
             invoice=invoice,
             drug=drug,
@@ -791,7 +731,6 @@ def add_stock_to_drug(request):
             unit_price=cost_price,
             total=quantity * cost_price
         )
-        # Update invoice total
         invoice.total_amount = invoice.items.aggregate(Sum('total'))['total__sum'] or 0
         invoice.save()
 
@@ -819,49 +758,37 @@ def supplier_list(request):
 
 @login_required
 def supplier_create(request):
-    """Create a new supplier"""
+    """Create a new supplier using SupplierForm"""
     if request.method == 'POST':
-        try:
-            supplier = Supplier.objects.create(
-                name=request.POST.get('name'),
-                contact_person=request.POST.get('contact_person'),
-                email=request.POST.get('email'),
-                phone=request.POST.get('phone'),
-                address=request.POST.get('address'),
-                tax_id=request.POST.get('tax_id'),
-                created_by=request.user
-            )
+        form = SupplierForm(request.POST)
+        if form.is_valid():
+            supplier = form.save(commit=False)
+            supplier.created_by = request.user
+            supplier.save()
             messages.success(request, f'Supplier "{supplier.name}" created successfully!')
             return redirect('stock:supplier_list')
-
-        except Exception as e:
-            messages.error(request, f'Error creating supplier: {str(e)}')
-
-    return render(request, 'stock/supplier_form.html')
+        else:
+            messages.error(request, 'Please correct the errors below.')
+    else:
+        form = SupplierForm()
+    return render(request, 'stock/supplier_form.html', {'form': form})
 
 
 @login_required
 def supplier_edit(request, supplier_id):
-    """Edit an existing supplier"""
+    """Edit an existing supplier using SupplierForm"""
     supplier = get_object_or_404(Supplier, id=supplier_id)
-
     if request.method == 'POST':
-        try:
-            supplier.name = request.POST.get('name')
-            supplier.contact_person = request.POST.get('contact_person')
-            supplier.email = request.POST.get('email')
-            supplier.phone = request.POST.get('phone')
-            supplier.address = request.POST.get('address')
-            supplier.tax_id = request.POST.get('tax_id')
-            supplier.save()
-
+        form = SupplierForm(request.POST, instance=supplier)
+        if form.is_valid():
+            form.save()
             messages.success(request, f'Supplier "{supplier.name}" updated successfully!')
             return redirect('stock:supplier_list')
-
-        except Exception as e:
-            messages.error(request, f'Error updating supplier: {str(e)}')
-
-    return render(request, 'stock/supplier_form.html', {'supplier': supplier})
+        else:
+            messages.error(request, 'Please correct the errors below.')
+    else:
+        form = SupplierForm(instance=supplier)
+    return render(request, 'stock/supplier_form.html', {'form': form, 'supplier': supplier})
 
 
 @login_required
@@ -891,12 +818,10 @@ def receipt_list(request):
     """List all receipts"""
     receipts = Receipt.objects.all().select_related('created_by').order_by('-created_at')
 
-    # Get today's total sales
     today = timezone.now().date()
     today_receipts = Receipt.objects.filter(created_at__date=today)
     today_total = today_receipts.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
 
-    # Get this month's total
     month_start = timezone.now().replace(day=1, hour=0, minute=0, second=0, microsecond=0)
     month_receipts = Receipt.objects.filter(created_at__gte=month_start)
     month_total = month_receipts.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
@@ -936,7 +861,6 @@ def create_sale_receipt(request):
             total_amount = 0
             sale_items = []
 
-            # Process each item
             for item in items:
                 drug_id = item.get('drug_id')
                 quantity = int(item.get('quantity', 0))
@@ -947,14 +871,12 @@ def create_sale_receipt(request):
 
                 drug = Drug.objects.get(id=drug_id)
 
-                # Check stock
                 if drug.stock_quantity < quantity:
                     return JsonResponse({
                         'success': False,
                         'message': f'Insufficient stock for {drug.name}. Available: {drug.stock_quantity}'
                     }, status=400)
 
-                # Update stock
                 drug.stock_quantity -= quantity
                 drug.save()
 
@@ -968,10 +890,8 @@ def create_sale_receipt(request):
                     'total': total
                 })
 
-            # Calculate change
             change_due = amount_paid - total_amount if amount_paid > total_amount else 0
 
-            # Create receipt
             receipt = Receipt.objects.create(
                 customer_name=customer_name,
                 customer_phone=customer_phone,
@@ -998,7 +918,6 @@ def create_sale_receipt(request):
         except Exception as e:
             return JsonResponse({'success': False, 'message': str(e)}, status=400)
 
-    # GET request - show sale form
     drugs = Drug.objects.filter(stock_quantity__gt=0).order_by('name')
     return render(request, 'stock/sale_form.html', {'drugs': drugs})
 
@@ -1008,7 +927,6 @@ def print_receipt(request, receipt_id):
     """Print receipt (returns a printable version)"""
     receipt = get_object_or_404(Receipt, id=receipt_id)
 
-    # Mark as printed
     if not receipt.is_printed:
         receipt.is_printed = True
         receipt.printed_at = timezone.now()
@@ -1027,7 +945,6 @@ def get_daily_sales_api(request):
         total_sales = receipts.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
         total_transactions = receipts.count()
 
-        # Get last 10 receipts
         last_receipts = receipts.order_by('-created_at')[:10]
 
         data = []
@@ -1079,7 +996,6 @@ def return_create(request):
             receipt = get_object_or_404(Receipt, id=receipt_id)
             drug = get_object_or_404(Drug, id=drug_id)
 
-            # Check that the drug is present in the receipt's items
             receipt_item = None
             for item in receipt.items:
                 if item.get('drug_id') == drug.id or item.get('drug_name') == drug.name:
@@ -1090,13 +1006,10 @@ def return_create(request):
                 messages.error(request, 'This drug is not on the selected receipt.')
                 return redirect('stock:return_create')
 
-            # Get unit price from receipt item (or use current selling price)
             unit_price = receipt_item.get('unit_price', drug.selling_price)
-            # Convert to Decimal
             from decimal import Decimal
             unit_price = Decimal(str(unit_price))
 
-            # Create return record
             return_obj = ReturnedDrug.objects.create(
                 receipt=receipt,
                 drug=drug,
@@ -1106,11 +1019,9 @@ def return_create(request):
                 created_by=request.user
             )
 
-            # Restore stock
             drug.stock_quantity += quantity
             drug.save()
 
-            # Create a stock movement entry
             StockMovement.objects.create(
                 drug=drug,
                 quantity=quantity,
@@ -1127,7 +1038,6 @@ def return_create(request):
             messages.error(request, f'Error creating return: {str(e)}')
             return redirect('stock:return_create')
 
-    # GET – show form
     receipts = Receipt.objects.all().order_by('-created_at')
     drugs = Drug.objects.all().order_by('name')
     return render(request, 'stock/return_form.html', {
@@ -1143,45 +1053,35 @@ def return_create(request):
 @login_required
 def reports_dashboard(request):
     """Main reports dashboard"""
-    # Get today's date
     today = timezone.now().date()
     week_start = today - timedelta(days=today.weekday())
     month_start = today.replace(day=1)
     year_start = today.replace(month=1, day=1)
 
-    # Daily Sales
     daily_receipts = Receipt.objects.filter(created_at__date=today)
     daily_total = daily_receipts.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
     daily_count = daily_receipts.count()
 
-    # Weekly Sales
     weekly_receipts = Receipt.objects.filter(created_at__date__gte=week_start, created_at__date__lte=today)
     weekly_total = weekly_receipts.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
     weekly_count = weekly_receipts.count()
 
-    # Monthly Sales
     monthly_receipts = Receipt.objects.filter(created_at__date__gte=month_start, created_at__date__lte=today)
     monthly_total = monthly_receipts.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
     monthly_count = monthly_receipts.count()
 
-    # Annual Sales
     annual_receipts = Receipt.objects.filter(created_at__date__gte=year_start, created_at__date__lte=today)
     annual_total = annual_receipts.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
     annual_count = annual_receipts.count()
 
-    # Get recent receipts
     recent_receipts = Receipt.objects.all().order_by('-created_at')[:20]
-
-    # Get recent invoices
     recent_invoices = Invoice.objects.all().order_by('-created_at')[:10]
 
-    # Payment method breakdown for today
     payment_breakdown = daily_receipts.values('payment_method').annotate(
         total=Sum('total_amount'),
         count=Count('id')
     )
 
-    # Top selling drugs
     top_drugs = []
     for receipt in Receipt.objects.all()[:100]:
         if receipt.items:
@@ -1192,7 +1092,6 @@ def reports_dashboard(request):
                     'total': item.get('total', 0)
                 })
 
-    # Aggregate top drugs
     drug_summary = {}
     for drug in top_drugs:
         name = drug['name']
@@ -1202,7 +1101,6 @@ def reports_dashboard(request):
         else:
             drug_summary[name] = {'quantity': drug['quantity'], 'total': drug['total']}
 
-    # Sort and get top 10
     top_selling = sorted(drug_summary.items(), key=lambda x: x[1]['quantity'], reverse=True)[:10]
 
     context = {
@@ -1238,14 +1136,11 @@ def generate_report_api(request):
         report_type = data.get('report_type', 'daily')
         email = data.get('email', 'kiyimbahenry314@gmail.com')
 
-        # Generate report data
         report_data = generate_report_data(report_type)
 
-        # Send email
         success = send_report_email(report_data, email, report_type)
 
         if success:
-            # Save report to database
             report = Report.objects.create(
                 report_type=report_type,
                 data=report_data,
@@ -1285,7 +1180,6 @@ def generate_report_data(report_type):
         'top_products': []
     }
 
-    # Set date range based on report type
     if report_type == 'daily':
         start_date = today
         end_date = today
@@ -1306,19 +1200,16 @@ def generate_report_data(report_type):
         start_date = today
         end_date = today
 
-    # ----- Get receipts within date range -----
     receipts = Receipt.objects.filter(
         created_at__date__gte=start_date,
         created_at__date__lte=end_date
     )
 
-    # ----- Get returns within date range -----
     returns = ReturnedDrug.objects.filter(
         returned_date__date__gte=start_date,
         returned_date__date__lte=end_date
     )
 
-    # ----- Sales summary -----
     total_sales = receipts.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
     total_transactions = receipts.count()
     total_items_sold = 0
@@ -1327,14 +1218,11 @@ def generate_report_data(report_type):
             for item in receipt.items:
                 total_items_sold += item.get('quantity', 0)
 
-    # ----- Returns summary -----
     total_returned_amount = returns.aggregate(Sum('total_refund'))['total_refund__sum'] or 0
     total_returned_items = returns.aggregate(Sum('quantity'))['quantity__sum'] or 0
 
-    # Net sales = total sales - total returns
     net_sales = total_sales - total_returned_amount
 
-    # ----- Build sales dict -----
     report_data['sales'] = {
         'total_amount': float(total_sales),
         'net_sales': float(net_sales),
@@ -1347,7 +1235,6 @@ def generate_report_data(report_type):
         'end_date': end_date.strftime('%Y-%m-%d'),
     }
 
-    # ----- Payment breakdown -----
     payment_breakdown = receipts.values('payment_method').annotate(
         total=Sum('total_amount'),
         count=Count('id')
@@ -1359,7 +1246,6 @@ def generate_report_data(report_type):
             'count': item['count']
         })
 
-    # ----- Top selling products -----
     product_sales = {}
     for receipt in receipts:
         if receipt.items:
@@ -1381,7 +1267,6 @@ def generate_report_data(report_type):
             'total': float(data['total'])
         })
 
-    # ----- Invoice summary -----
     invoices = Invoice.objects.filter(
         created_at__date__gte=start_date,
         created_at__date__lte=end_date
@@ -1399,17 +1284,13 @@ def generate_report_data(report_type):
 def send_report_email(report_data, email, report_type):
     """Send report via email"""
     try:
-        # Create email subject
         subject = f"Miyabala Pharmacy - {report_type.capitalize()} Report"
-
-        # Create email body
         html_message = render_to_string('stock/report_email.html', {
             'report_data': report_data,
             'report_type': report_type.capitalize(),
             'site_url': 'http://127.0.0.1:8000'
         })
 
-        # Send email
         send_mail(
             subject,
             f"Please view the HTML version of this email.",
@@ -1429,14 +1310,10 @@ def send_report_email(report_data, email, report_type):
 def send_auto_reports():
     """Automated function to send daily reports at midnight"""
     try:
-        # Generate daily report
         report_data = generate_report_data('daily')
-
-        # Send to main email
         success = send_report_email(report_data, 'kiyimbahenry314@gmail.com', 'daily')
 
         if success:
-            # Save report
             admin_user = User.objects.filter(is_superuser=True).first()
             Report.objects.create(
                 report_type='daily',
@@ -1481,7 +1358,6 @@ def invoice_create(request):
             total_items = int(request.POST.get('total_items', 0))
             total_cost = float(request.POST.get('total_cost', 0))
 
-            # Validation: check required fields
             if not invoice_number:
                 messages.error(request, 'Invoice Number is required.')
                 return render(request, 'stock/invoice_form.html', {
@@ -1498,7 +1374,6 @@ def invoice_create(request):
                     'drugs': drugs,
                 })
 
-            # Create the invoice with total_cost
             invoice = Invoice.objects.create(
                 invoice_number=invoice_number,
                 supplier_id=supplier_id,
@@ -1506,7 +1381,7 @@ def invoice_create(request):
                 payment_mode=payment_mode,
                 total_items=total_items,
                 total_cost=total_cost,
-                total_amount=0,  # Will be updated when adding drugs
+                total_amount=0,
                 created_by=request.user
             )
 
@@ -1521,11 +1396,10 @@ def invoice_create(request):
                 'drugs': drugs,
             })
 
-    # GET request – show the form
     context = {
         'suppliers': suppliers,
         'invoices': invoices,
-        'drugs': drugs,  # For the modal dropdown
+        'drugs': drugs,
     }
     return render(request, 'stock/invoice_form.html', context)
 
@@ -1549,7 +1423,6 @@ def invoice_delete(request, invoice_id):
 
     if request.method == 'POST':
         try:
-            # Reverse stock updates
             for item in invoice.items.all():
                 drug = item.drug
                 drug.stock_quantity -= item.quantity
@@ -1787,7 +1660,6 @@ def patient_list(request):
     """List all chronic patients"""
     patients = ChronicPatient.objects.all().select_related('created_by')
 
-    # Search functionality
     search_query = request.GET.get('search')
     if search_query:
         patients = patients.filter(
@@ -1798,7 +1670,6 @@ def patient_list(request):
             Q(location__icontains=search_query)
         )
 
-    # Filter by disease type
     disease_filter = request.GET.get('disease')
     if disease_filter:
         patients = patients.filter(disease_type=disease_filter)
@@ -1817,7 +1688,6 @@ def patient_create(request):
     """Create a new chronic patient"""
     if request.method == 'POST':
         try:
-            # Get form data
             first_name = request.POST.get('first_name', '').strip()
             last_name = request.POST.get('last_name', '').strip()
             date_of_birth = request.POST.get('date_of_birth') or None
@@ -1835,7 +1705,6 @@ def patient_create(request):
             dosage = request.POST.get('dosage', '').strip()
             next_appointment = request.POST.get('next_appointment') or None
 
-            # Validation
             errors = []
             if not first_name:
                 errors.append('First name is required.')
@@ -1854,7 +1723,6 @@ def patient_create(request):
                     'is_edit': False
                 })
 
-            # Create patient
             patient = ChronicPatient.objects.create(
                 first_name=first_name,
                 last_name=last_name,
@@ -1897,7 +1765,6 @@ def patient_edit(request, patient_id):
 
     if request.method == 'POST':
         try:
-            # Get form data
             patient.first_name = request.POST.get('first_name', '').strip()
             patient.last_name = request.POST.get('last_name', '').strip()
             patient.date_of_birth = request.POST.get('date_of_birth') or None
@@ -2011,12 +1878,10 @@ def create_test_drugs():
     """Create test drugs if none exist"""
     from django.contrib.auth.models import User
 
-    # Check if drugs exist
     if Drug.objects.count() > 0:
         print(f"✅ {Drug.objects.count()} drugs already exist")
         return
 
-    # Get or create categories
     categories_data = [
         'Antibiotic', 'Painkiller', 'Anti-fungals',
         'Beauty and Cosmetics', 'Neuro Care', 'Anti-diabetics',
@@ -2027,10 +1892,8 @@ def create_test_drugs():
     for name in categories_data:
         Category.objects.get_or_create(name=name)
 
-    # Get first category
     category = Category.objects.first()
 
-    # Get admin user
     admin = User.objects.filter(is_superuser=True).first()
     if not admin:
         admin = User.objects.first()
@@ -2039,7 +1902,6 @@ def create_test_drugs():
         print("❌ No user found to assign as creator")
         return
 
-    # Create test drugs
     test_drugs = [
         {'name': 'ibuprofen', 'generic_name': 'ibuprofen', 'selling_price': 4000, 'stock_quantity': 100},
         {'name': 'paracetamol', 'generic_name': 'paracetamol', 'selling_price': 4000, 'stock_quantity': 50},
