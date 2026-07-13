@@ -362,7 +362,7 @@ def drug_list(request):
 
     categories = Category.objects.all()
 
-    # Compute total stock values (fixed syntax)
+    # Compute total stock values
     from django.db.models import Sum, F
     total_cost_value = Drug.objects.aggregate(total=Sum(F('cost_price') * F('stock_quantity')))['total'] or 0
     total_selling_value = Drug.objects.aggregate(total=Sum(F('selling_price') * F('stock_quantity')))['total'] or 0
@@ -1367,12 +1367,6 @@ def invoice_list(request):
 @login_required
 @user_passes_test(is_admin_or_manager)
 def invoice_create(request):
-    # ... your existing code ...
-
-
-@login_required
-@user_passes_test(is_admin_or_manager)
-def invoice_create(request):
     """Create a new invoice - Admin/Manager only"""
     suppliers = Supplier.objects.all()
     categories = Category.objects.all()
@@ -1390,7 +1384,6 @@ def invoice_create(request):
             drug_ids = request.POST.getlist('drug[]')
             quantities = request.POST.getlist('quantity[]')
             unit_prices = request.POST.getlist('unit_price[]')
-            # Note: item_total is not needed as we can calculate
 
             total_amount = 0
             for i in range(len(drug_ids)):
