@@ -1374,6 +1374,7 @@ def invoice_create(request):
 
     if request.method == 'POST':
         form = InvoiceForm(request.POST)
+        print(form.errors)
         if form.is_valid():
             invoice = form.save(commit=False)
             invoice.total_amount = 0  # Will be updated from items
