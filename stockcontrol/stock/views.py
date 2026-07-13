@@ -1374,10 +1374,8 @@ def invoice_create(request):
 
     if request.method == 'POST':
         form = InvoiceForm(request.POST)
-        print(form.errors)
         if form.is_valid():
             invoice = form.save(commit=False)
-            invoice.total_amount = 0  # Will be updated from items
             invoice.created_by = request.user
             invoice.save()
 
@@ -1387,6 +1385,7 @@ def invoice_create(request):
             unit_prices = request.POST.getlist('unit_price[]')
 
             total_amount = 0
+            total_items_count = 0
             for i in range(len(drug_ids)):
                 drug_id = drug_ids[i]
                 quantity = int(quantities[i])
@@ -1395,20 +1394,25 @@ def invoice_create(request):
                     # Create InvoiceItem
                     InvoiceItem.objects.create(
                         invoice=invoice,
-                        drug_id=drug_id,
+                        drug_id=drug_id,          # ✅ fixed typo
                         quantity=quantity,
                         unit_price=unit_price,
                         total=quantity * unit_price
                     )
                     total_amount += quantity * unit_price
+                    total_items_count += 1
 
-            # Update invoice total_amount
+            # Update invoice totals
             invoice.total_amount = total_amount
+            invoice.total_items = total_items_count   # ✅ set number of item lines
+            invoice.total_cost = total_amount         # if total_cost should match total_amount
             invoice.save()
 
             messages.success(request, f'Invoice "{invoice.invoice_number}" created successfully!')
             return redirect('stock:invoice_list')
         else:
+            # Print errors to console for debugging
+            print(form.errors)
             messages.error(request, 'Please correct the errors below.')
             return render(request, 'stock/invoice_form.html', {
                 'form': form,

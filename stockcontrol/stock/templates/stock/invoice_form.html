@@ -15,6 +15,20 @@
                     <form method="post" id="invoiceForm">
                         {% csrf_token %}
 
+                        <!-- Display form errors -->
+                        {% if form.errors %}
+                            <div class="alert alert-danger">
+                                <strong>Please correct the following errors:</strong>
+                                <ul>
+                                    {% for field, errors in form.errors.items %}
+                                        {% for error in errors %}
+                                            <li>{{ field|capfirst }}: {{ error }}</li>
+                                        {% endfor %}
+                                    {% endfor %}
+                                </ul>
+                            </div>
+                        {% endif %}
+
                         <!-- HEADER FIELDS IN A TABLE -->
                         <div class="table-responsive">
                             <table class="table table-bordered" id="headerTable">
@@ -374,8 +388,8 @@
 
         // ---- Add to Invoice (from modal) ----
         $('#addDrugToInvoiceBtn').click(function() {
-            var drugId = $('#existing_dropdown').val();  // fixed ID
-            var drugName = $('#existing_dropdown option:selected').text();
+            var drugId = $('#existing_drug').val();  // FIXED: used correct ID
+            var drugName = $('#existing_drug option:selected').text();
             var batchNo = $('#batch_no_modal').val();
             var packSize = parseInt($('#pack_size_modal').val()) || 1;
             var packets = parseInt($('#packets_modal').val()) || 1;
@@ -495,9 +509,9 @@
                         var newOption = $('<option></option>')
                             .val(response.drug_id)
                             .text(response.drug_name);
-                        // Add to all drug dropdowns
+                        // Add to all drug dropdowns (both modals)
                         $('.drug-select').append(newOption);
-                        $('#existing_dropdown').append(newOption.clone());
+                        $('#existing_drug').append(newOption.clone());
                         $('#newDrugForm')[0].reset();
                         calculateNewDrugTotals();
                         setTimeout(function() {
