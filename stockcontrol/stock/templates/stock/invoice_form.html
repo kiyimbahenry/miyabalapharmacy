@@ -365,6 +365,33 @@
 <script>
     $(document).ready(function() {
 
+        // ---- Helper: Add a row to the invoice items table ----
+        function addDrugRow(drugId, drugName, batchNo, packSize, packets, sellingPrice) {
+            var totalQty = packets * packSize;
+            // Remove placeholder row if present
+            $('#emptyRow').remove();
+
+            // Build row HTML
+            var rowHtml = `
+                <tr>
+                    <td>
+                        <select name="drug[]" class="form-control drug-select">
+                            <option value="${drugId}" selected>${drugName}</option>
+                        </select>
+                        <input type="hidden" name="batch[]" value="${batchNo}">
+                        <input type="hidden" name="pack_size[]" value="${packSize}">
+                        <input type="hidden" name="packets[]" value="${packets}">
+                    </td>
+                    <td><input type="number" name="quantity[]" class="form-control quantity" value="${totalQty}" min="1"></td>
+                    <td><input type="number" name="unit_price[]" class="form-control unit-price" value="${sellingPrice.toFixed(2)}" step="0.01"></td>
+                    <td><input type="number" name="item_total[]" class="form-control item-total" value="${(totalQty * sellingPrice).toFixed(2)}" step="0.01" readonly></td>
+                    <td><button type="button" class="btn btn-danger btn-sm remove-item">Remove</button></td>
+                </tr>
+            `;
+            $('#invoiceItemsTable tbody').append(rowHtml);
+            updateTotalItems();
+        }
+
         // ---- Auto-calculate selling price in "Add Existing Drug" modal ----
         function calculateExistingDrugSellingPrice() {
             var costPrice = parseFloat($('#cost_price_modal').val()) || 0;
@@ -388,14 +415,13 @@
 
         // ---- Add to Invoice (from modal) ----
         $('#addDrugToInvoiceBtn').click(function() {
-            var drugId = $('#existing_drug').val();  // FIXED: used correct ID
+            var drugId = $('#existing_drug').val();
             var drugName = $('#existing_drug option:selected').text();
             var batchNo = $('#batch_no_modal').val();
             var packSize = parseInt($('#pack_size_modal').val()) || 1;
             var packets = parseInt($('#packets_modal').val()) || 1;
             var costPrice = parseFloat($('#cost_price_modal').val()) || 0;
             var sellingPrice = parseFloat($('#selling_price_modal').val()) || 0;
-            var totalQty = packets * packSize;
 
             if (!drugId) {
                 $('#modalError').text('Please select a drug.').show();
@@ -412,31 +438,11 @@
             }
             $('#modalError').hide();
 
-            // Remove placeholder row if present
-            $('#emptyRow').remove();
+            // Add the row using the helper
+            addDrugRow(drugId, drugName, batchNo, packSize, packets, sellingPrice);
 
-            // Build row HTML with hidden fields for batch, pack_size, packets
-            var rowHtml = `
-                <tr>
-                    <td>
-                        <select name="drug[]" class="form-control drug-select">
-                            <option value="${drugId}" selected>${drugName}</option>
-                        </select>
-                        <input type="hidden" name="batch[]" value="${batchNo}">
-                        <input type="hidden" name="pack_size[]" value="${packSize}">
-                        <input type="hidden" name="packets[]" value="${packets}">
-                    </td>
-                    <td><input type="number" name="quantity[]" class="form-control quantity" value="${totalQty}" min="1"></td>
-                    <td><input type="number" name="unit_price[]" class="form-control unit-price" value="${sellingPrice.toFixed(2)}" step="0.01"></td>
-                    <td><input type="number" name="item_total[]" class="form-control item-total" value="${(totalQty * sellingPrice).toFixed(2)}" step="0.01" readonly></td>
-                    <td><button type="button" class="btn btn-danger btn-sm remove-item">Remove</button></td>
-                </tr>
-            `;
-            $('#invoiceItemsTable tbody').append(rowHtml);
-            updateTotalItems();
-            // Close modal
+            // Close modal and reset form
             $('#addExistingDrugModal').modal('hide');
-            // Reset form
             $('#addExistingDrugForm')[0].reset();
             calculateExistingDrugSellingPrice();
         });
@@ -506,12 +512,24 @@
                     if (response.success) {
                         $('#newDrugSuccess').text('Drug added successfully!').show();
                         $('#newDrugError').hide();
+
+                        // Add new option to all drug dropdowns
                         var newOption = $('<option></option>')
                             .val(response.drug_id)
                             .text(response.drug_name);
-                        // Add to all drug dropdowns (both modals)
                         $('.drug-select').append(newOption);
                         $('#existing_drug').append(newOption.clone());
+
+                        // Read the modal values
+                        var batchNo = $('#batch_no_new').val();
+                        var packSize = parseInt($('#pack_size_new').val()) || 1;
+                        var packets = parseInt($('#packets_new').val()) || 1;
+                        var sellingPrice = parseFloat($('#selling_price_new').val()) || 0;
+
+                        // ---> ADD THE NEW DRUG AS A LINE ITEM <---
+                        addDrugRow(response.drug_id, response.drug_name, batchNo, packSize, packets, sellingPrice);
+
+                        // Reset form and close modal
                         $('#newDrugForm')[0].reset();
                         calculateNewDrugTotals();
                         setTimeout(function() {
