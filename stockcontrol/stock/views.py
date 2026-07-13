@@ -3,7 +3,7 @@ from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth import login, authenticate, logout
 from django.contrib import messages
 from django.http import JsonResponse
-from django.db.models import Sum, Count, Q
+from django.db.models import Sum, F, ExpressionWrapper, DecimalField
 from django.contrib.auth.models import User
 from django.utils import timezone
 from django.core.exceptions import ValidationError
@@ -362,10 +362,19 @@ def drug_list(request):
 
     categories = Category.objects.all()
 
-    # Compute total stock values
-    from django.db.models import Sum, F
-    total_cost_value = Drug.objects.aggregate(total=Sum(F('cost_price') * F('stock_quantity')))['total'] or 0
-    total_selling_value = Drug.objects.aggregate(total=Sum(F('selling_price') * F('stock_quantity')))['total'] or 0
+    # ===== CORRECTED TOTAL CALCULATIONS =====
+    # Total cost value = cost per packet × (total tablets / pack size)  → number of packets
+    total_cost_value = Drug.objects.aggregate(
+        total=Sum(ExpressionWrapper(
+            F('cost_price') * F('stock_quantity') / F('pack_size'),
+            output_field=DecimalField(max_digits=15, decimal_places=2)
+        ))
+    )['total'] or 0
+
+    # Total selling value = selling per tablet × total tablets (this was already correct)
+    total_selling_value = Drug.objects.aggregate(
+        total=Sum(F('selling_price') * F('stock_quantity'))
+    )['total'] or 0
 
     context = {
         'drugs': drugs,
