@@ -146,7 +146,7 @@
                     <div class="row">
                         <div class="col-md-4">
                             <div class="form-group">
-                                <label for="pack_size_modal">Pack Size *</label>
+                                <label for="pack_size_modal">Pack Size (tablets per pack) *</label>
                                 <input type="number" class="form-control" id="pack_size_modal" name="pack_size" value="1" min="1" required>
                             </div>
                         </div>
@@ -166,18 +166,18 @@
                     <div class="row">
                         <div class="col-md-6">
                             <div class="form-group">
-                                <label for="selling_price_modal">Selling Price (per unit) *</label>
+                                <label for="selling_price_modal">Selling Price (per tablet) *</label>
                                 <input type="number" class="form-control" id="selling_price_modal" name="selling_price" step="0.01" required>
                                 <small class="form-text text-muted">
-                                    Auto-calculated as (Cost Price / Pack Size) × 1.5 (you can adjust but not below cost per unit)
+                                    Auto‑calculated as (Cost Price / Pack Size) × 1.5 (can adjust but not below cost per unit)
                                 </small>
                             </div>
                         </div>
                         <div class="col-md-6">
                             <div class="form-group">
-                                <label for="total_quantity_modal">Total Quantity</label>
+                                <label for="total_quantity_modal">Total Quantity (tablets)</label>
                                 <input type="number" class="form-control" id="total_quantity_modal" name="total_quantity" readonly>
-                                <small class="form-text text-muted">Packets × Pack Size (auto-calculated)</small>
+                                <small class="form-text text-muted">Packets × Pack Size (auto‑calculated)</small>
                             </div>
                         </div>
                     </div>
@@ -192,7 +192,7 @@
     </div>
 </div>
 
-<!-- Modal: Add New Drug (with Brand Name label) -->
+<!-- Modal: Add New Drug (with proper structure and labels) -->
 <div class="modal fade" id="newDrugModal" tabindex="-1" aria-labelledby="newDrugModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
@@ -203,6 +203,7 @@
             <div class="modal-body">
                 <form id="newDrugForm">
                     {% csrf_token %}
+                    <!-- Row 1: Brand Name & Generic Name -->
                     <div class="row">
                         <div class="col-md-6">
                             <div class="form-group">
@@ -217,6 +218,7 @@
                             </div>
                         </div>
                     </div>
+                    <!-- Row 2: Dosage & Strength -->
                     <div class="row">
                         <div class="col-md-6">
                             <div class="form-group">
@@ -248,26 +250,29 @@
                             </div>
                         </div>
                     </div>
+                    <!-- Row 3: Cost Price, Selling Price, Pack Size -->
                     <div class="row">
                         <div class="col-md-4">
                             <div class="form-group">
-                                <label for="cost_price_new">Cost Price *</label>
+                                <label for="cost_price_new">Cost Price (per packet) *</label>
                                 <input type="number" class="form-control" id="cost_price_new" name="cost_price" step="0.01" required>
                             </div>
                         </div>
                         <div class="col-md-4">
                             <div class="form-group">
-                                <label for="selling_price_new">Selling Price</label>
-                                <input type="number" class="form-control" id="selling_price_new" name="selling_price" step="0.01">
+                                <label for="selling_price_new">Selling Price (per tablet) *</label>
+                                <input type="number" class="form-control" id="selling_price_new" name="selling_price" step="0.01" required>
+                                <small class="form-text text-muted">Auto‑calculated as (Cost Price / Pack Size) × 1.5</small>
                             </div>
                         </div>
                         <div class="col-md-4">
                             <div class="form-group">
-                                <label for="pack_size_new">Pack Size *</label>
+                                <label for="pack_size_new">Pack Size (tablets per packet) *</label>
                                 <input type="number" class="form-control" id="pack_size_new" name="pack_size" value="1" min="1" required>
                             </div>
                         </div>
                     </div>
+                    <!-- Row 4: Category & Supplier -->
                     <div class="row">
                         <div class="col-md-6">
                             <div class="form-group">
@@ -292,6 +297,7 @@
                             </div>
                         </div>
                     </div>
+                    <!-- Row 5: Batch Number & Expiry Date -->
                     <div class="row">
                         <div class="col-md-6">
                             <div class="form-group">
@@ -306,6 +312,7 @@
                             </div>
                         </div>
                     </div>
+                    <!-- Row 6: Number of Packets, Pack Size (auto), Total Stock Quantity -->
                     <div class="row">
                         <div class="col-md-4">
                             <div class="form-group">
@@ -315,14 +322,16 @@
                         </div>
                         <div class="col-md-4">
                             <div class="form-group">
-                                <label for="pack_size_new2">Pack Size</label>
+                                <label for="pack_size_new2">Pack Size (tablets/packet)</label>
                                 <input type="number" class="form-control" id="pack_size_new2" name="pack_size_new2" value="1" min="1" readonly>
+                                <small class="form-text text-muted">Auto‑filled from above</small>
                             </div>
                         </div>
                         <div class="col-md-4">
                             <div class="form-group">
                                 <label for="total_quantity_new">Total Stock Quantity *</label>
                                 <input type="number" class="form-control" id="total_quantity_new" name="total_quantity" readonly>
+                                <small class="form-text text-muted">Packets × Pack Size (auto‑calculated)</small>
                             </div>
                         </div>
                     </div>
