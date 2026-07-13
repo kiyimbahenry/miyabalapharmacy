@@ -8,25 +8,25 @@
     <div class="col-12">
         <div class="card shadow">
             <div class="card-header">
-                <h4><i class="fas fa-{% if is_edit %}edit{% else %}plus-circle{% endif %}"></i> 
+                <h4><i class="fas fa-{% if is_edit %}edit{% else %}plus-circle{% endif %}"></i>
                     {% if is_edit %}Edit Drug{% else %}Add New Drug{% endif %}
                 </h4>
             </div>
             <div class="card-body">
                 <form method="POST">
                     {% csrf_token %}
-                    
+
                     <div class="row">
                         <!-- Left Column -->
                         <div class="col-md-6">
                             <h5 class="border-bottom pb-2">Drug Information</h5>
-                            
+
                             <div class="mb-3">
                                 <label class="form-label required-field">Generic Name</label>
-                                <input type="text" name="generic_name" class="form-control" 
+                                <input type="text" name="generic_name" class="form-control"
                                        value="{{ drug.generic_name|default:'' }}" required>
                             </div>
-                            
+
                             <div class="mb-3">
                                 <label class="form-label required-field">Dosage</label>
                                 <select name="dosage" class="form-select" required>
@@ -43,73 +43,78 @@
                                     <option value="powder" {% if drug.dosage == 'powder' %}selected{% endif %}>Powder</option>
                                 </select>
                             </div>
-                            
+
                             <div class="mb-3">
                                 <label class="form-label required-field">Pack Size (Units per Packet)</label>
-                                <input type="number" name="pack_size" class="form-control" 
-                                       value="{{ drug.pack_size|default:'' }}" min="1" required>
+                                <input type="number" name="pack_size" class="form-control pack-size"
+                                       value="{{ drug.pack_size|default:'1' }}" min="1" required>
                             </div>
-                            
+
                             <div class="mb-3">
                                 <label class="form-label required-field">Cost Price (UGX per Packet)</label>
-                                <input type="number" step="0.01" name="cost_price" class="form-control" 
+                                <input type="number" step="0.01" name="cost_price" class="form-control cost-price"
                                        value="{{ drug.cost_price|default:'' }}" min="0" required>
                             </div>
-                            
+
                             <div class="mb-3">
                                 <label class="form-label required-field">Expiry Date</label>
-                                <input type="text" name="expiry_date" class="form-control" 
-                                       value="{{ drug.expiry_date|date:'d/m/Y'|default:'' }}" 
+                                <input type="text" name="expiry_date" class="form-control"
+                                       value="{{ drug.expiry_date|date:'d/m/Y'|default:'' }}"
                                        placeholder="dd/mm/yyyy" required>
                             </div>
-                            
+
                             <div class="mb-3">
                                 <label class="form-label">Brand Name</label>
-                                <input type="text" name="brand" class="form-control" 
+                                <input type="text" name="brand" class="form-control"
                                        value="{{ drug.brand|default:'' }}">
                             </div>
-                            
+
                             <div class="mb-3">
                                 <label class="form-label">Strength</label>
-                                <input type="text" name="strength" class="form-control" 
+                                <input type="text" name="strength" class="form-control"
                                        value="{{ drug.strength|default:'' }}" placeholder="e.g., 500mg">
                             </div>
                         </div>
-                        
+
                         <!-- Right Column -->
                         <div class="col-md-6">
                             <h5 class="border-bottom pb-2">Additional Details</h5>
-                            
+
                             <div class="mb-3">
                                 <label class="form-label">Batch No.</label>
-                                <input type="text" name="batch_no" class="form-control" 
+                                <input type="text" name="batch_no" class="form-control"
                                        value="{{ drug.batch_no|default:'' }}">
                             </div>
-                            
+
                             <div class="mb-3">
-                                <label class="form-label required-field">No. of Packets Bought</label>
-                                <input type="number" name="stock_quantity" class="form-control" 
+                                <label class="form-label required-field">Number of Packets Bought</label>
+                                <input type="number" name="stock_quantity" class="form-control packets"
                                        value="{{ drug.stock_quantity|default:'0' }}" min="0" required>
+                                <small class="form-text text-muted">Total stock = Packets × Pack Size (auto‑calculated)</small>
                             </div>
-                            
+
+                            <!-- REPLACE SUPPLIER WITH INVOICE DROPDOWN -->
                             <div class="mb-3">
-                                <label class="form-label required-field">Supplier</label>
-                                <select name="supplier" class="form-select" required>
-                                    <option value="">-- Select Supplier --</option>
-                                    {% for supplier in suppliers %}
-                                        <option value="{{ supplier.id }}" {% if drug.supplier.id == supplier.id %}selected{% endif %}>
-                                            {{ supplier.name }}
+                                <label class="form-label required-field">Invoice</label>
+                                <select name="invoice_id" class="form-select" required>
+                                    <option value="">-- Select Invoice --</option>
+                                    {% for invoice in invoices %}
+                                        <option value="{{ invoice.id }}"
+                                                {% if selected_invoice_id == invoice.id %}selected{% endif %}>
+                                            {{ invoice.invoice_number }} - {{ invoice.supplier.name }}
                                         </option>
                                     {% endfor %}
                                 </select>
+                                <small class="form-text text-muted">The drug will be linked to this purchase invoice.</small>
                             </div>
-                            
+
                             <div class="mb-3">
                                 <label class="form-label required-field">Selling Price (UGX per Tablet)</label>
-                                <input type="number" step="0.01" name="selling_price" class="form-control" 
+                                <input type="number" step="0.01" name="selling_price" class="form-control selling-price"
                                        value="{{ drug.selling_price|default:'' }}" min="0" required>
+                                <small class="form-text text-muted">Auto‑calculated as (Cost Price / Pack Size) × 1.5 – adjust as needed.</small>
                             </div>
-                            
+
                             <div class="mb-3">
                                 <label class="form-label">Category</label>
                                 <select name="category" class="form-select">
@@ -121,18 +126,18 @@
                                     {% endfor %}
                                 </select>
                             </div>
-                            
+
                             <div class="mb-3">
                                 <label class="form-label">Reorder Level</label>
-                                <input type="number" name="reorder_level" class="form-control" 
+                                <input type="number" name="reorder_level" class="form-control"
                                        value="{{ drug.reorder_level|default:'10' }}" min="0">
-                                <small class="text-muted">Alert when stock falls below this level</small>
+                                <small class="text-muted">Alert when stock falls below this level.</small>
                             </div>
                         </div>
                     </div>
-                    
+
                     <hr>
-                    
+
                     <div class="d-flex justify-content-end gap-2">
                         <a href="{% url 'stock:drug_list' %}" class="btn btn-secondary">
                             <i class="fas fa-times"></i> Cancel
@@ -146,4 +151,31 @@
         </div>
     </div>
 </div>
+
+<script>
+    document.addEventListener('DOMContentLoaded', function() {
+        const costPriceInput = document.querySelector('.cost-price');
+        const packSizeInput = document.querySelector('.pack-size');
+        const sellingPriceInput = document.querySelector('.selling-price');
+        const packetsInput = document.querySelector('.packets');
+
+        function autoCalculateSellingPrice() {
+            const cost = parseFloat(costPriceInput.value) || 0;
+            const packSize = parseInt(packSizeInput.value) || 1;
+            if (cost > 0 && packSize > 0) {
+                const perUnitCost = cost / packSize;
+                const suggested = perUnitCost * 1.5;
+                sellingPriceInput.value = suggested.toFixed(2);
+            } else {
+                sellingPriceInput.value = '';
+            }
+        }
+
+        costPriceInput.addEventListener('input', autoCalculateSellingPrice);
+        packSizeInput.addEventListener('input', autoCalculateSellingPrice);
+
+        // (Optional) Show total stock hint – you can add a read‑only field if you want.
+    });
+</script>
+
 {% endblock %}

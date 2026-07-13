@@ -394,93 +394,111 @@ def drug_list(request):
 @login_required
 @user_passes_test(is_admin_or_manager)
 def drug_create(request):
-    """Create a new drug/medicine"""
+    """Create a new drug/medicine and link to an invoice."""
     categories = Category.objects.all()
-    suppliers = Supplier.objects.all()
+    invoices = Invoice.objects.all().select_related('supplier')
 
     if request.method == 'POST':
         try:
-            name = request.POST.get('name') or request.POST.get('generic_name')
+            # Get form data
             generic_name = request.POST.get('generic_name')
-            brand = request.POST.get('brand')
             dosage = request.POST.get('dosage')
-            strength = request.POST.get('strength')
-            batch_no = request.POST.get('batch_no')
-
-            pack_size = int(request.POST.get('pack_size', 0))
-            supplier_id = int(request.POST.get('supplier', 0))
+            pack_size = int(request.POST.get('pack_size', 1))
             cost_price = float(request.POST.get('cost_price', 0))
-            selling_price = float(request.POST.get('selling_price', 0))
-            stock_quantity = int(request.POST.get('stock_quantity', 0))
-            category_id = int(request.POST.get('category', 1))
-            reorder_level = int(request.POST.get('reorder_level', 10))
             expiry_date = request.POST.get('expiry_date')
+            brand = request.POST.get('brand', '')
+            strength = request.POST.get('strength', '')
+            batch_no = request.POST.get('batch_no', '')
+            stock_quantity = int(request.POST.get('stock_quantity', 0))  # number of packets
+            selling_price = float(request.POST.get('selling_price', 0))
+            category_id = request.POST.get('category', 1)
+            reorder_level = int(request.POST.get('reorder_level', 10))
+            invoice_id = request.POST.get('invoice_id')
 
-            print(f"Creating Drug: {generic_name}, Dosage: {dosage}, Pack Size: {pack_size}")
-
+            # Basic validation
             errors = []
-
             if not generic_name:
                 errors.append('Generic Name is required.')
             if not dosage:
                 errors.append('Dosage is required.')
-            if not supplier_id or supplier_id <= 0:
-                errors.append('Supplier is required.')
-            else:
-                try:
-                    supplier = Supplier.objects.get(id=supplier_id)
-                except Supplier.DoesNotExist:
-                    errors.append('Selected supplier does not exist.')
             if cost_price <= 0:
                 errors.append('Cost Price must be greater than 0.')
-            if selling_price <= 0:
-                errors.append('Selling Price must be greater than 0.')
             if pack_size <= 0:
                 errors.append('Pack Size must be greater than 0.')
             if stock_quantity < 0:
-                errors.append('Stock quantity cannot be negative.')
+                errors.append('Number of packets cannot be negative.')
             if not expiry_date:
                 errors.append('Expiry Date is required.')
+            if not invoice_id:
+                errors.append('Invoice is required.')
+
+            # Convert expiry date format (dd/mm/yyyy → yyyy-mm-dd)
             if expiry_date and '/' in expiry_date:
-                try:
-                    parts = expiry_date.split('/')
-                    if len(parts) == 3:
-                        expiry_date = f"{parts[2]}-{parts[1]}-{parts[0]}"
-                except:
+                parts = expiry_date.split('/')
+                if len(parts) == 3:
+                    expiry_date = f"{parts[2]}-{parts[1]}-{parts[0]}"
+                else:
                     errors.append('Invalid date format. Use dd/mm/yyyy')
+
+            # Verify category exists
             try:
                 category = Category.objects.get(id=category_id)
             except Category.DoesNotExist:
                 errors.append('Selected category does not exist.')
+                category = None
+
+            # Verify invoice exists
+            try:
+                invoice = Invoice.objects.get(id=invoice_id)
+            except Invoice.DoesNotExist:
+                errors.append('Selected invoice does not exist.')
+                invoice = None
 
             if errors:
                 for error in errors:
                     messages.error(request, error)
                 return render(request, 'stock/drug_form.html', {
                     'categories': categories,
-                    'suppliers': suppliers,
-                    'is_edit': False
+                    'invoices': invoices,
+                    'is_edit': False,
+                    'drug': None,
+                    'selected_invoice_id': invoice_id,
                 })
 
+            # Create the drug (total tablets = packets × pack_size)
             drug = Drug.objects.create(
-                name=name or generic_name,
+                name=generic_name,  # use generic as name if no brand given
                 generic_name=generic_name,
-                brand=brand or '',
+                brand=brand,
                 dosage=dosage,
-                strength=strength or '',
-                batch_no=batch_no or '',
+                strength=strength,
+                batch_no=batch_no,
                 pack_size=pack_size,
-                supplier_id=supplier_id,
-                category_id=category_id,
                 cost_price=cost_price,
                 selling_price=selling_price,
-                stock_quantity=stock_quantity,
+                stock_quantity=stock_quantity * pack_size,  # total tablets
                 expiry_date=expiry_date,
                 reorder_level=reorder_level,
+                category=category,
                 created_by=request.user
             )
 
-            messages.success(request, f'Drug "{drug.name}" created successfully!')
+            # Create InvoiceItem for this purchase
+            # quantity = number of packets, unit_price = cost per packet
+            InvoiceItem.objects.create(
+                invoice=invoice,
+                drug=drug,
+                quantity=stock_quantity,                # packets
+                unit_price=cost_price,                  # cost per packet
+                total=cost_price * stock_quantity       # total cost of this purchase
+            )
+
+            # Optionally update the invoice totals
+            invoice.total_items = invoice.items.count()
+            invoice.total_amount = invoice.items.aggregate(Sum('total'))['total__sum'] or 0
+            invoice.save()
+
+            messages.success(request, f'Drug "{drug.name}" created and linked to Invoice #{invoice.invoice_number}.')
             return redirect('stock:drug_list')
 
         except ValueError as e:
@@ -490,10 +508,13 @@ def drug_create(request):
             import traceback
             traceback.print_exc()
 
+    # GET request
     context = {
         'categories': categories,
-        'suppliers': suppliers,
+        'invoices': invoices,
         'is_edit': False,
+        'drug': None,
+        'selected_invoice_id': None,
     }
     return render(request, 'stock/drug_form.html', context)
 
@@ -575,63 +596,67 @@ def drug_create_ajax(request):
 @login_required
 @user_passes_test(is_admin_or_manager)
 def drug_edit(request, drug_id):
-    """Edit an existing drug/medicine"""
+    """Edit an existing drug/medicine and optionally update invoice association."""
     drug = get_object_or_404(Drug, id=drug_id)
     categories = Category.objects.all()
-    suppliers = Supplier.objects.all()
+    invoices = Invoice.objects.all().select_related('supplier')
+
+    # Get current invoice linked to this drug (if any)
+    current_invoice_item = InvoiceItem.objects.filter(drug=drug).first()
+    current_invoice_id = current_invoice_item.invoice.id if current_invoice_item else None
 
     if request.method == 'POST':
         try:
+            # Get form data
             generic_name = request.POST.get('generic_name')
-            brand = request.POST.get('brand')
             dosage = request.POST.get('dosage')
-            strength = request.POST.get('strength')
-            batch_no = request.POST.get('batch_no')
-
-            pack_size = int(request.POST.get('pack_size', 0))
-            supplier_id = int(request.POST.get('supplier', 0))
+            pack_size = int(request.POST.get('pack_size', 1))
             cost_price = float(request.POST.get('cost_price', 0))
-            selling_price = float(request.POST.get('selling_price', 0))
-            stock_quantity = int(request.POST.get('stock_quantity', 0))
-            category_id = int(request.POST.get('category', 1))
-            reorder_level = int(request.POST.get('reorder_level', 10))
             expiry_date = request.POST.get('expiry_date')
-            name = request.POST.get('name') or generic_name
+            brand = request.POST.get('brand', '')
+            strength = request.POST.get('strength', '')
+            batch_no = request.POST.get('batch_no', '')
+            stock_quantity = int(request.POST.get('stock_quantity', 0))  # packets
+            selling_price = float(request.POST.get('selling_price', 0))
+            category_id = request.POST.get('category', 1)
+            reorder_level = int(request.POST.get('reorder_level', 10))
+            invoice_id = request.POST.get('invoice_id')
 
+            # Validation
             errors = []
-
             if not generic_name:
                 errors.append('Generic Name is required.')
             if not dosage:
                 errors.append('Dosage is required.')
-            if not supplier_id or supplier_id <= 0:
-                errors.append('Supplier is required.')
-            else:
-                try:
-                    supplier = Supplier.objects.get(id=supplier_id)
-                except Supplier.DoesNotExist:
-                    errors.append('Selected supplier does not exist.')
             if cost_price <= 0:
                 errors.append('Cost Price must be greater than 0.')
-            if selling_price <= 0:
-                errors.append('Selling Price must be greater than 0.')
             if pack_size <= 0:
                 errors.append('Pack Size must be greater than 0.')
             if stock_quantity < 0:
-                errors.append('Stock quantity cannot be negative.')
+                errors.append('Number of packets cannot be negative.')
             if not expiry_date:
                 errors.append('Expiry Date is required.')
+            if not invoice_id:
+                errors.append('Invoice is required.')
+
             if expiry_date and '/' in expiry_date:
-                try:
-                    parts = expiry_date.split('/')
-                    if len(parts) == 3:
-                        expiry_date = f"{parts[2]}-{parts[1]}-{parts[0]}"
-                except:
+                parts = expiry_date.split('/')
+                if len(parts) == 3:
+                    expiry_date = f"{parts[2]}-{parts[1]}-{parts[0]}"
+                else:
                     errors.append('Invalid date format. Use dd/mm/yyyy')
+
             try:
                 category = Category.objects.get(id=category_id)
             except Category.DoesNotExist:
                 errors.append('Selected category does not exist.')
+                category = None
+
+            try:
+                invoice = Invoice.objects.get(id=invoice_id)
+            except Invoice.DoesNotExist:
+                errors.append('Selected invoice does not exist.')
+                invoice = None
 
             if errors:
                 for error in errors:
@@ -639,27 +664,68 @@ def drug_edit(request, drug_id):
                 return render(request, 'stock/drug_form.html', {
                     'drug': drug,
                     'categories': categories,
-                    'suppliers': suppliers,
-                    'is_edit': True
+                    'invoices': invoices,
+                    'is_edit': True,
+                    'selected_invoice_id': invoice_id,
                 })
 
+            # Update drug
             drug.generic_name = generic_name
-            drug.brand = brand or ''
+            drug.brand = brand
             drug.dosage = dosage
-            drug.strength = strength or ''
-            drug.batch_no = batch_no or ''
+            drug.strength = strength
+            drug.batch_no = batch_no
             drug.pack_size = pack_size
-            drug.supplier_id = supplier_id
             drug.cost_price = cost_price
             drug.selling_price = selling_price
-            drug.stock_quantity = stock_quantity
+            drug.stock_quantity = stock_quantity * pack_size  # tablets
             drug.expiry_date = expiry_date
-            drug.name = name or generic_name
-            drug.category_id = category_id
             drug.reorder_level = reorder_level
+            drug.category = category
             drug.save()
 
-            messages.success(request, f'Drug "{drug.name}" updated successfully!')
+            # Update or create InvoiceItem
+            if current_invoice_item:
+                # If invoice changed, we need to update or move the item
+                if current_invoice_item.invoice.id != int(invoice_id):
+                    # Delete old item, create new one
+                    current_invoice_item.delete()
+                    InvoiceItem.objects.create(
+                        invoice=invoice,
+                        drug=drug,
+                        quantity=stock_quantity,
+                        unit_price=cost_price,
+                        total=cost_price * stock_quantity
+                    )
+                else:
+                    # Same invoice – just update fields
+                    current_invoice_item.quantity = stock_quantity
+                    current_invoice_item.unit_price = cost_price
+                    current_invoice_item.total = cost_price * stock_quantity
+                    current_invoice_item.save()
+            else:
+                # No previous invoice item – create new one
+                InvoiceItem.objects.create(
+                    invoice=invoice,
+                    drug=drug,
+                    quantity=stock_quantity,
+                    unit_price=cost_price,
+                    total=cost_price * stock_quantity
+                )
+
+            # Recalculate invoice totals for both old and new invoices if they changed
+            if current_invoice_item and current_invoice_item.invoice.id != int(invoice_id):
+                # Recalc old invoice
+                old_inv = current_invoice_item.invoice
+                old_inv.total_items = old_inv.items.count()
+                old_inv.total_amount = old_inv.items.aggregate(Sum('total'))['total__sum'] or 0
+                old_inv.save()
+            # Recalc new invoice
+            invoice.total_items = invoice.items.count()
+            invoice.total_amount = invoice.items.aggregate(Sum('total'))['total__sum'] or 0
+            invoice.save()
+
+            messages.success(request, f'Drug "{drug.name}" updated successfully.')
             return redirect('stock:drug_list')
 
         except ValueError as e:
@@ -669,11 +735,13 @@ def drug_edit(request, drug_id):
             import traceback
             traceback.print_exc()
 
+    # GET request – prefill the invoice dropdown with current invoice
     context = {
         'drug': drug,
         'categories': categories,
-        'suppliers': suppliers,
+        'invoices': invoices,
         'is_edit': True,
+        'selected_invoice_id': current_invoice_id,
     }
     return render(request, 'stock/drug_form.html', context)
 
