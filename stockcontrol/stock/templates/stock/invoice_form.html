@@ -192,7 +192,7 @@
     </div>
 </div>
 
-<!-- Modal: Add New Drug (with proper structure and labels) -->
+<!-- Modal: Add New Drug -->
 <div class="modal fade" id="newDrugModal" tabindex="-1" aria-labelledby="newDrugModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
@@ -312,7 +312,7 @@
                             </div>
                         </div>
                     </div>
-                    <!-- Row 6: Number of Packets, Pack Size (auto), Total Stock Quantity -->
+                    <!-- Row 6: Number of Packets, Pack Size (readonly), Total Stock Quantity -->
                     <div class="row">
                         <div class="col-md-4">
                             <div class="form-group">
@@ -374,8 +374,8 @@
 
         // ---- Add to Invoice (from modal) ----
         $('#addDrugToInvoiceBtn').click(function() {
-            var drugId = $('#existing_drug').val();
-            var drugName = $('#existing_drug option:selected').text();
+            var drugId = $('#existing_dropdown').val();  // fixed ID
+            var drugName = $('#existing_dropdown option:selected').text();
             var batchNo = $('#batch_no_modal').val();
             var packSize = parseInt($('#pack_size_modal').val()) || 1;
             var packets = parseInt($('#packets_modal').val()) || 1;
@@ -470,6 +470,18 @@
         $('#packets_new, #pack_size_new').on('input', calculateNewDrugTotals);
         calculateNewDrugTotals();
 
+        // Auto‑calculate selling price for new drug
+        function calculateNewSellingPrice() {
+            var costPrice = parseFloat($('#cost_price_new').val()) || 0;
+            var packSize = parseInt($('#pack_size_new').val()) || 1;
+            if (costPrice > 0 && packSize > 0) {
+                var perUnitCost = costPrice / packSize;
+                var suggestedSelling = perUnitCost * 1.5;
+                $('#selling_price_new').val(suggestedSelling.toFixed(2));
+            }
+        }
+        $('#cost_price_new, #pack_size_new').on('input', calculateNewSellingPrice);
+
         $('#saveNewDrugBtn').click(function() {
             var formData = $('#newDrugForm').serialize();
             $.ajax({
@@ -483,9 +495,9 @@
                         var newOption = $('<option></option>')
                             .val(response.drug_id)
                             .text(response.drug_name);
-                        // Add to all drug dropdowns (both existing drug modal and any future rows)
+                        // Add to all drug dropdowns
                         $('.drug-select').append(newOption);
-                        $('#existing_drug').append(newOption.clone());
+                        $('#existing_dropdown').append(newOption.clone());
                         $('#newDrugForm')[0].reset();
                         calculateNewDrugTotals();
                         setTimeout(function() {
@@ -520,7 +532,7 @@
             calculateNewDrugTotals();
         });
 
-        // Ensure placeholder is shown if no items initially (including edit mode with no items)
+        // Ensure placeholder is shown if no items initially
         if ($('#invoiceItemsTable tbody tr:not(#emptyRow)').length === 0) {
             if ($('#emptyRow').length === 0) {
                 $('#invoiceItemsTable tbody').append(`
@@ -534,16 +546,6 @@
         } else {
             $('#emptyRow').hide();
         }
-
-        // Whenever a new row is added, hide the placeholder if it exists.
-        // The add button already removes it, but for initial rows we hide it.
-
-        // Also, when in edit mode, existing rows already have the correct data.
-        // The total items field will be updated by the JavaScript.
-        // We need to ensure that the total_items field is not overridden by the automatic update if the user manually types.
-        // The updateTotalItems function sets the value, but we can leave it as is.
-        // The user can manually edit the total_items field; the JavaScript will overwrite it if they change quantities.
-        // We can optionally make it not auto-update, but we'll keep it as is.
 
     });
 </script>

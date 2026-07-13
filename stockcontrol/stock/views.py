@@ -1360,8 +1360,14 @@ def send_auto_reports():
 @login_required
 def invoice_list(request):
     """List all invoices"""
-    invoices = Invoice.objects.all().select_related('supplier', 'created_by')
+    invoices = Invoice.objects.all().select_related('supplier', 'created_by').order_by('-created_at')
     return render(request, 'stock/invoice_list.html', {'invoices': invoices})
+
+
+@login_required
+@user_passes_test(is_admin_or_manager)
+def invoice_create(request):
+    # ... your existing code ...
 
 
 @login_required
