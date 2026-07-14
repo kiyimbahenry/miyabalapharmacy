@@ -306,7 +306,7 @@
             display: flex;
             gap: 10px;
             margin-top: 15px;
-            flex-wrap: wrap; /* allow wrapping on small screens */
+            flex-wrap: wrap;
         }
         .payment-methods button {
             padding: 10px 20px;
@@ -316,7 +316,7 @@
             cursor: pointer;
             font-weight: 500;
             flex: 1;
-            min-width: 80px; /* ensure buttons are not too narrow */
+            min-width: 80px;
         }
         .payment-methods button.active {
             border-color: #667eea;
@@ -329,8 +329,6 @@
         @media print {
             .no-print { display: none; }
         }
-
-        /* NEW: style for the quantity input */
         .cart-qty {
             width: 50px;
             text-align: center;
@@ -399,7 +397,6 @@
                         <input type="text" id="customerPhone" placeholder="Phone (optional)">
                     </div>
 
-                    <!-- ===== UPDATED PAYMENT METHODS – CREDIT ADDED ===== -->
                     <div class="payment-methods">
                         <button class="active" data-method="cash" onclick="selectPayment('cash')">💵 Cash</button>
                         <button data-method="mobile" onclick="selectPayment('mobile')">📱 Mobile Money</button>
@@ -416,7 +413,6 @@
     </div>
 
     <script>
-        // Get CSRF token
         function getCookie(name) {
             let cookieValue = null;
             if (document.cookie && document.cookie !== '') {
@@ -438,15 +434,21 @@
         let selectedPayment = 'cash';
         let allDrugs = [];
 
-        // Load drugs on page load
         document.addEventListener('DOMContentLoaded', function() {
             loadDrugs();
         });
 
+        // ============================================================
+        //  LOAD DRUGS – uses the new flat API endpoint
+        // ============================================================
         function loadDrugs() {
-            fetch('/api/drugs/')
-                .then(response => response.json())
+            fetch('/api/drugs/all/')
+                .then(response => {
+                    if (!response.ok) throw new Error('Network response was not ok');
+                    return response.json();
+                })
                 .then(data => {
+                    // data is a flat array of drugs
                     allDrugs = data;
                     displayDrugs(data);
                 })
@@ -511,17 +513,14 @@
         }
 
         function addToCart(drugId) {
-            // Find the drug
             const drug = allDrugs.find(d => d.id === drugId);
             if (!drug) {
                 showToast('Drug not found', 'error');
                 return;
             }
 
-            // Check if already in cart
             const existing = cart.find(item => item.id === drugId);
             if (existing) {
-                // Check stock
                 if (existing.quantity >= drug.qty) {
                     showToast(`Only ${drug.qty} available in stock`, 'error');
                     return;
@@ -545,9 +544,6 @@
             showToast(`${drug.generic || drug.name} added to cart!`, 'success');
         }
 
-        // ============================================================
-        // UPDATED: updateCart function with editable quantity input
-        // ============================================================
         function updateCart() {
             const container = document.getElementById('cartItems');
             const totalEl = document.getElementById('cartTotal');
@@ -575,9 +571,9 @@
                         <div class="info">
                             <div class="name">${item.name}</div>
                             <div class="qty">
-                                <input type="number" class="cart-qty" 
-                                       value="${item.quantity}" 
-                                       min="1" max="${item.maxStock}" 
+                                <input type="number" class="cart-qty"
+                                       value="${item.quantity}"
+                                       min="1" max="${item.maxStock}"
                                        data-index="${index}">
                                 × UGX ${item.price}
                             </div>
@@ -592,7 +588,6 @@
             totalEl.textContent = `UGX ${total}`;
             completeBtn.disabled = false;
 
-            // Attach change event to quantity inputs
             container.querySelectorAll('.cart-qty').forEach(input => {
                 input.addEventListener('change', function() {
                     const idx = parseInt(this.dataset.index);
@@ -605,11 +600,10 @@
                     }
                     this.value = newQty;
                     cart[idx].quantity = newQty;
-                    updateCart(); // re‑render to update totals
+                    updateCart();
                 });
             });
 
-            // Attach click event to remove buttons
             container.querySelectorAll('.remove-btn').forEach(btn => {
                 btn.addEventListener('click', function() {
                     const idx = parseInt(this.dataset.index);
@@ -618,10 +612,6 @@
                 });
             });
         }
-
-        // ============================================================
-        // OBSOLETE functions removed: removeFromCart and updateQuantity
-        // ============================================================
 
         function selectPayment(method) {
             selectedPayment = method;
@@ -643,7 +633,6 @@
             completeBtn.disabled = true;
             completeBtn.textContent = '⏳ Processing...';
 
-            // Calculate total
             const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
             const data = {
@@ -653,7 +642,7 @@
                 })),
                 customer_name: document.getElementById('customerName').value || 'Walk-in Customer',
                 customer_phone: document.getElementById('customerPhone').value || '',
-                amount_paid: total, // Auto-set to total
+                amount_paid: total,
                 payment_method: selectedPayment,
                 sale_type: 'retail'
             };
@@ -672,11 +661,8 @@
             .then(data => {
                 if (data.success) {
                     showToast(`✅ Sale completed! Receipt #${data.receipt_number}`, 'success');
-                    // Clear cart
                     cart = [];
                     updateCart();
-
-                    // Print receipt option
                     if (confirm('Print receipt?')) {
                         window.open(data.receipt_url + 'print/', '_blank');
                     }
@@ -706,7 +692,6 @@
             }, 5000);
         }
 
-        // Enter key to search
         document.getElementById('searchInput').addEventListener('keyup', function(e) {
             if (e.key === 'Enter') {
                 searchDrugs();

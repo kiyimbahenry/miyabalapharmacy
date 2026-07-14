@@ -112,6 +112,7 @@ urlpatterns = [
     # API URLs
     # ============================================================
     path('api/drugs/', views.get_drugs_api, name='get_drugs_api'),
+    path('api/drugs/all/', views.get_all_drugs_for_sale, name='drugs_all'),
     path('api/complete-sale/', views.complete_sale, name='complete_sale'),
     path('api/calculate-price/', views.calculate_selling_price, name='calculate_selling_price'),
     path('api/daily-sales/', views.get_daily_sales_api, name='daily_sales_api'),

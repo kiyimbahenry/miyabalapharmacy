@@ -162,6 +162,30 @@ def get_drugs_api(request):
 
 
 @login_required
+def get_all_drugs_for_sale(request):
+    """API endpoint for sale form – returns all active drugs as a flat list (no pagination)."""
+    try:
+        today = timezone.now().date()
+        drugs_qs = Drug.objects.filter(
+            Q(expiry_date__isnull=True) | Q(expiry_date__gte=today)
+        ).order_by('name')
+        data = []
+        for drug in drugs_qs:
+            data.append({
+                'id': drug.id,
+                'name': drug.name,
+                'generic': drug.generic_name,
+                'brand': drug.brand,
+                'price': float(drug.selling_price),
+                'qty': drug.stock_quantity,
+                'batch_no': drug.batch_no,
+            })
+        return JsonResponse(data, safe=False)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+
+@login_required
 def complete_sale(request):
     """
     API endpoint to complete a drug sale and update stock
@@ -1551,14 +1575,13 @@ def invoice_create(request):
 
             # Update invoice totals
             invoice.total_amount = total_amount
-            invoice.total_items = total_items_count   # set number of item lines
-            invoice.total_cost = total_amount         # if total_cost should match total_amount
+            invoice.total_items = total_items_count
+            invoice.total_cost = total_amount
             invoice.save()
 
             messages.success(request, f'Invoice "{invoice.invoice_number}" created successfully!')
             return redirect('stock:invoice_list')
         else:
-            # Print errors to console for debugging
             print(form.errors)
             messages.error(request, 'Please correct the errors below.')
             return render(request, 'stock/invoice_form.html', {
