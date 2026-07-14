@@ -122,14 +122,22 @@ def dashboard(request):
 
 @login_required
 def get_drugs_api(request):
-    """
-    API endpoint to get drugs sorted by expiry date (top 10 shortest expiry)
-    """
+    """API for dashboard short expiry with pagination."""
     try:
-        drugs = Drug.objects.filter(expiry_date__isnull=False).order_by('expiry_date')[:10]
+        today = timezone.now().date()
+        drugs_qs = Drug.objects.filter(
+            Q(expiry_date__isnull=True) | Q(expiry_date__gte=today)
+        ).order_by('expiry_date')
+
+        page = request.GET.get('page', 1)
+        paginator = Paginator(drugs_qs, 10)
+        try:
+            drugs_page = paginator.page(page)
+        except (PageNotAnInteger, EmptyPage):
+            drugs_page = paginator.page(1)
 
         data = []
-        for drug in drugs:
+        for drug in drugs_page:
             data.append({
                 'id': drug.id,
                 'generic': drug.generic_name if drug.generic_name else drug.name,
@@ -140,13 +148,17 @@ def get_drugs_api(request):
                 'price': float(drug.selling_price) if drug.selling_price else 0,
                 'batch_no': drug.batch_no if drug.batch_no else 'N/A',
             })
-        return JsonResponse(data, safe=False)
+
+        return JsonResponse({
+            'data': data,
+            'page': drugs_page.number,
+            'total_pages': paginator.num_pages,
+            'has_next': drugs_page.has_next(),
+            'has_previous': drugs_page.has_previous(),
+        }, safe=False)
 
     except Exception as e:
-        return JsonResponse({
-            'error': str(e),
-            'message': 'Error fetching drugs data'
-        }, status=500)
+        return JsonResponse({'error': str(e), 'message': 'Error fetching drugs data'}, status=500)
 
 
 @login_required
@@ -339,47 +351,6 @@ def complete_sale(request):
         }, status=500)
 
 
-@login_required
-def get_drugs_api(request):
-    """API for dashboard short expiry with pagination."""
-    try:
-        today = timezone.now().date()
-        drugs_qs = Drug.objects.filter(
-            Q(expiry_date__isnull=True) | Q(expiry_date__gte=today)
-        ).order_by('expiry_date')
-
-        page = request.GET.get('page', 1)
-        paginator = Paginator(drugs_qs, 10)
-        try:
-            drugs_page = paginator.page(page)
-        except (PageNotAnInteger, EmptyPage):
-            drugs_page = paginator.page(1)
-
-        data = []
-        for drug in drugs_page:
-            data.append({
-                'id': drug.id,
-                'generic': drug.generic_name if drug.generic_name else drug.name,
-                'brand': drug.brand if drug.brand else 'N/A',
-                'strength': getattr(drug, 'strength', 'N/A'),
-                'expiry': drug.expiry_date.strftime('%Y-%m-%d') if drug.expiry_date else 'N/A',
-                'qty': drug.stock_quantity,
-                'price': float(drug.selling_price) if drug.selling_price else 0,
-                'batch_no': drug.batch_no if drug.batch_no else 'N/A',
-            })
-
-        return JsonResponse({
-            'data': data,
-            'page': drugs_page.number,
-            'total_pages': paginator.num_pages,
-            'has_next': drugs_page.has_next(),
-            'has_previous': drugs_page.has_previous(),
-        }, safe=False)
-
-    except Exception as e:
-        return JsonResponse({'error': str(e), 'message': 'Error fetching drugs data'}, status=500)
-
-
 # ============================================================
 # DRUG (MEDICINE) VIEWS
 # ============================================================
@@ -442,6 +413,37 @@ def drug_list(request):
         'total_selling_value': total_selling_value,
     }
     return render(request, 'stock/drug_list.html', context)
+
+
+@login_required
+def expired_drug_list(request):
+    """List expired drugs with pagination."""
+    today = timezone.now().date()
+    expired_qs = Drug.objects.filter(expiry_date__lt=today).order_by('expiry_date')
+
+    # Search (optional)
+    search_query = request.GET.get('search')
+    if search_query:
+        expired_qs = expired_qs.filter(
+            Q(name__icontains=search_query) |
+            Q(generic_name__icontains=search_query) |
+            Q(brand__icontains=search_query)
+        )
+
+    paginator = Paginator(expired_qs, 10)
+    page = request.GET.get('page')
+    try:
+        expired_drugs = paginator.page(page)
+    except PageNotAnInteger:
+        expired_drugs = paginator.page(1)
+    except EmptyPage:
+        expired_drugs = paginator.page(paginator.num_pages)
+
+    context = {
+        'expired_drugs': expired_drugs,
+        'search_query': search_query,
+    }
+    return render(request, 'stock/expired_drug_list.html', context)
 
 
 # ============================================================
@@ -1539,7 +1541,7 @@ def invoice_create(request):
                     # Create InvoiceItem
                     InvoiceItem.objects.create(
                         invoice=invoice,
-                        drug_id=drug_id,          # ✅ fixed typo
+                        drug_id=drug_id,
                         quantity=quantity,
                         unit_price=unit_price,
                         total=quantity * unit_price
@@ -1549,7 +1551,7 @@ def invoice_create(request):
 
             # Update invoice totals
             invoice.total_amount = total_amount
-            invoice.total_items = total_items_count   # ✅ set number of item lines
+            invoice.total_items = total_items_count   # set number of item lines
             invoice.total_cost = total_amount         # if total_cost should match total_amount
             invoice.save()
 
