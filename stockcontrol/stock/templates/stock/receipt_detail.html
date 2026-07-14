@@ -1,0 +1,107 @@
+{% extends 'stock/base.html' %}
+{% load static %}
+
+{% block title %}Receipt Details{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <div class="card shadow">
+            <div class="card-header d-flex justify-content-between align-items-center">
+                <h4><i class="fas fa-receipt text-primary me-2"></i> Receipt #{{ receipt.receipt_number }}</h4>
+                <div>
+                    <a href="{% url 'stock:print_receipt' receipt.id %}" target="_blank" class="btn btn-primary btn-sm">
+                        <i class="fas fa-print"></i> Print
+                    </a>
+                    <a href="{% url 'stock:receipt_list' %}" class="btn btn-secondary btn-sm">
+                        <i class="fas fa-arrow-left"></i> Back to List
+                    </a>
+                </div>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <!-- Left column: Receipt info -->
+                    <div class="col-md-6">
+                        <h5 class="fw-bold mb-3"><i class="fas fa-info-circle"></i> Receipt Information</h5>
+                        <table class="table table-bordered">
+                            <tr><th style="width:40%">Receipt Number</th><td>{{ receipt.receipt_number }}</td></tr>
+                            <tr><th>Customer</th><td>{{ receipt.customer_name|default:"Walk-in" }}</td></tr>
+                            <tr><th>Phone</th><td>{{ receipt.customer_phone|default:"N/A" }}</td></tr>
+                            <tr><th>Date & Time</th><td>{{ receipt.created_at|date:"d/m/Y H:i" }}</td></tr>
+                            <tr><th>Payment Method</th><td>{{ receipt.payment_method|title }}</td></tr>
+                            <tr><th>Status</th>
+                                <td>
+                                    {% if receipt.is_printed %}
+                                        <span class="badge bg-success">Printed</span>
+                                    {% else %}
+                                        <span class="badge bg-warning">Not Printed</span>
+                                    {% endif %}
+                                </td>
+                            </tr>
+                            <tr><th>Sold By</th><td>{{ receipt.created_by.username|default:"System" }}</td></tr>
+                        </table>
+                    </div>
+                    <!-- Right column: Payment summary -->
+                    <div class="col-md-6">
+                        <h5 class="fw-bold mb-3"><i class="fas fa-credit-card"></i> Payment Summary</h5>
+                        <table class="table table-bordered">
+                            <tr><th style="width:40%">Total Amount</th><td class="fw-bold">UGX {{ receipt.total_amount|floatformat:2 }}</td></tr>
+                            <tr><th>Amount Paid</th><td>UGX {{ receipt.amount_paid|floatformat:2 }}</td></tr>
+                            {% if receipt.change_due > 0 %}
+                            <tr><th>Change Due</th><td class="text-success fw-bold">UGX {{ receipt.change_due|floatformat:2 }}</td></tr>
+                            {% endif %}
+                        </table>
+                    </div>
+                </div>
+
+                <hr>
+
+                <!-- Items table -->
+                <h5 class="fw-bold mb-3"><i class="fas fa-list"></i> Items Purchased</h5>
+                <div class="table-responsive">
+                    <table class="table table-hover table-bordered">
+                        <thead>
+                            <tr>
+                                <th>#</th>
+                                <th>Drug Name</th>
+                                <th>Quantity</th>
+                                <th>Unit Price (UGX)</th>
+                                <th>Total (UGX)</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            {% if receipt.items %}
+                                {% for item in receipt.items %}
+                                <tr>
+                                    <td>{{ forloop.counter }}</td>
+                                    <td><strong>{{ item.drug_name }}</strong></td>
+                                    <td>{{ item.quantity }}</td>
+                                    <td>{{ item.unit_price|floatformat:2 }}</td>
+                                    <td>{{ item.total|floatformat:2 }}</td>
+                                </tr>
+                                {% endfor %}
+                            {% else %}
+                                <tr>
+                                    <td colspan="5" class="text-center text-muted">No items found for this receipt.</td>
+                                </tr>
+                            {% endif %}
+                        </tbody>
+                        <tfoot>
+                            <tr class="table-light">
+                                <th colspan="4" class="text-end">Total:</th>
+                                <th class="fw-bold">UGX {{ receipt.total_amount|floatformat:2 }}</th>
+                            </tr>
+                        </tfoot>
+                    </table>
+                </div>
+
+                <div class="mt-3">
+                    <a href="{% url 'stock:print_receipt' receipt.id %}" target="_blank" class="btn btn-outline-primary">
+                        <i class="fas fa-print"></i> Print Receipt
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
