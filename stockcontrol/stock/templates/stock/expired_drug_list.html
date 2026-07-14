@@ -1,59 +1,28 @@
 {% extends 'stock/base.html' %}
 {% load static %}
 
-{% block title %}Medicines List{% endblock %}
+{% block title %}Expired Drugs{% endblock %}
 
 {% block content %}
 <div class="row">
     <div class="col-12">
         <div class="card shadow">
             <div class="card-header d-flex justify-content-between align-items-center">
-                <h4><i class="fas fa-capsules"></i> Medicines List</h4>
+                <h4><i class="fas fa-clock text-danger"></i> Expired Drugs</h4>
                 <div>
-                    <a href="{% url 'stock:expired_drug_list' %}" class="btn btn-secondary me-2">
-                        <i class="fas fa-clock"></i> Expired Drugs
-                    </a>
-                    <a href="{% url 'stock:invoice_create' %}" class="btn btn-warning me-2">
-                        <i class="fas fa-file-invoice"></i> Add Invoice
-                    </a>
-                    <a href="{% url 'stock:add_stock_to_drug' %}" class="btn btn-info me-2">
-                        <i class="fas fa-boxes"></i> Add Existing Drug
-                    </a>
-                    <a href="{% url 'stock:drug_create' %}" class="btn btn-primary">
-                        <i class="fas fa-plus-circle"></i> Add New Drug
+                    <a href="{% url 'stock:drug_list' %}" class="btn btn-secondary">
+                        <i class="fas fa-arrow-left"></i> Back to Medicines
                     </a>
                 </div>
             </div>
             <div class="card-body">
 
-                <!-- ===== SUMMARY CARDS ===== -->
-                <div class="row mb-4">
-                    <div class="col-md-6">
-                        <div class="card bg-light border-primary">
-                            <div class="card-body text-center">
-                                <h6 class="text-muted">Total Cost Value</h6>
-                                <h3 class="text-primary">UGX {{ total_cost_value|floatformat:2 }}</h3>
-                                <small class="text-muted">(cost_price × stock_quantity)</small>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="card bg-light border-success">
-                            <div class="card-body text-center">
-                                <h6 class="text-muted">Total Selling Value</h6>
-                                <h3 class="text-success">UGX {{ total_selling_value|floatformat:2 }}</h3>
-                                <small class="text-muted">(selling_price × stock_quantity)</small>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Search -->
+                <!-- Search (optional) -->
                 <div class="row mb-3">
                     <div class="col-md-6">
                         <form method="GET" class="d-flex">
                             <input type="text" name="search" class="form-control me-2"
-                                   placeholder="Search medicines..." value="{{ search_query }}">
+                                   placeholder="Search expired drugs..." value="{{ search_query }}">
                             <button type="submit" class="btn btn-primary">
                                 <i class="fas fa-search"></i>
                             </button>
@@ -61,7 +30,7 @@
                     </div>
                     <div class="col-md-6 text-end">
                         <span class="text-muted">
-                            Showing {{ drugs.start_index }} – {{ drugs.end_index }} of {{ drugs.paginator.count }} drugs
+                            Showing {{ expired_drugs.start_index }} – {{ expired_drugs.end_index }} of {{ expired_drugs.paginator.count }} expired drugs
                         </span>
                     </div>
                 </div>
@@ -84,30 +53,21 @@
                             </tr>
                         </thead>
                         <tbody>
-                            {% for drug in drugs %}
+                            {% for drug in expired_drugs %}
                             <tr>
-                                <td>{{ forloop.counter|add:drugs.start_index|add:"-1" }}</td>
+                                <td>{{ forloop.counter|add:expired_drugs.start_index|add:"-1" }}</td>
                                 <td>{{ drug.generic_name|default:drug.name }}</td>
                                 <td>{{ drug.brand|default:'-' }}</td>
                                 <td>{{ drug.get_dosage_display|default:'-' }}</td>
                                 <td>{{ drug.pack_size }}</td>
                                 <td>
-                                    <a href="{% url 'stock:add_stock_to_drug' %}?drug_id={{ drug.id }}"
-                                       class="badge {% if drug.is_low_stock %}bg-danger{% else %}bg-success{% endif %}"
-                                       style="text-decoration: none; color: white; cursor: pointer;">
-                                        {{ drug.stock_quantity }}
-                                    </a>
+                                    <span class="badge bg-secondary">{{ drug.stock_quantity }}</span>
                                 </td>
                                 <td>UGX {{ drug.cost_price|floatformat:2 }}</td>
                                 <td>UGX {{ drug.selling_price|floatformat:2 }}</td>
-                                <td>
-                                    {% if drug.expiry_date %}
-                                        <span class="{% if drug.is_expired %}text-danger{% endif %}">
-                                            {{ drug.expiry_date|date:'d/m/Y' }}
-                                        </span>
-                                    {% else %}
-                                        -
-                                    {% endif %}
+                                <td class="text-danger">
+                                    <strong>{{ drug.expiry_date|date:'d/m/Y' }}</strong>
+                                    <span class="badge bg-danger">Expired</span>
                                 </td>
                                 <td>
                                     <a href="{% url 'stock:drug_edit' drug.id %}" class="btn btn-sm btn-warning">
@@ -143,7 +103,7 @@
                             </div>
                             {% empty %}
                             <tr>
-                                <td colspan="10" class="text-center">No active medicines found.</td>
+                                <td colspan="10" class="text-center">No expired drugs found.</td>
                             </tr>
                             {% endfor %}
                         </tbody>
@@ -151,17 +111,17 @@
                 </div>
 
                 <!-- ===== PAGINATION ===== -->
-                {% if drugs.has_other_pages %}
+                {% if expired_drugs.has_other_pages %}
                 <nav aria-label="Page navigation">
                     <ul class="pagination justify-content-center">
-                        {% if drugs.has_previous %}
+                        {% if expired_drugs.has_previous %}
                             <li class="page-item">
-                                <a class="page-link" href="?page=1{% if search_query %}&search={{ search_query }}{% endif %}{% if selected_category %}&category={{ selected_category }}{% endif %}">
+                                <a class="page-link" href="?page=1{% if search_query %}&search={{ search_query }}{% endif %}">
                                     &laquo; First
                                 </a>
                             </li>
                             <li class="page-item">
-                                <a class="page-link" href="?page={{ drugs.previous_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if selected_category %}&category={{ selected_category }}{% endif %}">
+                                <a class="page-link" href="?page={{ expired_drugs.previous_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}">
                                     Previous
                                 </a>
                             </li>
@@ -170,26 +130,26 @@
                             <li class="page-item disabled"><span class="page-link">Previous</span></li>
                         {% endif %}
 
-                        {% for num in drugs.paginator.page_range %}
-                            {% if drugs.number == num %}
+                        {% for num in expired_drugs.paginator.page_range %}
+                            {% if expired_drugs.number == num %}
                                 <li class="page-item active"><span class="page-link">{{ num }}</span></li>
-                            {% elif num > drugs.number|add:'-3' and num < drugs.number|add:'3' %}
+                            {% elif num > expired_drugs.number|add:'-3' and num < expired_drugs.number|add:'3' %}
                                 <li class="page-item">
-                                    <a class="page-link" href="?page={{ num }}{% if search_query %}&search={{ search_query }}{% endif %}{% if selected_category %}&category={{ selected_category }}{% endif %}">
+                                    <a class="page-link" href="?page={{ num }}{% if search_query %}&search={{ search_query }}{% endif %}">
                                         {{ num }}
                                     </a>
                                 </li>
                             {% endif %}
                         {% endfor %}
 
-                        {% if drugs.has_next %}
+                        {% if expired_drugs.has_next %}
                             <li class="page-item">
-                                <a class="page-link" href="?page={{ drugs.next_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}{% if selected_category %}&category={{ selected_category }}{% endif %}">
+                                <a class="page-link" href="?page={{ expired_drugs.next_page_number }}{% if search_query %}&search={{ search_query }}{% endif %}">
                                     Next
                                 </a>
                             </li>
                             <li class="page-item">
-                                <a class="page-link" href="?page={{ drugs.paginator.num_pages }}{% if search_query %}&search={{ search_query }}{% endif %}{% if selected_category %}&category={{ selected_category }}{% endif %}">
+                                <a class="page-link" href="?page={{ expired_drugs.paginator.num_pages }}{% if search_query %}&search={{ search_query }}{% endif %}">
                                     Last &raquo;
                                 </a>
                             </li>

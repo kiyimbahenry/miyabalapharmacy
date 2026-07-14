@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <meta name="csrf-token" content="{{ csrf_token }}">
     <title>Pharmacy Dashboard</title>
-    <!-- Font Awesome for icons -->
+    <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
     <style>
     * {
@@ -23,7 +23,6 @@
         margin: 0 auto;
     }
 
-    /* ===== HEADER - KEEP EXACTLY AS IS ===== */
     .header {
         background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
         color: white;
@@ -40,7 +39,6 @@
         font-size: 16px;
     }
 
-    /* ===== NAVIGATION - KEEP EXACTLY AS IS ===== */
     .nav {
         background: white;
         padding: 15px 20px;
@@ -67,8 +65,15 @@
         background: #667eea;
         color: white;
     }
+    .nav a.expired-link {
+        color: #e53e3e;
+        border: 1px solid #e53e3e;
+    }
+    .nav a.expired-link:hover {
+        background: #e53e3e;
+        color: white;
+    }
 
-    /* ===== STATISTICS - KEEP EXACTLY AS IS ===== */
     .stats {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -98,7 +103,6 @@
     .stat-card .number.danger { color: #fc8181; }
     .stat-card .number.info { color: #4299e1; }
 
-    /* ===== RECENT INVENTORY - KEEP EXACTLY AS IS ===== */
     .content {
         background: white;
         padding: 20px;
@@ -139,10 +143,6 @@
     .badge-success { background: #c6f6d5; color: #22543d; }
     .badge-warning { background: #feebc8; color: #7b341e; }
     .badge-danger { background: #fed7d7; color: #742a2a; }
-
-    /* ============================================================
-       DASHBOARD FEATURES
-       ============================================================ */
 
     .dashboard-features {
         display: flex;
@@ -426,7 +426,6 @@
         margin-bottom: 10px;
     }
 
-    /* Toast */
     .toast {
         position: fixed;
         bottom: 30px;
@@ -451,7 +450,6 @@
         to { transform: translateY(0); opacity: 1; }
     }
 
-    /* Receipt Panel */
     .receipt-panel {
         background: white;
         padding: 20px;
@@ -493,6 +491,48 @@
         color: #718096;
         text-transform: uppercase;
         margin-top: 4px;
+    }
+
+    /* Pagination */
+    .pagination-wrapper {
+        margin-top: 20px;
+        display: flex;
+        justify-content: center;
+        gap: 5px;
+        flex-wrap: wrap;
+    }
+    .pagination-wrapper button {
+        padding: 6px 14px;
+        border: 1px solid #e2e8f0;
+        background: white;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: 0.2s;
+        font-size: 14px;
+        font-weight: 500;
+        color: #2d3748;
+    }
+    .pagination-wrapper button:hover {
+        background: #ebf4ff;
+        border-color: #667eea;
+        color: #667eea;
+    }
+    .pagination-wrapper button.active {
+        background: #667eea;
+        border-color: #667eea;
+        color: white;
+    }
+    .pagination-wrapper button:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+        background: #f7fafc;
+    }
+    .pagination-wrapper .page-info {
+        padding: 6px 14px;
+        color: #718096;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
     }
 
     /* Responsive */
@@ -541,21 +581,21 @@
 <body>
 <div class="container">
 
-    <!-- ===== HEADER - KEEP EXACTLY AS IS ===== -->
     <div class="header">
         <h1>MIYABALA Pharmacy</h1>
         <p>Welcome to your pharmacy management dashboard</p>
     </div>
 
-    <!-- ===== NAVIGATION - KEEP EXACTLY AS IS ===== -->
+    <!-- ===== NAVIGATION ===== -->
     <div class="nav">
         <a href="{% url 'stock:dashboard' %}" class="active">Dashboard</a>
         <a href="{% url 'stock:drug_list' %}">Medicines</a>
+        <a href="{% url 'stock:expired_drug_list' %}" class="expired-link">Expired Drugs</a>
         <a href="{% url 'stock:patient_list' %}">Chronic Patients</a>
         <a href="/admin/">Admin Panel</a>
     </div>
 
-    <!-- ===== STATISTICS - KEEP EXACTLY AS IS ===== -->
+    <!-- ===== STATISTICS ===== -->
     <div class="stats">
         <div class="stat-card">
             <h3>Total Medicines</h3>
@@ -575,7 +615,7 @@
         </div>
     </div>
 
-    <!-- ===== RECENT INVENTORY - KEEP EXACTLY AS IS ===== -->
+    <!-- ===== RECENT INVENTORY ===== -->
     <div class="content">
         <h2>Recent Inventory</h2>
         {% if recent_medicines %}
@@ -619,7 +659,7 @@
          ============================================================ -->
     <div class="dashboard-features">
 
-        <!-- LEFT SIDEBAR - UPDATED WITH FULL NAVIGATION -->
+        <!-- LEFT SIDEBAR -->
         <div class="sidebar-nav">
             <div class="nav-item active" data-section="retail">
                 <i class="fas fa-store"></i> Retail Sale
@@ -627,43 +667,36 @@
             <div class="nav-item" data-section="wholesale">
                 <i class="fas fa-warehouse"></i> Whole Sale
             </div>
-            <!-- Medicines Link -->
             <a href="{% url 'stock:drug_list' %}" class="nav-item" style="text-decoration:none; color:inherit;">
                 <i class="fas fa-capsules"></i> Medicines
             </a>
-            <!-- Chronic Patients Link -->
+            <a href="{% url 'stock:expired_drug_list' %}" class="nav-item" style="text-decoration:none; color:inherit;">
+                <i class="fas fa-clock text-warning"></i> Expired Drugs
+            </a>
             <a href="{% url 'stock:patient_list' %}" class="nav-item" style="text-decoration:none; color:inherit;">
                 <i class="fas fa-heartbeat"></i> Chronic Patients
             </a>
-            <!-- Suppliers Link -->
             <a href="{% url 'stock:supplier_list' %}" class="nav-item" style="text-decoration:none; color:inherit;">
                 <i class="fas fa-truck"></i> Suppliers
             </a>
-            <!-- Invoices Link -->
             <a href="{% url 'stock:invoice_list' %}" class="nav-item" style="text-decoration:none; color:inherit;">
                 <i class="fas fa-file-invoice"></i> Invoices
             </a>
-            <!-- Receipts Link -->
             <a href="{% url 'stock:receipt_list' %}" class="nav-item" style="text-decoration:none; color:inherit;">
                 <i class="fas fa-receipt"></i> Receipts
             </a>
-            <!-- New Sale Link -->
             <a href="{% url 'stock:create_sale' %}" class="nav-item" style="text-decoration:none; color:inherit;">
                 <i class="fas fa-cash-register"></i> New Sale
             </a>
-            <!-- Reports Link -->
             <a href="{% url 'stock:reports_dashboard' %}" class="nav-item" style="text-decoration:none; color:inherit;">
                 <i class="fas fa-chart-bar"></i> Reports
             </a>
-            <!-- Users Link (Admin only) -->
             {% if user.is_superuser %}
             <a href="{% url 'stock:user_list' %}" class="nav-item" style="text-decoration:none; color:inherit;">
                 <i class="fas fa-users"></i> Users
             </a>
             {% endif %}
-            <!-- Divider -->
             <div style="border-top: 1px solid #e2e8f0; margin: 5px 15px;"></div>
-            <!-- Logout -->
             <a href="{% url 'stock:logout' %}" class="nav-item" style="text-decoration:none; color:inherit;">
                 <i class="fas fa-sign-out-alt"></i> Logout
             </a>
@@ -672,9 +705,9 @@
         <!-- MAIN CONTENT -->
         <div class="features-content">
 
-            <!-- Drug List Panel -->
+            <!-- Drug List Panel with Pagination -->
             <div id="drugListPanel" class="drug-list-panel">
-                <h3><i class="fas fa-clock"></i> Shortest Expiry Drugs (Top 10)</h3>
+                <h3><i class="fas fa-clock"></i> Shortest Expiry Drugs <span id="drugCount" style="font-weight:normal; font-size:14px; color:#718096;"></span></h3>
 
                 <div id="loadingMessage" class="loading">
                     <i class="fas fa-spinner fa-spin"></i>
@@ -696,6 +729,7 @@
                         <tbody id="drugTableBody">
                         </tbody>
                     </table>
+                    <div id="paginationControls" class="pagination-wrapper"></div>
                 </div>
             </div>
 
@@ -734,29 +768,42 @@ let drugData = [];
 let selectedDrug = null;
 let saleQuantity = 1;
 let paymentMethod = 'cash';
+let currentPage = 1;
+let totalPages = 1;
 
 // ============================================================
-//  FETCH DRUGS FROM DJANGO API
+//  FETCH DRUGS FROM DJANGO API (PAGINATED)
 // ============================================================
-async function fetchDrugs() {
+async function fetchDrugs(page = 1) {
+    const loading = document.getElementById('loadingMessage');
+    const container = document.getElementById('drugTableContainer');
+    loading.style.display = 'block';
+    container.style.display = 'none';
+
     try {
-        const response = await fetch('/api/drugs/');
+        const response = await fetch(`/api/drugs/?page=${page}`);
         if (!response.ok) {
             const errorData = await response.json();
             throw new Error(errorData.message || 'Failed to fetch drugs');
         }
-        drugData = await response.json();
+        const result = await response.json();
 
-        document.getElementById('loadingMessage').style.display = 'none';
-        document.getElementById('drugTableContainer').style.display = 'block';
+        drugData = result.data;
+        currentPage = result.page;
+        totalPages = result.total_pages;
+
+        loading.style.display = 'none';
+        container.style.display = 'block';
 
         renderTable();
+        renderPagination();
+        document.getElementById('drugCount').textContent = `(Page ${currentPage} of ${totalPages})`;
     } catch (error) {
         console.error('Error fetching drugs:', error);
-        document.getElementById('loadingMessage').innerHTML = `
+        loading.innerHTML = `
             <i class="fas fa-exclamation-circle" style="color:#fc8181; font-size:30px;"></i>
             <p style="margin-top:10px; color:#742a2a;">Error loading drugs: ${error.message}</p>
-            <button onclick="fetchDrugs()" style="margin-top:10px; padding:8px 16px; background:#667eea;color:white; border:none; border-radius:5px; cursor:pointer;">
+            <button onclick="fetchDrugs(1)" style="margin-top:10px; padding:8px 16px; background:#667eea;color:white; border:none; border-radius:5px; cursor:pointer;">
                 <i class="fas fa-redo"></i> Retry
             </button>
         `;
@@ -806,7 +853,41 @@ function renderTable() {
 }
 
 // ============================================================
-//  SALE PANEL LOGIC
+//  RENDER PAGINATION
+// ============================================================
+function renderPagination() {
+    const wrapper = document.getElementById('paginationControls');
+    if (!wrapper) return;
+
+    if (totalPages <= 1) {
+        wrapper.innerHTML = '';
+        return;
+    }
+
+    let html = '';
+    // Previous button
+    html += `<button onclick="fetchDrugs(${currentPage - 1})" ${currentPage <= 1 ? 'disabled' : ''}>
+        <i class="fas fa-chevron-left"></i> Prev
+    </button>`;
+
+    // Page numbers
+    const startPage = Math.max(1, currentPage - 2);
+    const endPage = Math.min(totalPages, currentPage + 2);
+    for (let i = startPage; i <= endPage; i++) {
+        html += `<button class="${i === currentPage ? 'active' : ''}" onclick="fetchDrugs(${i})">${i}</button>`;
+    }
+
+    // Next button
+    html += `<button onclick="fetchDrugs(${currentPage + 1})" ${currentPage >= totalPages ? 'disabled' : ''}>
+        Next <i class="fas fa-chevron-right"></i>
+    </button>`;
+
+    html += `<span class="page-info">Page ${currentPage} of ${totalPages}</span>`;
+    wrapper.innerHTML = html;
+}
+
+// ============================================================
+//  SALE PANEL LOGIC (unchanged)
 // ============================================================
 function openSale(drugId) {
     const drug = drugData.find(d => d.id === drugId);
@@ -964,7 +1045,7 @@ async function updateStock() {
         const data = await response.json();
 
         if (data.success) {
-            await fetchDrugs();
+            await fetchDrugs(currentPage);
             selectedDrug = null;
             renderSalePanel();
             loadReceipts();
@@ -1078,7 +1159,7 @@ function showToast(message, type = 'success') {
 //  SIDEBAR NAVIGATION
 // ============================================================
 document.addEventListener('DOMContentLoaded', function() {
-    fetchDrugs();
+    fetchDrugs(1);
 
     document.querySelectorAll('.sidebar-nav .nav-item:not(a)').forEach(item => {
         item.addEventListener('click', function() {
@@ -1096,7 +1177,7 @@ document.addEventListener('DOMContentLoaded', function() {
             } else if (section === 'retail') {
                 drugPanel.style.display = 'block';
                 receiptsPanel.style.display = 'none';
-                fetchDrugs();
+                fetchDrugs(1);
             } else {
                 drugPanel.style.display = 'block';
                 receiptsPanel.style.display = 'none';

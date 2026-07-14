@@ -191,13 +191,18 @@
                         </li>
 
                         <!-- ======================================== -->
-                        <!-- Medicines – visible only to admin/manager -->
+                        <!-- Medicines & Expired – admin/manager only -->
                         <!-- ======================================== -->
                         {% with user_groups=user.groups.all|join:',' %}
                             {% if user.is_superuser or 'admin' in user_groups or 'manager' in user_groups %}
                                 <li class="nav-item">
-                                    <a class="nav-link {% if 'drug' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'stock:drug_list' %}">
+                                    <a class="nav-link {% if 'drug' in request.resolver_match.url_name and 'expired' not in request.resolver_match.url_name %}active{% endif %}" href="{% url 'stock:drug_list' %}">
                                         <i class="fas fa-capsules"></i> Medicines
+                                    </a>
+                                </li>
+                                <li class="nav-item">
+                                    <a class="nav-link {% if 'expired_drug' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'stock:expired_drug_list' %}">
+                                        <i class="fas fa-clock text-warning"></i> Expired Drugs
                                     </a>
                                 </li>
                             {% endif %}

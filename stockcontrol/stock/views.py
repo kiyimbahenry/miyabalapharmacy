@@ -3,11 +3,12 @@ from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth import login, authenticate, logout
 from django.contrib import messages
 from django.http import JsonResponse
-from django.db.models import Sum, F, ExpressionWrapper, DecimalField
+from django.db.models import Sum, F, ExpressionWrapper, DecimalField, Q
 from django.contrib.auth.models import User
 from django.utils import timezone
 from django.core.exceptions import ValidationError
 from django.core.mail import send_mail
+from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.conf import settings
 from django.template.loader import render_to_string
 from django.views.decorators.http import require_POST
@@ -338,22 +339,70 @@ def complete_sale(request):
         }, status=500)
 
 
+@login_required
+def get_drugs_api(request):
+    """API for dashboard short expiry with pagination."""
+    try:
+        today = timezone.now().date()
+        drugs_qs = Drug.objects.filter(
+            Q(expiry_date__isnull=True) | Q(expiry_date__gte=today)
+        ).order_by('expiry_date')
+
+        page = request.GET.get('page', 1)
+        paginator = Paginator(drugs_qs, 10)
+        try:
+            drugs_page = paginator.page(page)
+        except (PageNotAnInteger, EmptyPage):
+            drugs_page = paginator.page(1)
+
+        data = []
+        for drug in drugs_page:
+            data.append({
+                'id': drug.id,
+                'generic': drug.generic_name if drug.generic_name else drug.name,
+                'brand': drug.brand if drug.brand else 'N/A',
+                'strength': getattr(drug, 'strength', 'N/A'),
+                'expiry': drug.expiry_date.strftime('%Y-%m-%d') if drug.expiry_date else 'N/A',
+                'qty': drug.stock_quantity,
+                'price': float(drug.selling_price) if drug.selling_price else 0,
+                'batch_no': drug.batch_no if drug.batch_no else 'N/A',
+            })
+
+        return JsonResponse({
+            'data': data,
+            'page': drugs_page.number,
+            'total_pages': paginator.num_pages,
+            'has_next': drugs_page.has_next(),
+            'has_previous': drugs_page.has_previous(),
+        }, safe=False)
+
+    except Exception as e:
+        return JsonResponse({'error': str(e), 'message': 'Error fetching drugs data'}, status=500)
+
+
 # ============================================================
 # DRUG (MEDICINE) VIEWS
 # ============================================================
 
 @login_required
 def drug_list(request):
-    """List all drugs/medicines with summary totals"""
-    drugs = Drug.objects.all().select_related('category', 'supplier')
+    """List all drugs/medicines with summary totals, exclude expired, paginated."""
+    today = timezone.now().date()
 
+    # Base queryset: exclude expired drugs (expiry_date < today) and order by generic_name
+    drugs_qs = Drug.objects.filter(
+        Q(expiry_date__isnull=True) | Q(expiry_date__gte=today)
+    ).select_related('category', 'supplier').order_by('generic_name')
+
+    # Filter by category
     category_id = request.GET.get('category')
     if category_id:
-        drugs = drugs.filter(category_id=category_id)
+        drugs_qs = drugs_qs.filter(category_id=category_id)
 
+    # Search
     search_query = request.GET.get('search')
     if search_query:
-        drugs = drugs.filter(
+        drugs_qs = drugs_qs.filter(
             Q(name__icontains=search_query) |
             Q(generic_name__icontains=search_query) |
             Q(brand__icontains=search_query) |
@@ -362,22 +411,30 @@ def drug_list(request):
 
     categories = Category.objects.all()
 
-    # ===== CORRECTED TOTAL CALCULATIONS =====
-    # Total cost value = cost per packet × (total tablets / pack size)  → number of packets
-    total_cost_value = Drug.objects.aggregate(
+    # ---- PAGINATION ----
+    paginator = Paginator(drugs_qs, 10)  # 10 per page
+    page = request.GET.get('page')
+    try:
+        drugs = paginator.page(page)
+    except PageNotAnInteger:
+        drugs = paginator.page(1)
+    except EmptyPage:
+        drugs = paginator.page(paginator.num_pages)
+
+    # ---- TOTALS (on the filtered queryset, not just the current page) ----
+    total_cost_value = drugs_qs.aggregate(
         total=Sum(ExpressionWrapper(
             F('cost_price') * F('stock_quantity') / F('pack_size'),
             output_field=DecimalField(max_digits=15, decimal_places=2)
         ))
     )['total'] or 0
 
-    # Total selling value = selling per tablet × total tablets (this was already correct)
-    total_selling_value = Drug.objects.aggregate(
+    total_selling_value = drugs_qs.aggregate(
         total=Sum(F('selling_price') * F('stock_quantity'))
     )['total'] or 0
 
     context = {
-        'drugs': drugs,
+        'drugs': drugs,               # paginated object
         'categories': categories,
         'search_query': search_query,
         'selected_category': category_id,
@@ -527,8 +584,8 @@ def drug_create(request):
 @require_POST
 def drug_create_ajax(request):
     """
-    AJAX endpoint to create a new drug from the invoice form modal
-    Now includes: category, batch_no, packets × pack_size = total_quantity
+    AJAX endpoint to create a new drug from the invoice form modal.
+    Validates that the expiry date is not in the past.
     """
     try:
         name = request.POST.get('name')
@@ -547,7 +604,7 @@ def drug_create_ajax(request):
         # Calculate total stock quantity: packets × pack size
         total_quantity = packets * pack_size
 
-        # Validation
+        # ---- Validation ----
         if not name:
             return JsonResponse({'success': False, 'error': 'Drug name is required.'})
         if not dosage:
@@ -560,6 +617,17 @@ def drug_create_ajax(request):
             return JsonResponse({'success': False, 'error': 'Pack size must be greater than 0.'})
         if packets <= 0:
             return JsonResponse({'success': False, 'error': 'Number of packets must be greater than 0.'})
+        if expiry_date:
+            # Check if expiry date is in the past
+            today = timezone.now().date()
+            try:
+                exp_date = datetime.strptime(expiry_date, '%Y-%m-%d').date()
+                if exp_date < today:
+                    return JsonResponse({'success': False, 'error': 'Expiry date cannot be in the past.'})
+            except ValueError:
+                return JsonResponse({'success': False, 'error': 'Invalid expiry date format.'})
+        else:
+            return JsonResponse({'success': False, 'error': 'Expiry date is required.'})
 
         # Create the drug
         drug = Drug.objects.create(
@@ -573,7 +641,7 @@ def drug_create_ajax(request):
             stock_quantity=total_quantity,  # Total = packets × pack_size
             supplier_id=supplier_id if supplier_id else None,
             category_id=category_id,
-            expiry_date=expiry_date if expiry_date else None,
+            expiry_date=expiry_date,
             batch_no=batch_no,
             created_by=request.user
         )
