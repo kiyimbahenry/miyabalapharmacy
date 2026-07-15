@@ -128,6 +128,9 @@ class Drug(models.Model):
             models.Index(fields=["name"]),
             models.Index(fields=["batch_no"]),
             models.Index(fields=["expiry_date"]),
+            # 🆕 Indexes for brand and generic_name to speed up searches
+            models.Index(fields=["brand"]),
+            models.Index(fields=["generic_name"]),
         ]
 
     def __str__(self):
@@ -185,7 +188,7 @@ class Invoice(models.Model):
     paid_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     payment_mode = models.CharField(max_length=10, choices=PAYMENT_MODE_CHOICES, default='cash')
-    
+
     # ✅ CHANGED: Removed 'notes' and added 'total_cost'
     total_cost = models.DecimalField(max_digits=12, decimal_places=2, default=0, help_text="Total cost of all items on this invoice")
 

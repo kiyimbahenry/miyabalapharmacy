@@ -186,6 +186,45 @@ def get_all_drugs_for_sale(request):
         return JsonResponse({'error': str(e)}, status=500)
 
 
+# ============================================================
+# NEW AUTOCOMPLETE API – searches across name, brand, generic
+# ============================================================
+
+@login_required
+def autocomplete_drugs(request):
+    """
+    API endpoint for drug autocomplete.
+    Searches across name, brand, and generic_name.
+    Used by the Add Stock form and any other autocomplete inputs.
+    """
+    query = request.GET.get('q', '').strip()
+    if len(query) < 2:
+        return JsonResponse([], safe=False)
+
+    drugs = Drug.objects.filter(
+        Q(name__icontains=query) |
+        Q(brand__icontains=query) |
+        Q(generic_name__icontains=query)
+    ).order_by('name')[:20]
+
+    data = [{
+        'id': d.id,
+        'name': d.name,
+        'brand': d.brand or '',
+        'generic_name': d.generic_name or '',
+        'stock_quantity': d.stock_quantity,
+        'pack_size': d.pack_size,
+        'cost_price': float(d.cost_price),
+        'selling_price': float(d.selling_price),
+    } for d in drugs]
+
+    return JsonResponse(data, safe=False)
+
+
+# ============================================================
+# COMPLETE SALE (unchanged)
+# ============================================================
+
 @login_required
 def complete_sale(request):
     """

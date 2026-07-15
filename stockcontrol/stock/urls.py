@@ -53,6 +53,7 @@ urlpatterns = [
     path('medicines/', views.drug_list, name='medicine_list'),
     path('drugs/expired/', views.expired_drug_list, name='expired_drug_list'),
     path('drugs/create/', views.drug_create, name='drug_create'),
+    path('autocomplete-drugs/', views.autocomplete_drugs, name='autocomplete_drugs'),
     path('add-stock-to-drug/', views.add_stock_to_drug, name='add_stock_to_drug'),
     path('drugs/<int:drug_id>/edit/', views.drug_edit, name='drug_edit'),
     path('drugs/<int:drug_id>/delete/', views.drug_delete, name='drug_delete'),
