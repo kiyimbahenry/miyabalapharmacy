@@ -127,7 +127,7 @@
     </div>
 </div>
 
-<!-- Modal: Add Existing Drug -->
+<!-- Modal: Add Existing Drug (UPDATED with searchable input) -->
 <div class="modal fade" id="addExistingDrugModal" tabindex="-1" aria-labelledby="addExistingDrugModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
@@ -141,13 +141,16 @@
                     <div class="row">
                         <div class="col-md-6">
                             <div class="form-group">
-                                <label for="existing_drug">Drug *</label>
-                                <select class="form-control" id="existing_drug" name="drug_id" required>
+                                <label for="existing_drug_search">Drug *</label>
+                                <input list="existing-drug-list" class="form-control" id="existing_drug_search" placeholder="Search by name or brand..." required autocomplete="off">
+                                <datalist id="existing-drug-list">
                                     <option value="">-- Select Drug --</option>
                                     {% for drug in drugs %}
-                                    <option value="{{ drug.id }}">{{ drug.name }}</option>
+                                        <option value="{{ drug.id }}" data-name="{{ drug.name }}">{{ drug.name }}</option>
                                     {% endfor %}
-                                </select>
+                                </datalist>
+                                <input type="hidden" id="selected_existing_drug_id" name="drug_id">
+                                <small class="form-text text-muted">Start typing to search for a drug.</small>
                             </div>
                         </div>
                         <div class="col-md-6">
@@ -206,7 +209,7 @@
     </div>
 </div>
 
-<!-- Modal: Add New Drug -->
+<!-- Modal: Add New Drug (unchanged) -->
 <div class="modal fade" id="newDrugModal" tabindex="-1" aria-labelledby="newDrugModalLabel" aria-hidden="true">
     <div class="modal-dialog modal-lg">
         <div class="modal-content">
@@ -413,10 +416,82 @@
             calculateExistingDrugSellingPrice();
         });
 
+        // ---- Drug search handling ----
+        var drugSearch = document.getElementById('existing_drug_search');
+        var drugHidden = document.getElementById('selected_existing_drug_id');
+        var drugList = document.getElementById('existing-drug-list');
+
+        if (drugSearch && drugHidden && drugList) {
+            // When the user selects from the datalist, the input value becomes the option's label.
+            // We use the 'change' event to set the hidden field with the corresponding ID.
+            drugSearch.addEventListener('change', function() {
+                var entered = this.value.trim();
+                var matchedOption = null;
+                for (var opt of drugList.options) {
+                    if (opt.text === entered) {
+                        matchedOption = opt;
+                        break;
+                    }
+                }
+                if (matchedOption) {
+                    drugHidden.value = matchedOption.value;
+                } else {
+                    drugHidden.value = '';
+                }
+            });
+
+            // On blur, try to find a match by partial text and set the input to the full name if found.
+            drugSearch.addEventListener('blur', function() {
+                var entered = this.value.trim();
+                if (entered === '') {
+                    drugHidden.value = '';
+                    return;
+                }
+                var matchedOption = null;
+                for (var opt of drugList.options) {
+                    if (opt.text.toLowerCase().includes(entered.toLowerCase())) {
+                        matchedOption = opt;
+                        break;
+                    }
+                }
+                if (matchedOption) {
+                    this.value = matchedOption.text;
+                    drugHidden.value = matchedOption.value;
+                }
+            });
+
+            // Clear hidden when input is cleared manually.
+            drugSearch.addEventListener('input', function() {
+                if (this.value === '') {
+                    drugHidden.value = '';
+                }
+            });
+        }
+
         // ---- Add to Invoice (from modal) ----
         $('#addDrugToInvoiceBtn').click(function() {
-            var drugId = $('#existing_drug').val();
-            var drugName = $('#existing_drug option:selected').text();
+            var drugId = $('#selected_existing_drug_id').val();
+            var drugName = $('#existing_drug_search').val();
+
+            // If hidden ID is empty but user typed a name, try to find by text
+            if (!drugId) {
+                var matchedOption = null;
+                var inputVal = drugName.trim();
+                if (inputVal) {
+                    var options = document.querySelectorAll('#existing-drug-list option');
+                    for (var opt of options) {
+                        if (opt.text === inputVal) {
+                            matchedOption = opt;
+                            break;
+                        }
+                    }
+                    if (matchedOption) {
+                        drugId = matchedOption.value;
+                        $('#selected_existing_drug_id').val(drugId);
+                    }
+                }
+            }
+
             var batchNo = $('#batch_no_modal').val();
             var packSize = parseInt($('#pack_size_modal').val()) || 1;
             var packets = parseInt($('#packets_modal').val()) || 1;
@@ -424,7 +499,7 @@
             var sellingPrice = parseFloat($('#selling_price_modal').val()) || 0;
 
             if (!drugId) {
-                $('#modalError').text('Please select a drug.').show();
+                $('#modalError').text('Please select a valid drug.').show();
                 return;
             }
             if (sellingPrice <= 0) {
@@ -439,12 +514,25 @@
             $('#modalError').hide();
 
             // Add the row using the helper
+            // We need the drug name for display. If we have the ID but name is empty, get it from the datalist.
+            if (!drugName) {
+                var options = document.querySelectorAll('#existing-drug-list option');
+                for (var opt of options) {
+                    if (opt.value === drugId) {
+                        drugName = opt.text;
+                        break;
+                    }
+                }
+                if (!drugName) drugName = 'Selected Drug';
+            }
             addDrugRow(drugId, drugName, batchNo, packSize, packets, sellingPrice);
 
             // Close modal and reset form
             $('#addExistingDrugModal').modal('hide');
             $('#addExistingDrugForm')[0].reset();
             calculateExistingDrugSellingPrice();
+            // Clear hidden field
+            $('#selected_existing_drug_id').val('');
         });
 
         // ---- Update total items count ----
@@ -518,7 +606,11 @@
                             .val(response.drug_id)
                             .text(response.drug_name);
                         $('.drug-select').append(newOption);
-                        $('#existing_drug').append(newOption.clone());
+                        // Also add to the datalist
+                        var newDataOption = $('<option></option>')
+                            .val(response.drug_id)
+                            .text(response.drug_name);
+                        $('#existing-drug-list').append(newDataOption);
 
                         // Read the modal values
                         var batchNo = $('#batch_no_new').val();
@@ -556,6 +648,7 @@
         $('#addExistingDrugModal').on('hidden.bs.modal', function() {
             $('#addExistingDrugForm')[0].reset();
             $('#modalError').hide();
+            $('#selected_existing_drug_id').val('');
         });
         $('#newDrugModal').on('hidden.bs.modal', function() {
             $('#newDrugForm')[0].reset();
