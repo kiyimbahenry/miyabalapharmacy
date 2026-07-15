@@ -1489,22 +1489,15 @@ def generate_report_data(report_type):
 
 
 def send_report_email(report_data, email, report_type):
-    """Send report via email – with fallback to console in DEBUG mode."""
+    """Send report via email (always tries to send)"""
     try:
         subject = f"Miyabala Pharmacy - {report_type.capitalize()} Report"
         html_message = render_to_string('stock/report_email.html', {
             'report_data': report_data,
             'report_type': report_type.capitalize(),
-            'site_url': 'https://miyabalapharmacy-2.onrender.com'  # Use your live Render URL
+            'site_url': 'https://miyabalapharmacy-2.onrender.com'
         })
 
-        # If in DEBUG mode, just print to console instead of sending
-        if settings.DEBUG:
-            print(f"📧 [DEBUG] Email would be sent to {email} with subject: {subject}")
-            print(f"📧 [DEBUG] HTML content preview: {html_message[:300]}...")
-            return True
-
-        # Send the email
         send_mail(
             subject,
             f"Please view the HTML version of this email.",
@@ -1517,9 +1510,6 @@ def send_report_email(report_data, email, report_type):
 
     except Exception as e:
         print(f"❌ Error sending email: {e}")
-        # In DEBUG, return True so the report still works (no error)
-        if settings.DEBUG:
-            return True
         return False
 
 
