@@ -1331,11 +1331,14 @@ def generate_report_api(request):
         report_type = data.get('report_type', 'daily')
         email = data.get('email', 'kiyimbahenry314@gmail.com')
 
+        # Generate report data
         report_data = generate_report_data(report_type)
 
+        # Send email (this will skip actual sending in DEBUG mode)
         success = send_report_email(report_data, email, report_type)
 
         if success:
+            # Save report to database
             report = Report.objects.create(
                 report_type=report_type,
                 data=report_data,
@@ -1356,7 +1359,16 @@ def generate_report_api(request):
             }, status=500)
 
     except Exception as e:
-        return JsonResponse({'success': False, 'message': str(e)}, status=500)
+        # In DEBUG mode, return detailed error
+        if settings.DEBUG:
+            import traceback
+            return JsonResponse({
+                'success': False,
+                'message': f'Error: {str(e)}',
+                'traceback': traceback.format_exc()
+            }, status=500)
+        else:
+            return JsonResponse({'success': False, 'message': str(e)}, status=500)
 
 
 # ============================================================
@@ -1477,15 +1489,22 @@ def generate_report_data(report_type):
 
 
 def send_report_email(report_data, email, report_type):
-    """Send report via email"""
+    """Send report via email – with fallback to console in DEBUG mode."""
     try:
         subject = f"Miyabala Pharmacy - {report_type.capitalize()} Report"
         html_message = render_to_string('stock/report_email.html', {
             'report_data': report_data,
             'report_type': report_type.capitalize(),
-            'site_url': 'http://127.0.0.1:8000'
+            'site_url': 'https://miyabalapharmacy-2.onrender.com'  # Use your live Render URL
         })
 
+        # If in DEBUG mode, just print to console instead of sending
+        if settings.DEBUG:
+            print(f"📧 [DEBUG] Email would be sent to {email} with subject: {subject}")
+            print(f"📧 [DEBUG] HTML content preview: {html_message[:300]}...")
+            return True
+
+        # Send the email
         send_mail(
             subject,
             f"Please view the HTML version of this email.",
@@ -1494,35 +1513,14 @@ def send_report_email(report_data, email, report_type):
             html_message=html_message,
             fail_silently=False,
         )
-
         return True
 
     except Exception as e:
-        print(f"Error sending email: {e}")
+        print(f"❌ Error sending email: {e}")
+        # In DEBUG, return True so the report still works (no error)
+        if settings.DEBUG:
+            return True
         return False
-
-
-def send_auto_reports():
-    """Automated function to send daily reports at midnight"""
-    try:
-        report_data = generate_report_data('daily')
-        success = send_report_email(report_data, 'kiyimbahenry314@gmail.com', 'daily')
-
-        if success:
-            admin_user = User.objects.filter(is_superuser=True).first()
-            Report.objects.create(
-                report_type='daily',
-                data=report_data,
-                generated_by=admin_user,
-                sent_to_email=True,
-                email_sent_at=timezone.now()
-            )
-            print(f"✅ Daily report sent successfully at {timezone.now()}")
-        else:
-            print(f"❌ Failed to send daily report at {timezone.now()}")
-
-    except Exception as e:
-        print(f"❌ Error sending auto report: {e}")
 
 
 # ============================================================
