@@ -3,7 +3,8 @@ from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth import login, authenticate, logout
 from django.contrib import messages
 from django.http import JsonResponse
-from django.db.models import Sum, F, ExpressionWrapper, DecimalField, Q
+from django.db.models import Count
+from django.db.models import Sum, F, ExpressionWrapper, DecimalField, Q, Count
 from django.contrib.auth.models import User
 from django.utils import timezone
 from django.core.exceptions import ValidationError
