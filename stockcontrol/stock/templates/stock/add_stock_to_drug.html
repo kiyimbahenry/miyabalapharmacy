@@ -17,18 +17,17 @@
                     <div class="row">
                         <!-- Left Column -->
                         <div class="col-md-6">
-                            <div class="mb-3">
+                            <!-- DRUG SEARCH (AJAX) -->
+                            <div class="mb-3" style="position: relative;">
                                 <label class="form-label required-field">Search / Select Drug *</label>
-                                <input list="drug-list" id="drug_search" name="drug_search" class="form-control" placeholder="Type drug name, brand, or generic..." required autocomplete="off">
-                                <datalist id="drug-list">
-                                    <option value="">-- Select Drug --</option>
-                                    {% for drug in drugs %}
-                                        <option value="{{ drug.id }}" data-name="{{ drug.name }}">
-                                            {{ drug.name }} ({{ drug.generic_name }}) – Stock: {{ drug.stock_quantity }}
-                                        </option>
-                                    {% endfor %}
-                                </datalist>
+                                <input type="text" 
+                                       id="drug_search" 
+                                       class="form-control" 
+                                       placeholder="Type drug name, brand, or generic..." 
+                                       autocomplete="off" 
+                                       required>
                                 <input type="hidden" id="selected_drug_id" name="drug_id">
+                                <div id="suggestions" style="position: absolute; top: 100%; left: 0; right: 0; background: white; border: 1px solid #ddd; border-radius: 4px; max-height: 250px; overflow-y: auto; z-index: 1000; display: none; box-shadow: 0 4px 8px rgba(0,0,0,0.1);"></div>
                                 <small class="text-muted">Start typing to search – select from suggestions.</small>
                             </div>
 
@@ -40,12 +39,12 @@
 
                             <div class="mb-3">
                                 <label class="form-label required-field">Cost Price (UGX per packet)</label>
-                                <input type="number" step="0.01" name="cost_price" class="form-control" required>
+                                <input type="number" step="0.01" name="cost_price" id="cost_price" class="form-control" required>
                             </div>
 
                             <div class="mb-3">
                                 <label class="form-label required-field">Selling Price (UGX per tablet)</label>
-                                <input type="number" step="0.01" name="selling_price" class="form-control" required>
+                                <input type="number" step="0.01" name="selling_price" id="selling_price" class="form-control" required>
                                 <small class="text-muted">Price per tablet/unit</small>
                             </div>
                         </div>
@@ -77,11 +76,11 @@
 
                             <div class="mb-3">
                                 <label class="form-label required-field">Pack Size (units per packet)</label>
-                                <input type="number" name="pack_size" class="form-control" value="1" min="1" required>
+                                <input type="number" name="pack_size" id="pack_size" class="form-control" value="1" min="1" required>
                                 <small class="text-muted">Tablets/units per packet</small>
                             </div>
 
-                            <!-- Supplier will be auto-filled from invoice -->
+                            <!-- Supplier auto‑fill -->
                             <div class="mb-3">
                                 <label class="form-label">Supplier (auto-filled from invoice)</label>
                                 <input type="text" id="supplier_display" class="form-control" readonly style="background: #f5f5f5;">
@@ -106,110 +105,191 @@
     </div>
 </div>
 
+<!-- ====== JAVASCRIPT ====== -->
 <script>
-    document.addEventListener('DOMContentLoaded', function() {
-        // ---- Auto-fill supplier ----
-        const invoiceSelect = document.querySelector('select[name="invoice_id"]');
-        const supplierDisplay = document.getElementById('supplier_display');
+document.addEventListener('DOMContentLoaded', function() {
+    // ---- Supplier auto‑fill ----
+    const invoiceSelect = document.querySelector('select[name="invoice_id"]');
+    const supplierDisplay = document.getElementById('supplier_display');
 
-        // Store supplier name in data attribute on each option
-        const invoiceOptions = invoiceSelect.options;
-        for (let i = 0; i < invoiceOptions.length; i++) {
-            const opt = invoiceOptions[i];
-            const text = opt.textContent;
-            // Extract supplier name from text: "INV-001 – SupplierName (date)"
-            const parts = text.split(' – ');
-            if (parts.length > 1) {
-                const supplierPart = parts[1].split(' (')[0];
-                opt.dataset.supplier = supplierPart.trim();
-            }
+    // Store supplier name in data attribute on each option
+    const invoiceOptions = invoiceSelect.options;
+    for (let i = 0; i < invoiceOptions.length; i++) {
+        const opt = invoiceOptions[i];
+        const text = opt.textContent;
+        const parts = text.split(' – ');
+        if (parts.length > 1) {
+            const supplierPart = parts[1].split(' (')[0];
+            opt.dataset.supplier = supplierPart.trim();
         }
+    }
 
-        invoiceSelect.addEventListener('change', function() {
-            const selectedOption = this.options[this.selectedIndex];
-            const supplierName = selectedOption.dataset.supplier || '';
-            supplierDisplay.value = supplierName;
-        });
-
-        // Trigger on page load if an invoice is pre-selected
-        if (invoiceSelect.value) {
-            invoiceSelect.dispatchEvent(new Event('change'));
-        }
-
-        // ---- Drug search with datalist ----
-        const drugSearch = document.getElementById('drug_search');
-        const drugHidden = document.getElementById('selected_drug_id');
-        const drugList = document.getElementById('drug-list');
-
-        // When the user selects from the datalist, the input value becomes the option's label (the displayed text).
-        // But we want the hidden field to get the corresponding ID.
-        // We'll use the 'change' event to look up the option by its label.
-        drugSearch.addEventListener('change', function() {
-            const entered = this.value.trim();
-            // Try to match by exact label (the option's text)
-            let matchedOption = null;
-            for (let opt of drugList.options) {
-                if (opt.text === entered) {
-                    matchedOption = opt;
-                    break;
-                }
-            }
-            if (matchedOption) {
-                const id = matchedOption.value;
-                drugHidden.value = id;
-                // Also update the input to the clean label (without extra info)
-                // but keep the user's selection.
-            } else {
-                // Not found – maybe the user typed a partial name. We'll keep the hidden empty.
-                drugHidden.value = '';
-                // Optionally, show a warning
-                // alert('Please select a valid drug from the suggestions.');
-            }
-        });
-
-        // When the user types but doesn't select from the list, the 'change' event might not fire.
-        // We also capture 'blur' to set the hidden field if a match is found.
-        drugSearch.addEventListener('blur', function() {
-            const entered = this.value.trim();
-            // Try to find a match (case‑insensitive, partial match)
-            let matchedOption = null;
-            for (let opt of drugList.options) {
-                if (opt.text.toLowerCase().includes(entered.toLowerCase())) {
-                    matchedOption = opt;
-                    break;
-                }
-            }
-            if (matchedOption && matchedOption.value) {
-                // If we found a match, set the input to the full label and set the hidden ID.
-                this.value = matchedOption.text;
-                drugHidden.value = matchedOption.value;
-            } else if (entered === '') {
-                // If empty, clear hidden
-                drugHidden.value = '';
-            } else {
-                // Keep the typed text, but warn the user
-                // Not necessary to show a warning; we'll just keep hidden empty.
-                drugHidden.value = '';
-            }
-        });
-
-        // ---- Form validation: ensure a drug is selected ----
-        const form = document.querySelector('form');
-        form.addEventListener('submit', function(e) {
-            const drugId = drugHidden.value;
-            if (!drugId) {
-                e.preventDefault();
-                alert('Please select a valid drug from the suggestions.');
-                drugSearch.focus();
-            }
-        });
-
-        // Optional: if the user clears the input, clear the hidden field.
-        drugSearch.addEventListener('input', function() {
-            if (this.value === '') {
-                drugHidden.value = '';
-            }
-        });
+    invoiceSelect.addEventListener('change', function() {
+        const selectedOption = this.options[this.selectedIndex];
+        const supplierName = selectedOption.dataset.supplier || '';
+        supplierDisplay.value = supplierName;
     });
+
+    // Trigger on page load if an invoice is pre‑selected
+    if (invoiceSelect.value) {
+        invoiceSelect.dispatchEvent(new Event('change'));
+    }
+
+    // ---- AJAX Autocomplete ----
+    const searchInput = document.getElementById('drug_search');
+    const suggestionsDiv = document.getElementById('suggestions');
+    const hiddenDrugId = document.getElementById('selected_drug_id');
+
+    // Debounce function
+    function debounce(func, wait) {
+        let timeout;
+        return function executedFunction(...args) {
+            const later = () => {
+                clearTimeout(timeout);
+                func(...args);
+            };
+            clearTimeout(timeout);
+            timeout = setTimeout(later, wait);
+        };
+    }
+
+    function performSearch() {
+        const query = searchInput.value.trim();
+        if (query.length < 2) {
+            suggestionsDiv.innerHTML = '';
+            suggestionsDiv.style.display = 'none';
+            return;
+        }
+
+        fetch(`/autocomplete-drugs/?q=${encodeURIComponent(query)}`)
+            .then(response => response.json())
+            .then(drugs => {
+                if (drugs.length === 0) {
+                    suggestionsDiv.innerHTML = '<div class="suggestion-item" style="padding:10px;color:#999;">No drugs found</div>';
+                    suggestionsDiv.style.display = 'block';
+                    return;
+                }
+
+                let html = '';
+                drugs.forEach(drug => {
+                    const displayName = drug.brand || drug.name;
+                    const generic = drug.generic_name || 'N/A';
+                    const stock = drug.stock_quantity || 0;
+                    html += `
+                        <div class="suggestion-item" 
+                             data-id="${drug.id}"
+                             data-name="${drug.name}"
+                             data-generic="${drug.generic_name}"
+                             data-brand="${drug.brand}"
+                             data-packsize="${drug.pack_size}"
+                             data-costprice="${drug.cost_price}"
+                             data-sellingprice="${drug.selling_price}"
+                             onclick="selectDrug(${drug.id}, '${displayName}', ${drug.pack_size}, ${drug.selling_price})"
+                             style="padding:10px 15px;cursor:pointer;border-bottom:1px solid #f0f0f0;transition:background 0.2s;">
+                            <div style="font-weight:500;">
+                                ${displayName}
+                                ${drug.brand ? '<span style="background:#007bff;color:white;padding:2px 8px;border-radius:12px;font-size:0.7rem;margin-left:8px;">BRAND</span>' : ''}
+                            </div>
+                            <div style="font-size:0.85rem;color:#666;">Generic: ${generic}</div>
+                            <div style="font-size:0.8rem;color:#999;">Stock: ${stock} units</div>
+                        </div>
+                    `;
+                });
+                suggestionsDiv.innerHTML = html;
+                suggestionsDiv.style.display = 'block';
+            })
+            .catch(err => {
+                console.error('Autocomplete error:', err);
+            });
+    }
+
+    const debouncedSearch = debounce(performSearch, 300);
+    searchInput.addEventListener('input', debouncedSearch);
+
+    // Hide suggestions on outside click
+    document.addEventListener('click', function(e) {
+        if (!e.target.closest('#drug_search') && !e.target.closest('#suggestions')) {
+            suggestionsDiv.style.display = 'none';
+        }
+    });
+
+    // Close on Escape
+    searchInput.addEventListener('keydown', function(e) {
+        if (e.key === 'Escape') {
+            suggestionsDiv.style.display = 'none';
+        }
+    });
+
+    // ---- Auto‑calculate selling price ----
+    const costPriceInput = document.getElementById('cost_price');
+    const packSizeInput = document.getElementById('pack_size');
+    const sellingPriceInput = document.getElementById('selling_price');
+
+    // Default markup percentage (can be changed later)
+    const MARKUP = 1.5;  // 50% markup
+
+    function autoCalculateSelling() {
+        const cost = parseFloat(costPriceInput.value);
+        const pack = parseInt(packSizeInput.value);
+        if (!isNaN(cost) && !isNaN(pack) && pack > 0) {
+            // selling price per tablet = (cost per packet * MARKUP) / pack size
+            const calculated = (cost * MARKUP) / pack;
+            sellingPriceInput.value = calculated.toFixed(2);
+        }
+    }
+
+    // Trigger calculation when cost price or pack size changes
+    costPriceInput.addEventListener('input', autoCalculateSelling);
+    packSizeInput.addEventListener('input', autoCalculateSelling);
+
+    // Also recalc when a drug is selected (it may have its own selling price)
+    window.selectDrug = function(id, displayName, packSize, sellingPrice) {
+        hiddenDrugId.value = id;
+        searchInput.value = displayName;
+        suggestionsDiv.innerHTML = '';
+        suggestionsDiv.style.display = 'none';
+
+        // Optionally pre‑fill pack size and selling price from the selected drug
+        if (packSize && packSize > 0) {
+            packSizeInput.value = packSize;
+        }
+        if (sellingPrice && sellingPrice > 0) {
+            sellingPriceInput.value = sellingPrice;
+        }
+        // Re‑trigger auto‑calc if cost price changes later
+    };
+
+    // ---- Form validation ----
+    const form = document.querySelector('form');
+    form.addEventListener('submit', function(e) {
+        const drugId = hiddenDrugId.value;
+        if (!drugId) {
+            e.preventDefault();
+            alert('Please select a valid drug from the suggestions.');
+            searchInput.focus();
+        }
+    });
+
+    // Clear hidden field if user manually clears the input
+    searchInput.addEventListener('input', function() {
+        if (this.value === '') {
+            hiddenDrugId.value = '';
+        }
+    });
+});
 </script>
+
+<!-- ====== STYLES (inline for suggestions) ====== -->
+<style>
+    #suggestions .suggestion-item:hover {
+        background: #f5f5f5;
+    }
+    #suggestions .suggestion-item:last-child {
+        border-bottom: none;
+    }
+    .required-field::after {
+        content: " *";
+        color: red;
+    }
+</style>
 {% endblock %}
