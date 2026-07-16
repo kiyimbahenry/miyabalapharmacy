@@ -887,19 +887,46 @@ def drug_edit(request, drug_id):
 @login_required
 @user_passes_test(is_admin_or_manager)
 def drug_delete(request, drug_id):
-    """Delete a drug/medicine"""
+    """Delete a drug and all its related records, updating invoice totals."""
     drug = get_object_or_404(Drug, id=drug_id)
 
     if request.method == 'POST':
         try:
+            from django.db.models import Sum
+
+            # ---- 1. Delete all InvoiceItems linked to this drug ----
+            invoice_items = InvoiceItem.objects.filter(drug=drug)
+            invoices_to_update = set()
+            for item in invoice_items:
+                invoices_to_update.add(item.invoice)
+                item.delete()  # delete the invoice item
+
+            # Update each invoice's total_amount and total_items
+            for invoice in invoices_to_update:
+                invoice.total_amount = invoice.items.aggregate(Sum('total'))['total__sum'] or 0
+                invoice.total_items = invoice.items.count()
+                invoice.save()
+
+            # ---- 2. Delete other related records ----
+            SaleItem.objects.filter(drug=drug).delete()
+            StockMovement.objects.filter(drug=drug).delete()
+            PatientMedication.objects.filter(drug=drug).delete()
+            ReturnedDrug.objects.filter(drug=drug).delete()
+
+            # ---- 3. Finally delete the drug itself ----
             drug_name = drug.name
             drug.delete()
-            messages.success(request, f'Drug "{drug_name}" deleted successfully!')
+
+            messages.success(request, f'Drug "{drug_name}" and all related records deleted successfully!')
             return redirect('stock:drug_list')
 
         except Exception as e:
             messages.error(request, f'Error deleting drug: {str(e)}')
+            import traceback
+            traceback.print_exc()
+            return redirect('stock:drug_list')
 
+    # GET request – show confirmation page
     return render(request, 'stock/drug_confirm_delete.html', {'drug': drug})
 
 
