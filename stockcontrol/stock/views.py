@@ -36,31 +36,19 @@ def is_admin_or_manager(user):
     return user.groups.filter(name__in=['admin', 'manager']).exists()
 
 
-import traceback
-from django.http import JsonResponse
-from django.conf import settings
-from django.core.mail import get_connection
-from django.contrib.auth.decorators import login_required
-
 @login_required
 def test_smtp(request):
-    """
-    Test SMTP connection – returns connection status and settings.
-    """
     try:
         connection = get_connection()
         connection.open()
         connection.close()
-
         return JsonResponse({
             "success": True,
-            "message": "SMTP connection successful!",
             "host": settings.EMAIL_HOST,
             "port": settings.EMAIL_PORT,
             "user": settings.EMAIL_HOST_USER,
             "use_tls": settings.EMAIL_USE_TLS,
         })
-
     except Exception as e:
         return JsonResponse({
             "success": False,
@@ -1592,27 +1580,28 @@ def generate_report_data(report_type):
 
 
 def send_report_email(report_data, email, report_type):
-    """Send report via email (always tries to send)"""
     try:
-        subject = f"Miyabala Pharmacy - {report_type.capitalize()} Report"
-        html_message = render_to_string('stock/report_email.html', {
-            'report_data': report_data,
-            'report_type': report_type.capitalize(),
-            'site_url': 'https://miyabalapharmacy-2.onrender.com'
-        })
+        print("===== EMAIL SETTINGS =====")
+        print("HOST:", settings.EMAIL_HOST)
+        print("PORT:", settings.EMAIL_PORT)
+        print("TLS:", settings.EMAIL_USE_TLS)
+        print("USER:", settings.EMAIL_HOST_USER)
+        print("PASSWORD SET:", bool(settings.EMAIL_HOST_PASSWORD))
+        print("==========================")
 
         send_mail(
-            subject,
-            f"Please view the HTML version of this email.",
-            settings.DEFAULT_FROM_EMAIL or 'noreply@miyabalapharmacy.com',
+            "SMTP Test",   # you can change this to a meaningful subject
+            "This is a test.",
+            settings.DEFAULT_FROM_EMAIL,
             [email],
-            html_message=html_message,
             fail_silently=False,
         )
+
+        print("✅ Email sent")
         return True
 
-    except Exception as e:
-        print(f"❌ Error sending email: {e}")
+    except Exception:
+        traceback.print_exc()
         return False
 
 
