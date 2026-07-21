@@ -1339,8 +1339,9 @@ def return_create(request):
 
 @login_required
 def reports_dashboard(request):
-    """Main reports dashboard"""
+    """Main reports dashboard with today, yesterday, weekly, monthly, annual"""
     today = timezone.now().date()
+    yesterday = today - timedelta(days=1)
     week_start = today - timedelta(days=today.weekday())
     month_start = today.replace(day=1)
     year_start = today.replace(month=1, day=1)
@@ -1348,6 +1349,11 @@ def reports_dashboard(request):
     daily_receipts = Receipt.objects.filter(created_at__date=today)
     daily_total = daily_receipts.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
     daily_count = daily_receipts.count()
+
+    # Yesterday
+    yesterday_receipts = Receipt.objects.filter(created_at__date=yesterday)
+    yesterday_total = yesterday_receipts.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
+    yesterday_count = yesterday_receipts.count()
 
     weekly_receipts = Receipt.objects.filter(created_at__date__gte=week_start, created_at__date__lte=today)
     weekly_total = weekly_receipts.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
@@ -1393,6 +1399,8 @@ def reports_dashboard(request):
     context = {
         'daily_total': daily_total,
         'daily_count': daily_count,
+        'yesterday_total': yesterday_total,
+        'yesterday_count': yesterday_count,
         'weekly_total': weekly_total,
         'weekly_count': weekly_count,
         'monthly_total': monthly_total,
@@ -1404,6 +1412,7 @@ def reports_dashboard(request):
         'payment_breakdown': payment_breakdown,
         'top_selling': top_selling,
         'today': today,
+        'yesterday': yesterday,
         'week_start': week_start,
         'month_start': month_start,
         'year_start': year_start,

@@ -33,10 +33,11 @@
         margin-bottom: 10px;
     }
     .report-stat.daily .icon { color: #4299e1; }
+    .report-stat.yesterday .icon { color: #9f7aea; }      /* new colour for yesterday */
     .report-stat.weekly .icon { color: #48bb78; }
     .report-stat.monthly .icon { color: #ed8936; }
     .report-stat.annual .icon { color: #9f7aea; }
-    
+
     .report-card {
         background: white;
         padding: 20px;
@@ -119,34 +120,41 @@
     </div>
 </div>
 
-<!-- Report Stats -->
+<!-- Report Stats – 5 columns: Today, Yesterday, Weekly, Monthly, Annual -->
 <div class="row">
-    <div class="col-md-3">
+    <div class="col-md-2 col-sm-4 col-6">
         <div class="report-stat daily">
             <div class="icon"><i class="fas fa-calendar-day"></i></div>
             <div class="number">UGX {{ daily_total|floatformat:0 }}</div>
-            <div class="label">Daily Sales ({{ daily_count }} transactions)</div>
+            <div class="label">Today ({{ daily_count }} txns)</div>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-md-2 col-sm-4 col-6">
+        <div class="report-stat yesterday">
+            <div class="icon"><i class="fas fa-calendar-minus"></i></div>
+            <div class="number">UGX {{ yesterday_total|floatformat:0 }}</div>
+            <div class="label">Yesterday ({{ yesterday_count }} txns)</div>
+        </div>
+    </div>
+    <div class="col-md-2 col-sm-4 col-6">
         <div class="report-stat weekly">
             <div class="icon"><i class="fas fa-calendar-week"></i></div>
             <div class="number">UGX {{ weekly_total|floatformat:0 }}</div>
-            <div class="label">Weekly Sales ({{ weekly_count }} transactions)</div>
+            <div class="label">Weekly ({{ weekly_count }} txns)</div>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-md-2 col-sm-4 col-6">
         <div class="report-stat monthly">
             <div class="icon"><i class="fas fa-calendar-alt"></i></div>
             <div class="number">UGX {{ monthly_total|floatformat:0 }}</div>
-            <div class="label">Monthly Sales ({{ monthly_count }} transactions)</div>
+            <div class="label">Monthly ({{ monthly_count }} txns)</div>
         </div>
     </div>
-    <div class="col-md-3">
+    <div class="col-md-2 col-sm-4 col-6">
         <div class="report-stat annual">
             <div class="icon"><i class="fas fa-calendar"></i></div>
             <div class="number">UGX {{ annual_total|floatformat:0 }}</div>
-            <div class="label">Annual Sales ({{ annual_count }} transactions)</div>
+            <div class="label">Annual ({{ annual_count }} txns)</div>
         </div>
     </div>
 </div>
@@ -330,15 +338,15 @@
 function sendReport(type) {
     const buttons = document.querySelectorAll('.btn-email');
     const statusDiv = document.getElementById('emailStatus');
-    
+
     buttons.forEach(btn => {
         btn.disabled = true;
         btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
     });
-    
+
     statusDiv.className = 'email-status';
     statusDiv.style.display = 'none';
-    
+
     fetch('{% url "stock:generate_report_api" %}', {
         method: 'POST',
         headers: {
@@ -356,7 +364,7 @@ function sendReport(type) {
             btn.disabled = false;
             btn.innerHTML = '<i class="fas fa-envelope"></i> Send ' + type.charAt(0).toUpperCase() + type.slice(1) + ' Report';
         });
-        
+
         if (data.success) {
             statusDiv.className = 'email-status success';
             statusDiv.innerHTML = '<i class="fas fa-check-circle"></i> ' + data.message;
@@ -366,7 +374,7 @@ function sendReport(type) {
             statusDiv.innerHTML = '<i class="fas fa-exclamation-circle"></i> ' + data.message;
             statusDiv.style.display = 'block';
         }
-        
+
         setTimeout(() => {
             statusDiv.style.display = 'none';
         }, 8000);
@@ -376,7 +384,7 @@ function sendReport(type) {
             btn.disabled = false;
             btn.innerHTML = '<i class="fas fa-envelope"></i> Send ' + type.charAt(0).toUpperCase() + type.slice(1) + ' Report';
         });
-        
+
         statusDiv.className = 'email-status error';
         statusDiv.innerHTML = '<i class="fas fa-exclamation-circle"></i> Error sending report: ' + error;
         statusDiv.style.display = 'block';
