@@ -36,6 +36,41 @@ def is_admin_or_manager(user):
     return user.groups.filter(name__in=['admin', 'manager']).exists()
 
 
+from django.http import JsonResponse
+from django.conf import settings
+from django.core.mail import get_connection
+
+@login_required
+def test_smtp(request):
+    """
+    Test SMTP connection – returns connection status and settings.
+    Only accessible to logged‑in users.
+    """
+    try:
+        connection = get_connection()
+        connection.open()
+        connection.close()
+
+        return JsonResponse({
+            "success": True,
+            "message": "SMTP connection successful!",
+            "host": settings.EMAIL_HOST,
+            "port": settings.EMAIL_PORT,
+            "user": settings.EMAIL_HOST_USER,
+            "use_tls": settings.EMAIL_USE_TLS,
+        })
+
+    except Exception as e:
+        return JsonResponse({
+            "success": False,
+            "error": str(e),
+            "host": settings.EMAIL_HOST,
+            "port": settings.EMAIL_PORT,
+            "user": settings.EMAIL_HOST_USER,
+            "use_tls": settings.EMAIL_USE_TLS,
+        })
+
+
 # ============================================================
 # AUTHENTICATION VIEWS
 # ============================================================
