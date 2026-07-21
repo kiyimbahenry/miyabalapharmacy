@@ -1582,26 +1582,21 @@ def generate_report_data(report_type):
 
 def send_report_email(report_data, email, report_type):
     try:
-        print("===== EMAIL SETTINGS =====")
-        print("HOST:", settings.EMAIL_HOST)
-        print("PORT:", settings.EMAIL_PORT)
-        print("TLS:", settings.EMAIL_USE_TLS)
-        print("USER:", settings.EMAIL_HOST_USER)
-        print("PASSWORD SET:", bool(settings.EMAIL_HOST_PASSWORD))
-        print("==========================")
+        print("ABOUT TO SEND EMAIL TO:", email)
 
         send_mail(
-            "SMTP Test",   # you can change this to a meaningful subject
-            "This is a test.",
-            settings.DEFAULT_FROM_EMAIL,
+            f"{report_type} Report",
+            "This is a test report from Pharm-Tally.",
+            settings.EMAIL_HOST_USER,
             [email],
             fail_silently=False,
         )
 
-        print("✅ Email sent")
+        print("✅ EMAIL SENT SUCCESSFULLY")
         return True
 
-    except Exception:
+    except Exception as e:
+        print("❌ EMAIL ERROR:", e)
         traceback.print_exc()
         return False
 
