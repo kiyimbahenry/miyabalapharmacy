@@ -1582,21 +1582,52 @@ def generate_report_data(report_type):
 
 def send_report_email(report_data, email, report_type):
     try:
+        print("===== EMAIL SETTINGS =====")
+        print("HOST:", settings.EMAIL_HOST)
+        print("PORT:", settings.EMAIL_PORT)
+        print("TLS:", settings.EMAIL_USE_TLS)
+        print("USER:", settings.EMAIL_HOST_USER)
+        print("PASSWORD SET:", bool(settings.EMAIL_HOST_PASSWORD))
+        print("==========================")
+
         print("ABOUT TO SEND EMAIL TO:", email)
 
+        # Create SMTP connection with timeout
+        connection = get_connection(
+            host=settings.EMAIL_HOST,
+            port=settings.EMAIL_PORT,
+            username=settings.EMAIL_HOST_USER,
+            password=settings.EMAIL_HOST_PASSWORD,
+            use_tls=settings.EMAIL_USE_TLS,
+            timeout=10,
+        )
+
+        subject = f"{report_type} Report - Pharm-Tally"
+
+        message = f"""
+Pharm-Tally Report
+
+Report Type: {report_type}
+
+{report_data}
+
+This report was generated automatically.
+"""
+
         send_mail(
-            f"{report_type} Report",
-            "This is a test report from Pharm-Tally.",
+            subject,
+            message,
             settings.EMAIL_HOST_USER,
             [email],
             fail_silently=False,
+            connection=connection,
         )
 
         print("✅ EMAIL SENT SUCCESSFULLY")
         return True
 
     except Exception as e:
-        print("❌ EMAIL ERROR:", e)
+        print("❌ EMAIL ERROR:", str(e))
         traceback.print_exc()
         return False
 

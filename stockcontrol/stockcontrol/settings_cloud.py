@@ -100,7 +100,9 @@ EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = "b2b92c001@smtp-brevo.com"
 EMAIL_HOST_PASSWORD = "bsk3b2wjdrQVisF"
-DEFAULT_FROM_EMAIL = "kiyimbahenry314@gmail.com"
+DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
+
+EMAIL_TIMEOUT = 10
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
