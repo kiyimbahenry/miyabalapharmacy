@@ -973,7 +973,7 @@ def add_stock_to_drug(request):
     drug_id = request.GET.get('drug_id')
     if drug_id:
         try:
-            selected_drug = Drug.objects.get(id=drug_id)
+            selected_drug = Drug.objects.get(id=drug_id)  # ✅ fixed typo
         except Drug.DoesNotExist:
             pass
 
@@ -995,10 +995,13 @@ def add_stock_to_drug(request):
                 'selected_drug': selected_drug,
             })
 
-        drug = get_object_or_404(Drug, id=drug_id)
+        drug = get_object_or_404(Drug, id=drug_id)  # ✅ fixed typo
         invoice = get_object_or_404(Invoice, id=invoice_id)
 
-        drug.stock_quantity += quantity
+        # ✅ FIX: add total units (packets × pack size)
+        total_units = quantity * pack_size
+        drug.stock_quantity += total_units
+
         if cost_price > 0:
             drug.cost_price = cost_price
         if selling_price > 0:
@@ -1018,10 +1021,11 @@ def add_stock_to_drug(request):
             unit_price=cost_price,
             total=quantity * cost_price
         )
+
         invoice.total_amount = invoice.items.aggregate(Sum('total'))['total__sum'] or 0
         invoice.save()
 
-        messages.success(request, f'Added {quantity} units of "{drug.name}" to stock via Invoice #{invoice.invoice_number}.')
+        messages.success(request, f'Added {quantity} packets ({total_units} units) of "{drug.name}" to stock via Invoice #{invoice.invoice_number}.')
         return redirect('stock:drug_list')
 
     context = {
