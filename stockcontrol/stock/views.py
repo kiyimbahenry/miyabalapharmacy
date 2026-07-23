@@ -1862,12 +1862,12 @@ def send_report_email(report_data, email, report_type):
         # --- 7. Send email via Brevo with attachments (TWO RECIPIENTS) ---
         send_smtp_email = sib_api_v3_sdk.SendSmtpEmail(
             to=[
-                {"email": "kiyimbahenry314@gmail.com"},
-                {"email": "daveedaviyam@gmail.com"}
+                {"email": "kiyimbahenry314@gmail.com", "name": "Henry"},
+                {"email": "daveedaviyam@gmail.com", "name": "David"}
             ],
             sender={
                 "name": "Miyabala Pharmacy",
-                "email": settings.DEFAULT_FROM_EMAIL or "kiyimbahenry314@gmail.com"
+                "email": "kiyimbahenry314@gmail.com"
             },
             subject=subject,
             html_content=html_content,

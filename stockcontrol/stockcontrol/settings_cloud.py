@@ -109,7 +109,7 @@ EMAIL_HOST_USER = "b2b92c001@smtp-brevo.com"
 # Read SMTP password from Render Environment Variables
 EMAIL_HOST_PASSWORD = os.environ.get("EMAIL_HOST_PASSWORD", "")
 
-DEFAULT_FROM_EMAIL = EMAIL_HOST_USER
+DEFAULT_FROM_EMAIL = "kiyimbahenry314@gmail.com"
 
 EMAIL_TIMEOUT = 20
 
