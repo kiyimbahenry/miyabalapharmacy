@@ -3,24 +3,29 @@ from django.contrib.auth.decorators import login_required, user_passes_test
 from django.contrib.auth import login, authenticate, logout
 from django.contrib import messages
 from django.http import JsonResponse
-from django.db.models import Count
-from django.db.models import Sum, F, ExpressionWrapper, DecimalField, Q, Count
+from django.db.models import Count, Sum, F, ExpressionWrapper, DecimalField, Q
 from django.contrib.auth.models import User
 from django.utils import timezone
 from django.core.exceptions import ValidationError
-from django.core.mail import send_mail
-from django.core.mail import get_connection
+from django.core.mail import send_mail, get_connection, EmailMessage
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.conf import settings
 from django.template.loader import render_to_string
 from django.views.decorators.http import require_POST
 import json
 import os
-import sib_api_v3_sdk
-from sib_api_v3_sdk.rest import ApiException
+import base64
 import traceback
 from datetime import datetime, timedelta
 from decimal import Decimal
+
+# Brevo / Sendinblue
+import sib_api_v3_sdk
+from sib_api_v3_sdk.rest import ApiException
+
+# Your utils
+from .utils.invoice_pdf import get_invoices_zip, get_invoices_zip_range
+from .utils.report_generator import generate_report_pdf
 
 # ===== IMPORTS =====
 from .models import (
@@ -1598,6 +1603,13 @@ def generate_report_data(report_type):
 
 def send_report_email(report_data, email, report_type):
     try:
+        import base64
+        from datetime import datetime, timedelta
+        from django.utils import timezone
+        from .utils.invoice_pdf import get_invoices_zip, get_invoices_zip_range
+        from .utils.report_generator import generate_daily_report_pdf
+        from stock.models import Invoice
+
         print("===== BREVO API EMAIL =====")
         print("Recipient:", email)
         print("Report Type:", report_type)
@@ -1610,39 +1622,270 @@ def send_report_email(report_data, email, report_type):
             sib_api_v3_sdk.ApiClient(configuration)
         )
 
-        subject = f"{report_type} Report - Pharm-Tally"
+        # Determine report date based on type
+        if report_type == 'daily':
+            report_date = timezone.now().date()
+            start_date = report_date
+            end_date = report_date
+        elif report_type == 'weekly':
+            end_date = timezone.now().date()
+            start_date = end_date - timedelta(days=7)
+            report_date = end_date
+        elif report_type == 'monthly':
+            end_date = timezone.now().date()
+            start_date = end_date.replace(day=1)
+            report_date = end_date
+        elif report_type == 'annual':
+            end_date = timezone.now().date()
+            start_date = end_date.replace(month=1, day=1)
+            report_date = end_date
+        else:
+            report_date = timezone.now().date()
+            start_date = report_date
+            end_date = report_date
 
+        # Get sales data from report_data
+        sales = report_data.get("sales", {})
+        invoices_data = report_data.get("invoices", {})
+        payment_breakdown = report_data.get("payment_breakdown", [])
+        top_products = report_data.get("top_products", [])
+        period = report_data.get("period", f"{report_type.capitalize()} Report")
+        generated_at = report_data.get("generated_at", timezone.now().strftime('%Y-%m-%d %H:%M:%S'))
+
+        # --- 1. Generate PDF Report ---
+        pdf_buffer = generate_daily_report_pdf(report_date)
+        pdf_encoded = base64.b64encode(pdf_buffer.getvalue()).decode('utf-8')
+
+        # --- 2. Generate ZIP of all invoices ---
+        if report_type == 'daily':
+            zip_buffer = get_invoices_zip(report_date)
+        else:
+            invoices_qs = Invoice.objects.filter(
+                invoice_date__gte=start_date, 
+                invoice_date__lte=end_date
+            )
+            zip_buffer = get_invoices_zip_range(invoices_qs)
+
+        zip_encoded = base64.b64encode(zip_buffer.getvalue()).decode('utf-8')
+
+        # --- 3. Build payment breakdown rows ---
+        payment_rows = ""
+        for method in payment_breakdown:
+            payment_rows += f"""
+            <tr>
+                <td>{method.get('method', 'Unknown')}</td>
+                <td>UGX {method.get('total', 0):,.0f}</td>
+                <td>{method.get('count', 0)}</td>
+            </tr>
+            """
+
+        # --- 4. Build top products rows ---
+        product_rows = ""
+        for i, product in enumerate(top_products[:10], 1):
+            product_rows += f"""
+            <tr>
+                <td>{i}</td>
+                <td>{product.get('name', 'Unknown')}</td>
+                <td>{product.get('quantity', 0)}</td>
+                <td>UGX {product.get('total', 0):,.0f}</td>
+            </tr>
+            """
+
+        # --- 5. Subject ---
+        subject = f"{report_type.capitalize()} Sales Report - Miyabala Pharmacy"
+
+        # --- 6. HTML Email Content ---
         html_content = f"""
         <html>
+        <head>
+        <style>
+            body {{
+                font-family: Arial, Helvetica, sans-serif;
+                background: #f4f6f9;
+                padding: 30px;
+            }}
+            .container {{
+                max-width: 700px;
+                margin: auto;
+                background: white;
+                border-radius: 10px;
+                overflow: hidden;
+                box-shadow: 0 0 10px rgba(0,0,0,.15);
+            }}
+            .header {{
+                background: #0b7d3b;
+                color: white;
+                text-align: center;
+                padding: 25px;
+            }}
+            .header h1 {{
+                margin: 0;
+            }}
+            .header h3 {{
+                margin-top: 8px;
+                font-weight: normal;
+            }}
+            .section {{
+                padding: 25px;
+            }}
+            table {{
+                width: 100%;
+                border-collapse: collapse;
+            }}
+            th {{
+                background: #0b7d3b;
+                color: white;
+                padding: 12px;
+                text-align: left;
+            }}
+            td {{
+                border: 1px solid #ddd;
+                padding: 12px;
+            }}
+            .footer {{
+                background: #f1f1f1;
+                text-align: center;
+                padding: 20px;
+                color: #666;
+                font-size: 14px;
+            }}
+            .attachments {{
+                background: #ebf8ff;
+                padding: 15px;
+                border-radius: 8px;
+                margin: 15px 0;
+                border-left: 4px solid #0b7d3b;
+            }}
+            .attachments ul {{
+                margin: 5px 0;
+                padding-left: 20px;
+            }}
+            .attachments li {{
+                margin: 3px 0;
+            }}
+        </style>
+        </head>
+
         <body>
-            <h2>Pharm-Tally Report</h2>
+        <div class="container">
 
-            <p>Hello,</p>
+            <div class="header">
+                <h1>🏥 MIYABALA PHARMACY</h1>
+                <h3>{report_type.capitalize()} Sales Report</h3>
+            </div>
 
-            <p>Your requested <strong>{report_type}</strong> report is below.</p>
+            <div class="section">
 
-            <pre>{report_data}</pre>
+                <p><strong>Report Period:</strong> {period}</p>
+                <p><strong>Generated:</strong> {generated_at}</p>
 
-            <br>
+                <table>
+                    <tr>
+                        <th>Description</th>
+                        <th>Value</th>
+                    </tr>
+                    <tr>
+                        <td>Total Sales</td>
+                        <td>UGX {sales.get('total_amount', 0):,.0f}</td>
+                    </tr>
+                    <tr>
+                        <td>Net Sales</td>
+                        <td>UGX {sales.get('net_sales', 0):,.0f}</td>
+                    </tr>
+                    <tr>
+                        <td>Total Returns</td>
+                        <td>UGX {sales.get('total_returns', 0):,.0f}</td>
+                    </tr>
+                    <tr>
+                        <td>Total Transactions</td>
+                        <td>{sales.get('total_transactions', 0)}</td>
+                    </tr>
+                    <tr>
+                        <td>Total Medicines Sold</td>
+                        <td>{sales.get('total_items_sold', 0)}</td>
+                    </tr>
+                    <tr>
+                        <td>Total Invoices</td>
+                        <td>{invoices_data.get('total_invoices', 0)}</td>
+                    </tr>
+                    <tr>
+                        <td>Average Transaction</td>
+                        <td>UGX {sales.get('average_transaction', 0):,.0f}</td>
+                    </tr>
+                </table>
 
-            <p>This email was generated automatically by Pharm-Tally.</p>
+                <!-- Payment Breakdown -->
+                <h3 style="margin-top: 30px;">💳 Payment Breakdown</h3>
+                <table>
+                    <tr>
+                        <th>Method</th>
+                        <th>Amount</th>
+                        <th>Transactions</th>
+                    </tr>
+                    {payment_rows}
+                    </table>
+
+                <!-- Top Products -->
+                <h3 style="margin-top: 30px;">🏆 Top Selling Products</h3>
+                <table>
+                    <tr>
+                        <th>#</th>
+                        <th>Product</th>
+                        <th>Quantity</th>
+                        <th>Total</th>
+                    </tr>
+                    {product_rows}
+                </table>
+
+                <!-- Attachments -->
+                <div class="attachments">
+                    <h3>📎 Attachments</h3>
+                    <ul>
+                        <li><strong>📄 Daily_Report_{report_date.strftime('%Y-%m-%d')}.pdf</strong> – Full report with all details</li>
+                        <li><strong>📦 Invoices_{report_date.strftime('%Y-%m-%d')}.zip</strong> – All purchase invoices</li>
+                    </ul>
+                </div>
+
+            </div>
+
+            <div class="footer">
+                <b>Miyabala Pharmacy Stock Management System</b>
+                <br><br>
+                This report was generated automatically.
+            </div>
+
+        </div>
         </body>
         </html>
         """
 
+        # --- 7. Send email via Brevo with attachments (TWO RECIPIENTS) ---
         send_smtp_email = sib_api_v3_sdk.SendSmtpEmail(
-            to=[{"email": email}],
+            to=[
+                {"email": "kiyimbahenry314@gmail.com"},
+                {"email": "daveedaviyam@gmail.com"}
+            ],
             sender={
-                "name": "Pharm-Tally",
-                "email": "kiyimbahenry314@gmail.com"
+                "name": "Miyabala Pharmacy",
+                "email": settings.DEFAULT_FROM_EMAIL or "kiyimbahenry314@gmail.com"
             },
             subject=subject,
-            html_content=html_content
+            html_content=html_content,
+            attachment=[
+                {
+                    "content": pdf_encoded,
+                    "name": f"Daily_Report_{report_date.strftime('%Y-%m-%d')}.pdf"
+                },
+                {
+                    "content": zip_encoded,
+                    "name": f"Invoices_{report_date.strftime('%Y-%m-%d')}.zip"
+                }
+            ]
         )
 
         response = api_instance.send_transac_email(send_smtp_email)
 
-        print("✅ EMAIL SENT SUCCESSFULLY")
+        print("✅ EMAIL SENT SUCCESSFULLY via Brevo!")
         print(response)
 
         return True
