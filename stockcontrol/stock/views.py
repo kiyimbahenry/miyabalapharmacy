@@ -25,7 +25,7 @@ from sib_api_v3_sdk.rest import ApiException
 
 # Your utils
 from .utils.invoice_pdf import get_invoices_zip, get_invoices_zip_range
-from .utils.report_generator import generate_report_pdf
+from .utils.report_generator import generate_daily_report_pdf, generate_comprehensive_report_pdf
 
 # ===== IMPORTS =====
 from .models import (
@@ -1653,7 +1653,7 @@ def send_report_email(report_data, email, report_type):
         generated_at = report_data.get("generated_at", timezone.now().strftime('%Y-%m-%d %H:%M:%S'))
 
         # --- 1. Generate PDF Report ---
-        pdf_buffer = generate_daily_report_pdf(report_date)
+        pdf_buffer = generate_comprehensive_report_pdf(report_date)
         pdf_encoded = base64.b64encode(pdf_buffer.getvalue()).decode('utf-8')
 
         # --- 2. Generate ZIP of all invoices ---
