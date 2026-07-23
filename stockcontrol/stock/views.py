@@ -15,6 +15,9 @@ from django.conf import settings
 from django.template.loader import render_to_string
 from django.views.decorators.http import require_POST
 import json
+import os
+import sib_api_v3_sdk
+from sib_api_v3_sdk.rest import ApiException
 import traceback
 from datetime import datetime, timedelta
 from decimal import Decimal
@@ -1595,52 +1598,63 @@ def generate_report_data(report_type):
 
 def send_report_email(report_data, email, report_type):
     try:
-        print("===== EMAIL SETTINGS =====")
-        print("HOST:", settings.EMAIL_HOST)
-        print("PORT:", settings.EMAIL_PORT)
-        print("TLS:", settings.EMAIL_USE_TLS)
-        print("USER:", settings.EMAIL_HOST_USER)
-        print("PASSWORD SET:", bool(settings.EMAIL_HOST_PASSWORD))
-        print("==========================")
+        print("===== BREVO API EMAIL =====")
+        print("Recipient:", email)
+        print("Report Type:", report_type)
 
-        print("ABOUT TO SEND EMAIL TO:", email)
+        # Configure Brevo API
+        configuration = sib_api_v3_sdk.Configuration()
+        configuration.api_key['api-key'] = os.environ.get("BREVO_API_KEY")
 
-        # Create SMTP connection with timeout
-        connection = get_connection(
-            host=settings.EMAIL_HOST,
-            port=settings.EMAIL_PORT,
-            username=settings.EMAIL_HOST_USER,
-            password=settings.EMAIL_HOST_PASSWORD,
-            use_tls=settings.EMAIL_USE_TLS,
-            timeout=10,
+        api_instance = sib_api_v3_sdk.TransactionalEmailsApi(
+            sib_api_v3_sdk.ApiClient(configuration)
         )
 
         subject = f"{report_type} Report - Pharm-Tally"
 
-        message = f"""
-Pharm-Tally Report
+        html_content = f"""
+        <html>
+        <body>
+            <h2>Pharm-Tally Report</h2>
 
-Report Type: {report_type}
+            <p>Hello,</p>
 
-{report_data}
+            <p>Your requested <strong>{report_type}</strong> report is below.</p>
 
-This report was generated automatically.
-"""
+            <pre>{report_data}</pre>
 
-        send_mail(
-            subject,
-            message,
-            settings.EMAIL_HOST_USER,
-            [email],
-            fail_silently=False,
-            connection=connection,
+            <br>
+
+            <p>This email was generated automatically by Pharm-Tally.</p>
+        </body>
+        </html>
+        """
+
+        send_smtp_email = sib_api_v3_sdk.SendSmtpEmail(
+            to=[{"email": email}],
+            sender={
+                "name": "Pharm-Tally",
+                "email": "kiyimbahenry314@gmail.com"
+            },
+            subject=subject,
+            html_content=html_content
         )
 
+        response = api_instance.send_transac_email(send_smtp_email)
+
         print("✅ EMAIL SENT SUCCESSFULLY")
+        print(response)
+
         return True
 
+    except ApiException as e:
+        print("❌ BREVO API ERROR")
+        print(e.body)
+        return False
+
     except Exception as e:
-        print("❌ EMAIL ERROR:", str(e))
+        print("❌ GENERAL ERROR")
+        print(str(e))
         traceback.print_exc()
         return False
 
