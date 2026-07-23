@@ -109,6 +109,7 @@ urlpatterns = [
     # ============================================================
     path('reports/', views.reports_dashboard, name='reports_dashboard'),
     path('api/generate-report/', views.generate_report_api, name='generate_report_api'),
+    path('run-daily-report/', views.run_daily_report, name='run_daily_report'),
 
     # ============================================================
     # API URLs

@@ -12,6 +12,8 @@ from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.conf import settings
 from django.template.loader import render_to_string
 from django.views.decorators.http import require_POST
+from django.views.decorators.csrf import csrf_exempt
+from django.core.management import call_command
 import json
 import os
 import base64
@@ -43,6 +45,18 @@ def is_admin_or_manager(user):
     if user.is_superuser:
         return True
     return user.groups.filter(name__in=['admin', 'manager']).exists()
+
+@csrf_exempt
+def run_daily_report(request):
+    """Endpoint to trigger daily report via cron-job.org"""
+    if request.method != 'POST':
+        return JsonResponse({'error': 'Method not allowed'}, status=405)
+    
+    try:
+        call_command('send_daily_report')
+        return JsonResponse({'success': True, 'message': 'Daily report sent successfully'})
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
 @login_required
