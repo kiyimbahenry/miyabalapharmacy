@@ -81,11 +81,16 @@ USE_I18N = True
 USE_TZ = True
 
 # ============================================================
-# STATIC FILES (fixes the previous build error)
+# STATIC FILES
 # ============================================================
 STATIC_URL = '/static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-# No STATICFILES_DIRS needed unless you have custom static folders.
+
+# Tell Django where to find your static files
+STATICFILES_DIRS = [
+    BASE_DIR / 'static',  # ← This is the important line!
+]
+
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 # Authentication
