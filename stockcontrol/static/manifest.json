@@ -1,0 +1,24 @@
+{
+    "name": "Miyabala Pharmacy",
+    "short_name": "Miyabala",
+    "description": "Caring Beyond Medicine – Pharmacy Stock Management System",
+    "start_url": "/",
+    "display": "standalone",
+    "background_color": "#ffffff",
+    "theme_color": "#0b7d3b",
+    "orientation": "portrait",
+    "icons": [
+        {
+            "src": "/static/icons/icon-192.png",
+            "sizes": "192x192",
+            "type": "image/png",
+            "purpose": "any maskable"
+        },
+        {
+            "src": "/static/icons/icon-512.png",
+            "sizes": "512x512",
+            "type": "image/png",
+            "purpose": "any maskable"
+        }
+    ]
+}
