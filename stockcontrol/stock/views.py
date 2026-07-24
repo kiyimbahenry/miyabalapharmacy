@@ -49,7 +49,8 @@ def is_admin_or_manager(user):
 @csrf_exempt
 def run_daily_report(request):
     """Endpoint to trigger daily report via cron-job.org"""
-    if request.method != 'POST':
+    # Allow both GET and POST
+    if request.method not in ['GET', 'POST']:
         return JsonResponse({'error': 'Method not allowed'}, status=405)
     
     try:
