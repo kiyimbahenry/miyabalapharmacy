@@ -88,7 +88,7 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 # Tell Django where to find your static files
 STATICFILES_DIRS = [
-    BASE_DIR / 'static',  # ← This is the important line!
+    BASE_DIR / 'stockcontrol' / 'static',  # ← This is the important line!
 ]
 
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
