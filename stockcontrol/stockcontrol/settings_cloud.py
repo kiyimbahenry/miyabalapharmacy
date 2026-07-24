@@ -83,12 +83,17 @@ USE_TZ = True
 # ============================================================
 # STATIC FILES
 # ============================================================
-STATIC_URL = '/static/'
-STATIC_ROOT = BASE_DIR / 'staticfiles'
+import os
+from pathlib import Path
 
-# Tell Django where to find your static files
+BASE_DIR = Path(__file__).resolve().parent.parent
+
+STATIC_URL = '/static/'
+STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+
+# This tells Django where your source static files are
 STATICFILES_DIRS = [
-    BASE_DIR / 'stockcontrol' / 'static',  # ← This is the important line!
+    os.path.join(BASE_DIR, 'static'),  # /app/static
 ]
 
 STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
