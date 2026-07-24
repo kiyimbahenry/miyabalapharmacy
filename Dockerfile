@@ -24,7 +24,5 @@ COPY stockcontrol/ .
 # Create static directory
 RUN mkdir -p staticfiles
 
-EXPOSE 8080
-
-# Run migrations, collect static, create superuser, and start server
-CMD ["sh", "-c", "python3 manage.py migrate --noinput && python3 manage.py collectstatic --noinput && python3 manage.py createsuperuser --noinput --username $DJANGO_SUPERUSER_USERNAME --email $DJANGO_SUPERUSER_EMAIL || true && gunicorn --bind 0.0.0.0:8080 stockcontrol.wsgi:application"]
+# Run migrations, collect static, then start Django
+CMD ["sh", "-c", "python3 manage.py migrate --noinput && python3 manage.py collectstatic --noinput && gunicorn stockcontrol.wsgi:application --bind 0.0.0.0:8080"]
