@@ -83,20 +83,19 @@ USE_TZ = True
 # ============================================================
 # STATIC FILES
 # ============================================================
-import os
-from pathlib import Path
 
-BASE_DIR = Path(__file__).resolve().parent.parent
+STATIC_URL = "/static/"
 
-STATIC_URL = '/static/'
-STATIC_ROOT = os.path.join(BASE_DIR, 'staticfiles')
+# Where collectstatic places files for Render
+STATIC_ROOT = BASE_DIR / "staticfiles"
 
-# This tells Django where your source static files are
+# Your original static folder containing icons, css, js, etc.
 STATICFILES_DIRS = [
-    os.path.join(BASE_DIR, 'static'),  # /app/static
+    BASE_DIR / "static",
 ]
 
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+# WhiteNoise compression
+STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
 # Authentication
 LOGIN_URL = '/login/'
