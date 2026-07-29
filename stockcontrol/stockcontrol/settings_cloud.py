@@ -97,10 +97,26 @@ STATICFILES_DIRS = [
 # WhiteNoise compression
 STATICFILES_STORAGE = "whitenoise.storage.CompressedManifestStaticFilesStorage"
 
-# Authentication
+# ============================================================
+# AUTHENTICATION
+# ============================================================
+
 LOGIN_URL = '/login/'
 LOGIN_REDIRECT_URL = '/'
 LOGOUT_REDIRECT_URL = '/login/'
+
+# ============================================================
+# SESSION SETTINGS (NEW)
+# ============================================================
+
+# Log out when the browser/PWA is closed
+SESSION_EXPIRE_AT_BROWSER_CLOSE = True
+
+# Log out after 30 minutes of inactivity
+SESSION_COOKIE_AGE = 1800
+
+# Refresh the session expiry on every request
+SESSION_SAVE_EVERY_REQUEST = True
 
 # ============================================================
 # EMAIL SETTINGS
