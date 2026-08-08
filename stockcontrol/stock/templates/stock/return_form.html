@@ -132,7 +132,7 @@
                             {% for receipt in receipts %}
                                 <option value="{{ receipt.id }}" data-items='{{ receipt.items|safe }}'>
                                     {{ receipt.receipt_number }} - {{ receipt.created_at|date:"d/m/Y H:i" }}
-                                    (UGX {{ receipt.total_amount|floatformat:0 }})
+                                    ({{ receipt.item_count }} items - UGX {{ receipt.total_amount|floatformat:0 }})
                                 </option>
                             {% endfor %}
                         </select>
@@ -193,8 +193,11 @@ document.addEventListener('DOMContentLoaded', function() {
     document.querySelectorAll('#receiptSelect option').forEach(option => {
         if (option.value) {
             try {
-                receiptItems[option.value] = JSON.parse(option.dataset.items || '[]');
+                const data = JSON.parse(option.dataset.items || '[]');
+                receiptItems[option.value] = data;
+                console.log('Loaded receipt', option.value, 'items:', data.length);
             } catch (e) {
+                console.error('Error parsing items for receipt', option.value, e);
                 receiptItems[option.value] = [];
             }
         }
@@ -216,10 +219,12 @@ document.addEventListener('DOMContentLoaded', function() {
         }
 
         const items = receiptItems[receiptId] || [];
+        console.log('Selected receipt', receiptId, 'items:', items);
+
         if (items.length === 0) {
             itemsContainer.innerHTML = `
                 <div class="alert alert-warning">
-                    <i class="fas fa-exclamation-triangle"></i> 
+                    <i class="fas fa-exclamation-triangle"></i>
                     No items found on this receipt.
                 </div>
             `;
@@ -245,33 +250,33 @@ document.addEventListener('DOMContentLoaded', function() {
 
         items.forEach((item, index) => {
             const drugName = item.drug_name || item.name || 'Unknown Drug';
-            const quantity = item.quantity || 0;
-            const unitPrice = item.unit_price || 0;
-            const total = item.total || 0;
-            const drugId = item.drug_id || index;
+            const quantity = item.quantity || item.qty || 0;
+            const unitPrice = item.unit_price || item.price || 0;
+            const total = item.total || item.Total || 0;
+            const drugId = item.drug_id || item.id || index;
 
             html += `
                 <div class="col-md-6">
                     <div class="receipt-item" data-index="${index}">
                         <div class="d-flex align-items-start">
-                            <input type="checkbox" class="item-checkbox" 
+                            <input type="checkbox" class="item-checkbox"
                                    name="selected_items[]" value="${index}"
                                    data-drug-id="${drugId}"
                                    data-max-qty="${quantity}">
                             <div class="flex-grow-1">
                                 <div class="item-name">${drugName}</div>
                                 <div class="item-details">
-                                    Qty: ${quantity} &bull; 
-                                    Price: UGX ${parseFloat(unitPrice).toLocaleString()} &bull; 
+                                    Qty: ${quantity} &bull;
+                                    Price: UGX ${parseFloat(unitPrice).toLocaleString()} &bull;
                                     Total: UGX ${parseFloat(total).toLocaleString()}
                                 </div>
                                 <div class="mt-2">
                                     <label class="text-muted small">Quantity to return:</label>
-                                    <input type="number" class="item-quantity form-control form-control-sm" 
-                                           name="quantities[]" value="${quantity}" 
+                                    <input type="number" class="item-quantity form-control form-control-sm"
+                                           name="quantities[]" value="${quantity}"
                                            min="0" max="${quantity}" disabled>
                                     <input type="hidden" name="drug_ids[]" value="${drugId}" disabled>
-                                    <input type="text" class="item-reason form-control form-control-sm mt-1" 
+                                    <input type="text" class="item-reason form-control form-control-sm mt-1"
                                            name="reasons[]" placeholder="Reason (optional)" disabled>
                                 </div>
                             </div>
@@ -362,7 +367,7 @@ document.addEventListener('DOMContentLoaded', function() {
             const name = parent.querySelector('.item-name').textContent;
             const qtyInput = parent.querySelector('.item-quantity');
             const qty = parseInt(qtyInput.value) || 0;
-            
+
             if (qty > 0) {
                 html += `<li><strong>${name}</strong> - Qty: ${qty}</li>`;
                 totalItems += qty;

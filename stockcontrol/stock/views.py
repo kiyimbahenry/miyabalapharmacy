@@ -1,5 +1,5 @@
 from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth.decorators import login_required, user_passes_test, permission_required  # ← FIXED: 'decorators' not 'models'
+from django.contrib.auth.decorators import login_required, user_passes_test, permission_required  # ← FIXED: Added permission_required
 from django.contrib.auth import login, authenticate, logout
 from django.contrib import messages
 from django.http import JsonResponse
@@ -12,8 +12,8 @@ from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.conf import settings
 from django.template.loader import render_to_string
 from django.views.decorators.csrf import csrf_exempt
-from django.views.decorators.http import require_POST  # ← ADD THIS
-from django.core.management import call_command
+from django.views.decorators.http import require_POST
+from django.core.management import call_command  # ← FIXED: was 'import_data'
 from django.db import transaction
 import json
 import os
@@ -1391,14 +1391,48 @@ def return_create(request):
                     messages.error(request, 'Receipt not found.')
                     return redirect('stock:return_create')
 
-                # Build a lookup dictionary for receipt items (performance improvement)
+                # Build a robust lookup dictionary for receipt items
+                # This handles different data structures
                 receipt_lookup = {}
+                
+                # Log the receipt items for debugging
+                logger.info(f"Receipt {receipt.receipt_number} items: {receipt.items}")
+                
                 for item in receipt.items or []:
-                    if item.get('drug_id'):
-                        receipt_lookup[item['drug_id']] = item
-                    elif item.get('drug_name'):
-                        # Fallback for older receipts using drug_name
-                        receipt_lookup[item.get('drug_name')] = item
+                    # Try to find drug_id from various possible keys
+                    drug_id = None
+                    drug_name = None
+                    
+                    # Check for drug_id in different formats
+                    if 'drug_id' in item:
+                        drug_id = item['drug_id']
+                    elif 'id' in item:
+                        drug_id = item['id']
+                    elif 'drugId' in item:
+                        drug_id = item['drugId']
+                    
+                    # Check for drug_name in different formats
+                    if 'drug_name' in item:
+                        drug_name = item['drug_name']
+                    elif 'name' in item:
+                        drug_name = item['name']
+                    elif 'drugName' in item:
+                        drug_name = item['drugName']
+                    
+                    # Store in lookup with both string and integer keys
+                    if drug_id is not None:
+                        try:
+                            # Store with integer key
+                            receipt_lookup[int(drug_id)] = item
+                            # Also store with string key
+                            receipt_lookup[str(drug_id)] = item
+                        except (ValueError, TypeError):
+                            pass
+                    
+                    if drug_name:
+                        receipt_lookup[drug_name] = item
+                        # Also store lowercase for case-insensitive matching
+                        receipt_lookup[drug_name.lower()] = item
 
                 returned_count = 0
                 failed_items = []
@@ -1422,12 +1456,18 @@ def return_create(request):
                         failed_items.append(f'Drug with ID {drug_id} no longer exists.')
                         continue
 
-                    # Check if this drug is actually on the receipt using lookup
-                    receipt_item = receipt_lookup.get(drug.id)
+                    # Check if this drug is actually on the receipt using robust lookup
+                    receipt_item = None
                     
-                    # If not found by ID, try by name
-                    if not receipt_item:
-                        receipt_item = receipt_lookup.get(drug.name)
+                    # Try all possible lookup methods
+                    if drug.id in receipt_lookup:
+                        receipt_item = receipt_lookup[drug.id]
+                    elif str(drug.id) in receipt_lookup:
+                        receipt_item = receipt_lookup[str(drug.id)]
+                    elif drug.name in receipt_lookup:
+                        receipt_item = receipt_lookup[drug.name]
+                    elif drug.name.lower() in receipt_lookup:
+                        receipt_item = receipt_lookup[drug.name.lower()]
 
                     if not receipt_item:
                         failed_items.append(f'"{drug.name}" is not on the selected receipt.')
@@ -1435,7 +1475,14 @@ def return_create(request):
 
                     # Get sold quantity from receipt safely
                     try:
-                        sold_quantity = int(receipt_item.get('quantity', 0))
+                        # Try different possible keys for quantity
+                        sold_quantity = (
+                            receipt_item.get('quantity') or 
+                            receipt_item.get('qty') or 
+                            receipt_item.get('Qty') or
+                            0
+                        )
+                        sold_quantity = int(sold_quantity)
                     except (TypeError, ValueError):
                         sold_quantity = 0
 
@@ -1465,7 +1512,12 @@ def return_create(request):
                         continue
 
                     # Get the unit price from the receipt
-                    unit_price = receipt_item.get('unit_price', drug.selling_price)
+                    unit_price = (
+                        receipt_item.get('unit_price') or 
+                        receipt_item.get('price') or 
+                        receipt_item.get('Price') or
+                        drug.selling_price
+                    )
                     try:
                         unit_price = Decimal(str(unit_price))
                     except (ValueError, TypeError):
@@ -1508,11 +1560,9 @@ def return_create(request):
                 # Show any failed items (summarized)
                 if failed_items:
                     if len(failed_items) <= 5:
-                        # Show individual messages if only a few failures
                         for fail_msg in failed_items:
                             messages.warning(request, f'⚠️ {fail_msg}')
                     else:
-                        # Summarize if there are many failures
                         messages.warning(
                             request,
                             f'⚠️ {len(failed_items)} items could not be returned. '
@@ -1535,6 +1585,94 @@ def return_create(request):
         'drugs': drugs,
     }
     return render(request, 'stock/return_form.html', context)
+
+@login_required
+def get_receipt_items(request, receipt_id):
+    """
+    AJAX endpoint to get items for a specific receipt.
+    Used by the return form to display receipt items.
+    """
+    try:
+        receipt = get_object_or_404(Receipt, id=receipt_id)
+        items = receipt.items if isinstance(receipt.items, list) else []
+        
+        # Clean up items and handle different data structures
+        clean_items = []
+        for item in items:
+            # Get drug_id from various possible keys
+            drug_id = (
+                item.get('drug_id') or 
+                item.get('id') or 
+                item.get('drugId') or 
+                0
+            )
+            try:
+                drug_id = int(drug_id)
+            except (ValueError, TypeError):
+                drug_id = 0
+            
+            # Get drug_name from various possible keys
+            drug_name = (
+                item.get('drug_name') or 
+                item.get('name') or 
+                item.get('drugName') or 
+                'Unknown'
+            )
+            
+            # Get quantity from various possible keys
+            quantity = (
+                item.get('quantity') or 
+                item.get('qty') or 
+                item.get('Qty') or 
+                0
+            )
+            try:
+                quantity = int(quantity)
+            except (ValueError, TypeError):
+                quantity = 0
+            
+            # Get unit_price from various possible keys
+            unit_price = (
+                item.get('unit_price') or 
+                item.get('price') or 
+                item.get('Price') or 
+                0
+            )
+            try:
+                unit_price = float(unit_price)
+            except (ValueError, TypeError):
+                unit_price = 0
+            
+            # Get total from various possible keys
+            total = (
+                item.get('total') or 
+                item.get('Total') or 
+                quantity * unit_price
+            )
+            try:
+                total = float(total)
+            except (ValueError, TypeError):
+                total = quantity * unit_price
+            
+            clean_items.append({
+                'drug_id': drug_id,
+                'drug_name': drug_name,
+                'quantity': quantity,
+                'unit_price': unit_price,
+                'total': total,
+            })
+        
+        return JsonResponse({
+            'success': True,
+            'items': clean_items,
+            'receipt_number': receipt.receipt_number,
+        })
+    except Exception as e:
+        logger.exception(f"Error fetching receipt items for {receipt_id}")
+        return JsonResponse({
+            'success': False,
+            'error': str(e)
+        }, status=500)
 
 
 # ============================================================

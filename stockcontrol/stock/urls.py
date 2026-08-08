@@ -103,7 +103,7 @@ urlpatterns = [
     path('api/complete-sale/', views.complete_sale, name='complete_sale'),
     path('returns/', views.return_list, name='return_list'),
     path('returns/create/', views.return_create, name='return_create'),
-
+    path('api/receipt/<int:receipt_id>/items/', views.get_receipt_items, name='get_receipt_items'),
     # ============================================================
     # REPORT URLs
     # ============================================================
