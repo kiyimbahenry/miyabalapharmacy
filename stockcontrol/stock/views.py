@@ -1,5 +1,5 @@
 from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth.decorators import login_required, user_passes_test, permission_required  # ← FIXED: Added permission_required
+from django.contrib.auth.decorators import login_required, user_passes_test, permission_required
 from django.contrib.auth import login, authenticate, logout
 from django.contrib import messages
 from django.http import JsonResponse
@@ -13,7 +13,7 @@ from django.conf import settings
 from django.template.loader import render_to_string
 from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
-from django.core.management import call_command  # ← FIXED: was 'import_data'
+from django.core.management import call_command
 from django.db import transaction
 import json
 import os
@@ -34,80 +34,12 @@ from .utils.report_generator import generate_daily_report_pdf, generate_comprehe
 # IMPORTS
 from .models import (
     Drug, Supplier, Invoice, Category, InvoiceItem,
-
-I need to verify your ReturnedDrug model, because I don't want you to get a runtime error.
-Then on the dashboard show:
-
-Today's Sales (Gross):  UGX 500,000
-Today's Returns:        UGX 30,000
-Today's Net Sales:      UGX 470,000
-Before you paste this into your project
-
-That is much clearer than showing only one number.
-
     Sale, SaleItem, Receipt, Report, ChronicPatient,
     PatientMedication, PatientVisit,
-
     ReturnedDrug, StockMovement
 )
 
-✅ Net sales (sales − returns)
-✅ Top-selling products
-net_sales = today_sales - today_returns
-
-without modifying any receipt.
-
-One suggestion
-
-today_returns = total returned today
-Instead of replacing today_sales, keep all three values:
-
-today_sales = gross sales
-If those field names don't exist, Django will raise a FieldError.
-✅ Number of transactions
-✅ Today's returns
-
-2. You need these imports
-
-If they aren't already at the top of views.py, add:
-
-from django.db.models import Sum
-from django.utils import timezone
-Otherwise, yes—this is a better dashboard
-✅ Gross sales today
-
-It will give you:
-
 # FORM IMPORTS
-total_amount
-
-
-Many projects instead use fields like:
-
-
-created_at
-or
-
-or
-
-
-return_date
-refund_amount
-
-and
-
-Yes, this is the right idea, but don't copy it exactly yet because I notice two things that may not match your models.
-
-1. Check your ReturnedDrug model
-
-
-These fields must exist in your ReturnedDrug model.
-Your proposed code uses:
-
-Sum('total_refund')
-ReturnedDrug.objects.filter(returned_date__date=today)
-
-and
 from .forms import SupplierForm, InvoiceForm, DrugForm, StockMovementForm
 
 # Set up logger
@@ -126,7 +58,7 @@ def run_daily_report(request):
     # Allow both GET and POST
     if request.method not in ['GET', 'POST']:
         return JsonResponse({'error': 'Method not allowed'}, status=405)
-    
+
     try:
         call_command('send_daily_report')
         return JsonResponse({'success': True, 'message': 'Daily report sent successfully'})
@@ -216,7 +148,7 @@ def dashboard(request):
     Dashboard view showing statistics and recent data
     """
     today = timezone.now().date()
-    
+
     # Get statistics
     total_medicines = Drug.objects.count()
     total_suppliers = Supplier.objects.count()
@@ -1506,15 +1438,15 @@ def return_create(request):
                 # Build a robust lookup dictionary for receipt items
                 # This handles different data structures
                 receipt_lookup = {}
-                
+
                 # Log the receipt items for debugging
                 logger.info(f"Receipt {receipt.receipt_number} items: {receipt.items}")
-                
+
                 for item in receipt.items or []:
                     # Try to find drug_id from various possible keys
                     drug_id = None
                     drug_name = None
-                    
+
                     # Check for drug_id in different formats
                     if 'drug_id' in item:
                         drug_id = item['drug_id']
@@ -1522,7 +1454,7 @@ def return_create(request):
                         drug_id = item['id']
                     elif 'drugId' in item:
                         drug_id = item['drugId']
-                    
+
                     # Check for drug_name in different formats
                     if 'drug_name' in item:
                         drug_name = item['drug_name']
@@ -1530,7 +1462,7 @@ def return_create(request):
                         drug_name = item['name']
                     elif 'drugName' in item:
                         drug_name = item['drugName']
-                    
+
                     # Store in lookup with both string and integer keys
                     if drug_id is not None:
                         try:
@@ -1540,7 +1472,7 @@ def return_create(request):
                             receipt_lookup[str(drug_id)] = item
                         except (ValueError, TypeError):
                             pass
-                    
+
                     if drug_name:
                         receipt_lookup[drug_name] = item
                         # Also store lowercase for case-insensitive matching
@@ -1570,7 +1502,7 @@ def return_create(request):
 
                     # Check if this drug is actually on the receipt using robust lookup
                     receipt_item = None
-                    
+
                     # Try all possible lookup methods
                     if drug.id in receipt_lookup:
                         receipt_item = receipt_lookup[drug.id]
@@ -1589,8 +1521,8 @@ def return_create(request):
                     try:
                         # Try different possible keys for quantity
                         sold_quantity = (
-                            receipt_item.get('quantity') or 
-                            receipt_item.get('qty') or 
+                            receipt_item.get('quantity') or
+                            receipt_item.get('qty') or
                             receipt_item.get('Qty') or
                             0
                         )
@@ -1625,8 +1557,8 @@ def return_create(request):
 
                     # Get the unit price from the receipt
                     unit_price = (
-                        receipt_item.get('unit_price') or 
-                        receipt_item.get('price') or 
+                        receipt_item.get('unit_price') or
+                        receipt_item.get('price') or
                         receipt_item.get('Price') or
                         drug.selling_price
                     )
@@ -1688,7 +1620,7 @@ def return_create(request):
             messages.error(request, f'Error creating return: {str(e)}')
             return redirect('stock:return_create')
 
-        # GET request - show form with properly JSON-encoded items
+    # GET request - show form with properly JSON-encoded items
     import json
     receipts = Receipt.objects.all().order_by('-created_at')
 
@@ -1741,65 +1673,65 @@ def get_receipt_items(request, receipt_id):
     try:
         receipt = get_object_or_404(Receipt, id=receipt_id)
         items = receipt.items if isinstance(receipt.items, list) else []
-        
+
         # Clean up items and handle different data structures
         clean_items = []
         for item in items:
             # Get drug_id from various possible keys
             drug_id = (
-                item.get('drug_id') or 
-                item.get('id') or 
-                item.get('drugId') or 
+                item.get('drug_id') or
+                item.get('id') or
+                item.get('drugId') or
                 0
             )
             try:
                 drug_id = int(drug_id)
             except (ValueError, TypeError):
                 drug_id = 0
-            
+
             # Get drug_name from various possible keys
             drug_name = (
-                item.get('drug_name') or 
-                item.get('name') or 
-                item.get('drugName') or 
+                item.get('drug_name') or
+                item.get('name') or
+                item.get('drugName') or
                 'Unknown'
             )
-            
+
             # Get quantity from various possible keys
             quantity = (
-                item.get('quantity') or 
-                item.get('qty') or 
-                item.get('Qty') or 
+                item.get('quantity') or
+                item.get('qty') or
+                item.get('Qty') or
                 0
             )
             try:
                 quantity = int(quantity)
             except (ValueError, TypeError):
                 quantity = 0
-            
+
             # Get unit_price from various possible keys
             unit_price = (
-                item.get('unit_price') or 
-                item.get('price') or 
-                item.get('Price') or 
+                item.get('unit_price') or
+                item.get('price') or
+                item.get('Price') or
                 0
             )
             try:
                 unit_price = float(unit_price)
             except (ValueError, TypeError):
                 unit_price = 0
-            
+
             # Get total from various possible keys
             total = (
-                item.get('total') or 
-                item.get('Total') or 
+                item.get('total') or
+                item.get('Total') or
                 quantity * unit_price
             )
             try:
                 total = float(total)
             except (ValueError, TypeError):
                 total = quantity * unit_price
-            
+
             clean_items.append({
                 'drug_id': drug_id,
                 'drug_name': drug_name,
@@ -1807,7 +1739,7 @@ def get_receipt_items(request, receipt_id):
                 'unit_price': unit_price,
                 'total': total,
             })
-        
+
         return JsonResponse({
             'success': True,
             'items': clean_items,
@@ -2137,7 +2069,7 @@ def send_report_email(report_data, email, report_type):
             zip_buffer = get_invoices_zip(report_date)
         else:
             invoices_qs = Invoice.objects.filter(
-                invoice_date__gte=start_date, 
+                invoice_date__gte=start_date,
                 invoice_date__lte=end_date
             )
             zip_buffer = get_invoices_zip_range(invoices_qs)
