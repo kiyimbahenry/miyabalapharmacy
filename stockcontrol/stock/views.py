@@ -1,5 +1,5 @@
 from django.shortcuts import render, redirect, get_object_or_404
-from django.contrib.auth.decorators import login_required, user_passes_test
+from django.contrib.auth.decorators import login_required, user_passes_test, permission_required  # ← FIXED: 'decorators' not 'models'
 from django.contrib.auth import login, authenticate, logout
 from django.contrib import messages
 from django.http import JsonResponse
@@ -11,13 +11,15 @@ from django.core.mail import send_mail, get_connection, EmailMessage
 from django.core.paginator import Paginator, EmptyPage, PageNotAnInteger
 from django.conf import settings
 from django.template.loader import render_to_string
-from django.views.decorators.http import require_POST
 from django.views.decorators.csrf import csrf_exempt
+from django.views.decorators.http import require_POST  # ← ADD THIS
 from django.core.management import call_command
+from django.db import transaction
 import json
 import os
 import base64
 import traceback
+import logging
 from datetime import datetime, timedelta
 from decimal import Decimal
 
@@ -29,15 +31,19 @@ from sib_api_v3_sdk.rest import ApiException
 from .utils.invoice_pdf import get_invoices_zip, get_invoices_zip_range
 from .utils.report_generator import generate_daily_report_pdf, generate_comprehensive_report_pdf
 
-# ===== IMPORTS =====
+# IMPORTS
 from .models import (
     Drug, Supplier, Invoice, Category, InvoiceItem,
     Sale, SaleItem, Receipt, Report, ChronicPatient,
     PatientMedication, PatientVisit,
     ReturnedDrug, StockMovement
 )
-# ===== FORM IMPORTS =====
+
+# FORM IMPORTS
 from .forms import SupplierForm, InvoiceForm, DrugForm, StockMovementForm
+
+# Set up logger
+logger = logging.getLogger(__name__)
 
 
 def is_admin_or_manager(user):
@@ -703,55 +709,103 @@ def drug_create_ajax(request):
     Validates that the expiry date is not in the past.
     """
     try:
-        name = request.POST.get('name')
-        generic_name = request.POST.get('generic_name', '')
-        dosage = request.POST.get('dosage')
-        strength = request.POST.get('strength', '')
-        cost_price = float(request.POST.get('cost_price', 0))
-        selling_price = float(request.POST.get('selling_price', 0))
-        pack_size = int(request.POST.get('pack_size', 1))
+        # Get form data with safe defaults
+        name = request.POST.get('name', '').strip()
+        generic_name = request.POST.get('generic_name', '').strip()
+        dosage = request.POST.get('dosage', '').strip()
+        strength = request.POST.get('strength', '').strip()
+        batch_no = request.POST.get('batch_no', '').strip()
         supplier_id = request.POST.get('supplier_id')
         category_id = request.POST.get('category_id')
         expiry_date = request.POST.get('expiry_date')
-        batch_no = request.POST.get('batch_no', '')
-        packets = int(request.POST.get('packets', 1))
+
+        # Convert numeric fields safely
+        try:
+            cost_price = Decimal(str(request.POST.get('cost_price', 0)))
+        except (ValueError, TypeError):
+            return JsonResponse({'success': False, 'error': 'Invalid cost price format.'})
+
+        try:
+            selling_price = Decimal(str(request.POST.get('selling_price', 0)))
+        except (ValueError, TypeError):
+            return JsonResponse({'success': False, 'error': 'Invalid selling price format.'})
+
+        try:
+            pack_size = int(request.POST.get('pack_size', 1))
+        except (ValueError, TypeError):
+            return JsonResponse({'success': False, 'error': 'Invalid pack size format.'})
+
+        try:
+            packets = int(request.POST.get('packets', 1))
+        except (ValueError, TypeError):
+            return JsonResponse({'success': False, 'error': 'Invalid packets format.'})
 
         # Calculate total stock quantity: packets × pack size
         total_quantity = packets * pack_size
 
         # ---- Validation ----
+        errors = []
+
         if not name:
-            return JsonResponse({'success': False, 'error': 'Drug name is required.'})
+            errors.append('Drug name is required.')
+        elif len(name) < 2:
+            errors.append('Drug name must be at least 2 characters.')
+
         if not dosage:
-            return JsonResponse({'success': False, 'error': 'Dosage is required.'})
+            errors.append('Dosage is required.')
+
         if cost_price <= 0:
-            return JsonResponse({'success': False, 'error': 'Cost price must be greater than 0.'})
+            errors.append('Cost price must be greater than 0.')
+
         if not category_id:
-            return JsonResponse({'success': False, 'error': 'Category is required.'})
+            errors.append('Category is required.')
+        else:
+            # Verify category exists
+            try:
+                from .models import Category
+                Category.objects.get(id=category_id)
+            except Category.DoesNotExist:
+                errors.append('Selected category does not exist.')
+
         if pack_size <= 0:
-            return JsonResponse({'success': False, 'error': 'Pack size must be greater than 0.'})
+            errors.append('Pack size must be greater than 0.')
+
         if packets <= 0:
-            return JsonResponse({'success': False, 'error': 'Number of packets must be greater than 0.'})
-        if expiry_date:
+            errors.append('Number of packets must be greater than 0.')
+
+        if not expiry_date:
+            errors.append('Expiry date is required.')
+        else:
             # Check if expiry date is in the past
             today = timezone.now().date()
             try:
                 exp_date = datetime.strptime(expiry_date, '%Y-%m-%d').date()
                 if exp_date < today:
-                    return JsonResponse({'success': False, 'error': 'Expiry date cannot be in the past.'})
+                    errors.append('Expiry date cannot be in the past.')
             except ValueError:
-                return JsonResponse({'success': False, 'error': 'Invalid expiry date format.'})
-        else:
-            return JsonResponse({'success': False, 'error': 'Expiry date is required.'})
+                errors.append('Invalid expiry date format. Use YYYY-MM-DD.')
+
+        # If there are validation errors, return them
+        if errors:
+            return JsonResponse({
+                'success': False,
+                'error': errors[0],  # Return first error for simplicity
+                'errors': errors     # Include all errors for debugging
+            }, status=400)
+
+        # Calculate selling price if not provided or invalid
+        if selling_price <= 0:
+            selling_price = cost_price * Decimal('1.5')
 
         # Create the drug
+        from .models import Drug
         drug = Drug.objects.create(
             name=name,
             generic_name=generic_name,
             dosage=dosage,
             strength=strength,
             cost_price=cost_price,
-            selling_price=selling_price if selling_price > 0 else cost_price * 1.5,
+            selling_price=selling_price,
             pack_size=pack_size,
             stock_quantity=total_quantity,  # Total = packets × pack_size
             supplier_id=supplier_id if supplier_id else None,
@@ -765,11 +819,18 @@ def drug_create_ajax(request):
             'success': True,
             'drug_id': drug.id,
             'drug_name': drug.name,
-            'stock_quantity': drug.stock_quantity
+            'stock_quantity': drug.stock_quantity,
+            'pack_size': drug.pack_size,
+            'selling_price': float(drug.selling_price),
+            'cost_price': float(drug.cost_price),
         })
 
     except Exception as e:
-        return JsonResponse({'success': False, 'error': str(e)})
+        logger.exception("Error creating drug via AJAX")
+        return JsonResponse({
+            'success': False,
+            'error': f'Error creating drug: {str(e)}'
+        }, status=500)
 
 
 # ============================================================
@@ -1294,70 +1355,186 @@ def return_list(request):
 
 
 @login_required
+@permission_required("stock.add_returneddrug", raise_exception=True)
 def return_create(request):
-    """Create a new return"""
+    """
+    Create a new return - supports multiple items from one receipt.
+    Includes transaction safety, duplicate protection, and stock validation.
+    """
     if request.method == 'POST':
         try:
             receipt_id = request.POST.get('receipt')
-            drug_id = request.POST.get('drug')
-            quantity = int(request.POST.get('quantity', 0))
-            reason = request.POST.get('reason', '')
-
-            if not receipt_id or not drug_id or quantity <= 0:
-                messages.error(request, 'Please fill all required fields correctly.')
+            if not receipt_id:
+                messages.error(request, 'Please select a receipt.')
                 return redirect('stock:return_create')
 
-            receipt = get_object_or_404(Receipt, id=receipt_id)
-            drug = get_object_or_404(Drug, id=drug_id)
+            # Get all items from the form (multiple items)
+            drug_ids = request.POST.getlist('drug_ids[]')
+            quantities = request.POST.getlist('quantities[]')
+            reasons = request.POST.getlist('reasons[]')
 
-            receipt_item = None
-            for item in receipt.items:
-                if item.get('drug_id') == drug.id or item.get('drug_name') == drug.name:
-                    receipt_item = item
-                    break
-
-            if not receipt_item:
-                messages.error(request, 'This drug is not on the selected receipt.')
+            # Validate all lists have equal length
+            if not (len(drug_ids) == len(quantities) == len(reasons)):
+                messages.error(request, 'Invalid submitted data.')
                 return redirect('stock:return_create')
 
-            unit_price = receipt_item.get('unit_price', drug.selling_price)
-            from decimal import Decimal
-            unit_price = Decimal(str(unit_price))
+            if not drug_ids or not quantities:
+                messages.error(request, 'No items selected for return.')
+                return redirect('stock:return_create')
 
-            return_obj = ReturnedDrug.objects.create(
-                receipt=receipt,
-                drug=drug,
-                quantity=quantity,
-                unit_price=unit_price,
-                reason=reason,
-                created_by=request.user
-            )
+            # Use database transaction for atomicity
+            with transaction.atomic():
+                # Lock the receipt row to prevent race conditions
+                try:
+                    receipt = Receipt.objects.select_for_update().get(id=receipt_id)
+                except Receipt.DoesNotExist:
+                    messages.error(request, 'Receipt not found.')
+                    return redirect('stock:return_create')
 
-            drug.stock_quantity += quantity
-            drug.save()
+                # Build a lookup dictionary for receipt items (performance improvement)
+                receipt_lookup = {}
+                for item in receipt.items or []:
+                    if item.get('drug_id'):
+                        receipt_lookup[item['drug_id']] = item
+                    elif item.get('drug_name'):
+                        # Fallback for older receipts using drug_name
+                        receipt_lookup[item.get('drug_name')] = item
 
-            StockMovement.objects.create(
-                drug=drug,
-                quantity=quantity,
-                movement_type='return',
-                reference=f"Return from Receipt {receipt.receipt_number}",
-                notes=reason,
-                created_by=request.user
-            )
+                returned_count = 0
+                failed_items = []
 
-            messages.success(request, f'Successfully returned {quantity} of "{drug.name}" to stock.')
+                for drug_id_str, quantity_str, reason in zip(drug_ids, quantities, reasons):
+                    # Validate integer conversion
+                    try:
+                        drug_id = int(drug_id_str)
+                        quantity = int(quantity_str)
+                    except (ValueError, TypeError):
+                        failed_items.append(f'Invalid drug ID or quantity: {drug_id_str}')
+                        continue
+
+                    if quantity <= 0:
+                        continue
+
+                    # Lock the drug row to prevent race conditions
+                    try:
+                        drug = Drug.objects.select_for_update().get(id=drug_id)
+                    except Drug.DoesNotExist:
+                        failed_items.append(f'Drug with ID {drug_id} no longer exists.')
+                        continue
+
+                    # Check if this drug is actually on the receipt using lookup
+                    receipt_item = receipt_lookup.get(drug.id)
+                    
+                    # If not found by ID, try by name
+                    if not receipt_item:
+                        receipt_item = receipt_lookup.get(drug.name)
+
+                    if not receipt_item:
+                        failed_items.append(f'"{drug.name}" is not on the selected receipt.')
+                        continue
+
+                    # Get sold quantity from receipt safely
+                    try:
+                        sold_quantity = int(receipt_item.get('quantity', 0))
+                    except (TypeError, ValueError):
+                        sold_quantity = 0
+
+                    # Prevent returning more than was sold
+                    if quantity > sold_quantity:
+                        failed_items.append(
+                            f'You cannot return {quantity} of "{drug.name}". Only {sold_quantity} were sold.'
+                        )
+                        continue
+
+                    # Calculate already returned quantity to prevent duplicates
+                    already_returned = ReturnedDrug.objects.filter(
+                        receipt=receipt,
+                        drug=drug
+                    ).aggregate(
+                        total=Sum('quantity')
+                    )['total'] or 0
+
+                    # Prevent negative remaining values
+                    remaining = max(sold_quantity - already_returned, 0)
+
+                    if quantity > remaining:
+                        failed_items.append(
+                            f'Only {remaining} of "{drug.name}" can still be returned. '
+                            f'({already_returned} already returned)'
+                        )
+                        continue
+
+                    # Get the unit price from the receipt
+                    unit_price = receipt_item.get('unit_price', drug.selling_price)
+                    try:
+                        unit_price = Decimal(str(unit_price))
+                    except (ValueError, TypeError):
+                        unit_price = Decimal('0.00')
+
+                    # Create the return record
+                    ReturnedDrug.objects.create(
+                        receipt=receipt,
+                        drug=drug,
+                        quantity=quantity,
+                        unit_price=unit_price,
+                        reason=reason or 'Return from receipt',
+                        created_by=request.user
+                    )
+
+                    # Update stock atomically (prevents race conditions)
+                    Drug.objects.filter(id=drug.id).update(
+                        stock_quantity=F('stock_quantity') + quantity
+                    )
+
+                    # Create stock movement record
+                    StockMovement.objects.create(
+                        drug=drug,
+                        quantity=quantity,
+                        movement_type='return',
+                        reference=f"Return from Receipt {receipt.receipt_number}",
+                        notes=reason or 'Return from receipt',
+                        created_by=request.user
+                    )
+
+                    returned_count += 1
+
+                # Show summary messages
+                if returned_count > 0:
+                    messages.success(
+                        request,
+                        f'✅ Successfully returned {returned_count} item(s) from "{receipt.receipt_number}" to stock.'
+                    )
+
+                # Show any failed items (summarized)
+                if failed_items:
+                    if len(failed_items) <= 5:
+                        # Show individual messages if only a few failures
+                        for fail_msg in failed_items:
+                            messages.warning(request, f'⚠️ {fail_msg}')
+                    else:
+                        # Summarize if there are many failures
+                        messages.warning(
+                            request,
+                            f'⚠️ {len(failed_items)} items could not be returned. '
+                            f'Please check the form and try again.'
+                        )
+
             return redirect('stock:return_list')
 
         except Exception as e:
+            logger.exception("Error creating return")
             messages.error(request, f'Error creating return: {str(e)}')
             return redirect('stock:return_create')
 
+    # GET request - show form
     receipts = Receipt.objects.all().order_by('-created_at')
     drugs = Drug.objects.all().order_by('name')
-    return render(request, 'stock/return_form.html', {
+
+    context = {
         'receipts': receipts,
         'drugs': drugs,
-    })
+    }
+    return render(request, 'stock/return_form.html', context)
 
 
 # ============================================================
