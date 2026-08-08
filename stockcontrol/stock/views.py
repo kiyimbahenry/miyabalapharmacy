@@ -31,7 +31,6 @@ from sib_api_v3_sdk.rest import ApiException
 from .utils.invoice_pdf import get_invoices_zip, get_invoices_zip_range
 from .utils.report_generator import generate_daily_report_pdf, generate_comprehensive_report_pdf
 
-Please paste your ReturnedDrug model from models.py, and I'll tell you the exact field names (returned_date vs created_at, total_refund vs refund_amount, etc.) to use.
 # IMPORTS
 from .models import (
     Drug, Supplier, Invoice, Category, InvoiceItem,
