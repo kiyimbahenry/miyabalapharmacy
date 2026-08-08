@@ -31,15 +31,84 @@ from sib_api_v3_sdk.rest import ApiException
 from .utils.invoice_pdf import get_invoices_zip, get_invoices_zip_range
 from .utils.report_generator import generate_daily_report_pdf, generate_comprehensive_report_pdf
 
+Please paste your ReturnedDrug model from models.py, and I'll tell you the exact field names (returned_date vs created_at, total_refund vs refund_amount, etc.) to use.
 # IMPORTS
 from .models import (
     Drug, Supplier, Invoice, Category, InvoiceItem,
+
+I need to verify your ReturnedDrug model, because I don't want you to get a runtime error.
+Then on the dashboard show:
+
+Today's Sales (Gross):  UGX 500,000
+Today's Returns:        UGX 30,000
+Today's Net Sales:      UGX 470,000
+Before you paste this into your project
+
+That is much clearer than showing only one number.
+
     Sale, SaleItem, Receipt, Report, ChronicPatient,
     PatientMedication, PatientVisit,
+
     ReturnedDrug, StockMovement
 )
 
+✅ Net sales (sales − returns)
+✅ Top-selling products
+net_sales = today_sales - today_returns
+
+without modifying any receipt.
+
+One suggestion
+
+today_returns = total returned today
+Instead of replacing today_sales, keep all three values:
+
+today_sales = gross sales
+If those field names don't exist, Django will raise a FieldError.
+✅ Number of transactions
+✅ Today's returns
+
+2. You need these imports
+
+If they aren't already at the top of views.py, add:
+
+from django.db.models import Sum
+from django.utils import timezone
+Otherwise, yes—this is a better dashboard
+✅ Gross sales today
+
+It will give you:
+
 # FORM IMPORTS
+total_amount
+
+
+Many projects instead use fields like:
+
+
+created_at
+or
+
+or
+
+
+return_date
+refund_amount
+
+and
+
+Yes, this is the right idea, but don't copy it exactly yet because I notice two things that may not match your models.
+
+1. Check your ReturnedDrug model
+
+
+These fields must exist in your ReturnedDrug model.
+Your proposed code uses:
+
+Sum('total_refund')
+ReturnedDrug.objects.filter(returned_date__date=today)
+
+and
 from .forms import SupplierForm, InvoiceForm, DrugForm, StockMovementForm
 
 # Set up logger
@@ -144,7 +213,11 @@ def logout_view(request):
 
 @login_required
 def dashboard(request):
-    """Dashboard view showing statistics and recent data"""
+    """
+    Dashboard view showing statistics and recent data
+    """
+    today = timezone.now().date()
+    
     # Get statistics
     total_medicines = Drug.objects.count()
     total_suppliers = Supplier.objects.count()
@@ -160,6 +233,39 @@ def dashboard(request):
     for drug in all_drugs:
         total_stock_value += drug.stock_quantity * drug.selling_price
 
+    # ---- TODAY'S SALES ----
+    today_receipts = Receipt.objects.filter(created_at__date=today)
+    today_sales = (
+        today_receipts.aggregate(Sum('total_amount'))['total_amount__sum']
+        or Decimal("0.00")
+    )
+    today_transactions = today_receipts.count()
+
+    # ---- TODAY'S RETURNS ----
+    today_returns = ReturnedDrug.objects.filter(returned_date__date=today)
+    today_returns_amount = (
+        today_returns.aggregate(Sum('total_refund'))['total_refund__sum']
+        or Decimal("0.00")
+    )
+    today_returns_count = today_returns.count()
+
+    # ---- NET SALES (Sales - Returns) ----
+    net_sales = today_sales - today_returns_amount
+
+    # ---- TOP SELLING PRODUCTS TODAY ----
+    top_drugs = {}
+    for receipt in today_receipts:
+        if receipt.items:
+            for item in receipt.items:
+                name = item.get('drug_name', 'Unknown')
+                quantity = item.get('quantity', 0)
+                if name in top_drugs:
+                    top_drugs[name] += quantity
+                else:
+                    top_drugs[name] = quantity
+
+    top_selling = sorted(top_drugs.items(), key=lambda x: x[1], reverse=True)[:5]
+
     context = {
         'total_medicines': total_medicines,
         'total_suppliers': total_suppliers,
@@ -167,6 +273,13 @@ def dashboard(request):
         'low_stock_count': low_stock_count,
         'recent_medicines': recent_medicines,
         'total_stock_value': total_stock_value,
+        # Today's sales data
+        'today_sales': today_sales,
+        'today_transactions': today_transactions,
+        'today_returns': today_returns_amount,
+        'today_returns_count': today_returns_count,
+        'net_sales': net_sales,
+        'top_selling': top_selling,
     }
 
     return render(request, 'stock/dashboard.html', context)

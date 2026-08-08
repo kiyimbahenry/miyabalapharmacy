@@ -16,6 +16,8 @@
 <link rel="apple-touch-icon" href="{% static 'icons/icon-192.png' %}">
     <!-- Font Awesome -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0-beta3/css/all.min.css" />
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
     * {
         margin: 0;
@@ -33,45 +35,64 @@
     }
 
     .header {
-        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        background: linear-gradient(135deg, #0b7d3b 0%, #065a2a 100%);
         color: white;
-        padding: 30px;
+        padding: 25px 30px;
         border-radius: 10px;
-        margin-bottom: 30px;
+        margin-bottom: 25px;
     }
     .header h1 {
-        font-size: 32px;
-        margin-bottom: 10px;
+        font-size: 28px;
+        margin-bottom: 5px;
     }
-    .header p {
+    .header .subtitle {
         opacity: 0.9;
-        font-size: 16px;
+        font-size: 14px;
+    }
+    .header .summary {
+        display: flex;
+        gap: 30px;
+        margin-top: 12px;
+        flex-wrap: wrap;
+        font-size: 13px;
+        background: rgba(255,255,255,0.1);
+        padding: 10px 15px;
+        border-radius: 8px;
+    }
+    .header .summary span {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+    }
+    .header .summary i {
+        font-size: 14px;
     }
 
     .nav {
         background: white;
-        padding: 15px 20px;
+        padding: 12px 20px;
         border-radius: 10px;
-        margin-bottom: 30px;
+        margin-bottom: 25px;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         display: flex;
-        gap: 20px;
+        gap: 15px;
         flex-wrap: wrap;
     }
     .nav a {
         color: #4a5568;
         text-decoration: none;
-        padding: 8px 16px;
+        padding: 6px 14px;
         border-radius: 5px;
         transition: all 0.3s;
         font-weight: 500;
+        font-size: 14px;
     }
     .nav a:hover {
-        background: #667eea;
+        background: #0b7d3b;
         color: white;
     }
     .nav a.active {
-        background: #667eea;
+        background: #0b7d3b;
         color: white;
     }
     .nav a.expired-link {
@@ -83,6 +104,38 @@
         color: white;
     }
 
+    /* ===== QUICK ACTION BUTTONS ===== */
+    .quick-actions {
+        display: flex;
+        gap: 12px;
+        flex-wrap: wrap;
+        margin-bottom: 25px;
+    }
+    .quick-actions .btn {
+        padding: 10px 20px;
+        border: none;
+        border-radius: 8px;
+        font-weight: 600;
+        font-size: 14px;
+        cursor: pointer;
+        transition: all 0.3s;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        text-decoration: none;
+        color: white;
+    }
+    .quick-actions .btn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    }
+    .quick-actions .btn-primary { background: #0b7d3b; }
+    .quick-actions .btn-success { background: #38a169; }
+    .quick-actions .btn-warning { background: #d69e2e; color: #1a202c; }
+    .quick-actions .btn-info { background: #3182ce; }
+    .quick-actions .btn-danger { background: #e53e3e; }
+
+    /* ===== STATISTICS ===== */
     .stats {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
@@ -91,38 +144,87 @@
     }
     .stat-card {
         background: white;
-        padding: 20px;
+        padding: 18px 20px;
         border-radius: 10px;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         text-align: center;
+        transition: transform 0.2s, box-shadow 0.2s;
+        cursor: default;
+        border-top: 4px solid #e2e8f0;
     }
+    .stat-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    }
+    .stat-card.primary { border-top-color: #0b7d3b; }
+    .stat-card.success { border-top-color: #48bb78; }
+    .stat-card.warning { border-top-color: #ed8936; }
+    .stat-card.danger { border-top-color: #e53e3e; }
+    .stat-card.info { border-top-color: #3182ce; }
+    .stat-card.purple { border-top-color: #805ad5; }
+
     .stat-card h3 {
         color: #4a5568;
-        font-size: 14px;
+        font-size: 12px;
         text-transform: uppercase;
-        letter-spacing: 1px;
-        margin-bottom: 10px;
+        letter-spacing: 0.8px;
+        margin-bottom: 8px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 6px;
     }
     .stat-card .number {
-        font-size: 36px;
-        font-weight: bold;
+        font-size: 30px;
+        font-weight: 700;
+        color: #2d3748;
     }
+    .stat-card .label {
+        font-size: 12px;
+        color: #718096;
+        margin-top: 4px;
+    }
+    .stat-card .number.primary { color: #0b7d3b; }
     .stat-card .number.success { color: #48bb78; }
     .stat-card .number.warning { color: #ed8936; }
-    .stat-card .number.danger { color: #fc8181; }
-    .stat-card .number.info { color: #4299e1; }
+    .stat-card .number.danger { color: #e53e3e; }
+    .stat-card .number.info { color: #3182ce; }
+    .stat-card .number.purple { color: #805ad5; }
 
+    /* ===== CONTENT SECTIONS ===== */
     .content {
         background: white;
         padding: 20px;
         border-radius: 10px;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        margin-bottom: 30px;
+        margin-bottom: 25px;
     }
     .content h2 {
         color: #2d3748;
-        margin-bottom: 20px;
+        margin-bottom: 15px;
+        font-size: 18px;
+        border-bottom: 2px solid #e8f5e9;
+        padding-bottom: 10px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
     }
+    .content h2 i {
+        color: #0b7d3b;
+    }
+    .content .empty-state {
+        text-align: center;
+        color: #a0aec0;
+        padding: 30px 10px;
+    }
+    .content .empty-state i {
+        font-size: 36px;
+        display: block;
+        margin-bottom: 10px;
+        color: #cbd5e0;
+    }
+
+    /* ===== TABLES ===== */
     .table {
         width: 100%;
         border-collapse: collapse;
@@ -131,20 +233,27 @@
         background: #f7fafc;
         color: #4a5568;
         font-weight: 600;
-        padding: 12px;
+        padding: 10px 12px;
         text-align: left;
         border-bottom: 2px solid #e2e8f0;
+        font-size: 13px;
     }
     .table td {
-        padding: 12px;
+        padding: 10px 12px;
         border-bottom: 1px solid #e2e8f0;
+        font-size: 14px;
     }
-    .table tr:hover {
+    .table tbody tr {
+        transition: all 0.2s;
+    }
+    .table tbody tr:hover {
+        transform: scale(1.003);
         background: #f7fafc;
     }
+
     .badge {
         display: inline-block;
-        padding: 4px 12px;
+        padding: 3px 12px;
         border-radius: 20px;
         font-size: 12px;
         font-weight: 600;
@@ -152,26 +261,27 @@
     .badge-success { background: #c6f6d5; color: #22543d; }
     .badge-warning { background: #feebc8; color: #7b341e; }
     .badge-danger { background: #fed7d7; color: #742a2a; }
+    .badge-info { background: #bee3f8; color: #2a4365; }
 
+    /* ===== DASHBOARD LAYOUT ===== */
     .dashboard-features {
         display: flex;
         gap: 20px;
         margin-top: 20px;
     }
-
     .sidebar-nav {
         width: 200px;
         background: white;
         border-radius: 10px;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        padding: 10px 0;
+        padding: 8px 0;
         flex-shrink: 0;
         height: fit-content;
     }
     .sidebar-nav .nav-item {
         display: flex;
         align-items: center;
-        padding: 12px 18px;
+        padding: 10px 18px;
         color: #4a5568;
         text-decoration: none;
         transition: all 0.3s;
@@ -179,7 +289,7 @@
         font-weight: 500;
         border-left: 3px solid transparent;
         gap: 10px;
-        font-size: 14px;
+        font-size: 13px;
     }
     .sidebar-nav .nav-item i {
         width: 18px;
@@ -187,12 +297,12 @@
     }
     .sidebar-nav .nav-item:hover {
         background: #f7fafc;
-        color: #667eea;
+        color: #0b7d3b;
     }
     .sidebar-nav .nav-item.active {
-        background: #ebf4ff;
-        color: #667eea;
-        border-left-color: #667eea;
+        background: #e8f5e9;
+        color: #0b7d3b;
+        border-left-color: #0b7d3b;
     }
     .sidebar-nav .nav-item a {
         color: inherit;
@@ -202,10 +312,20 @@
         gap: 10px;
         width: 100%;
     }
+    .sidebar-nav .divider {
+        border-top: 1px solid #e2e8f0;
+        margin: 5px 15px;
+    }
 
     .features-content {
         flex: 1;
         min-width: 0;
+        display: grid;
+        grid-template-columns: 70% 30%;
+        gap: 20px;
+    }
+    .features-content .full-width {
+        grid-column: 1 / -1;
     }
 
     .drug-list-panel {
@@ -214,7 +334,6 @@
         border-radius: 10px;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
         overflow-x: auto;
-        margin-bottom: 20px;
     }
     .drug-list-panel h3 {
         color: #2d3748;
@@ -222,7 +341,7 @@
         display: flex;
         align-items: center;
         gap: 10px;
-        font-size: 16px;
+        font-size: 15px;
     }
     .drug-list-panel h3 i {
         color: #ed8936;
@@ -233,7 +352,7 @@
         padding: 20px;
         border-radius: 10px;
         box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        max-height: 500px;
+        max-height: 600px;
         overflow-y: auto;
     }
     .sale-panel h3 {
@@ -242,12 +361,13 @@
         display: flex;
         align-items: center;
         gap: 10px;
-        font-size: 16px;
+        font-size: 15px;
     }
     .sale-panel h3 i {
         color: #4299e1;
     }
 
+    /* ===== EXPIRY STYLES ===== */
     .expiry-soon {
         background: #fed7d7;
         color: #742a2a;
@@ -267,18 +387,19 @@
         display: inline-block;
     }
 
+    /* ===== QTY CLICK ===== */
     .qty-click {
         cursor: pointer;
-        color: #4299e1;
+        color: #3182ce;
         font-weight: 700;
         transition: 0.2s;
         display: inline-block;
-        padding: 4px 10px;
+        padding: 3px 10px;
         border-radius: 6px;
-        background: #ebf4ff;
+        background: #ebf8ff;
     }
     .qty-click:hover {
-        background: #667eea;
+        background: #0b7d3b;
         color: white;
         transform: scale(1.05);
     }
@@ -287,6 +408,7 @@
         font-size: 11px;
     }
 
+    /* ===== SALE PANEL STYLES ===== */
     .sale-item-detail {
         background: #f7fafc;
         padding: 12px;
@@ -311,6 +433,7 @@
         color: #718096;
         margin-top: 5px;
     }
+
     .form-group {
         margin-bottom: 12px;
     }
@@ -330,7 +453,7 @@
         transition: 0.2s;
     }
     .form-group input:focus {
-        border-color: #667eea;
+        border-color: #0b7d3b;
         outline: none;
     }
 
@@ -353,15 +476,12 @@
         min-width: 60px;
     }
     .payment-options button:hover {
-        border-color: #667eea;
+        border-color: #0b7d3b;
     }
     .payment-options button.active {
-        border-color: #667eea;
-        background: #ebf4ff;
-        color: #667eea;
-    }
-    .payment-options button i {
-        margin-right: 4px;
+        border-color: #0b7d3b;
+        background: #e8f5e9;
+        color: #0b7d3b;
     }
 
     .mobile-money-details {
@@ -369,7 +489,7 @@
         padding: 12px;
         border-radius: 8px;
         margin: 10px 0;
-        border-left: 4px solid #667eea;
+        border-left: 4px solid #0b7d3b;
     }
     .mobile-money-details .merchant {
         font-size: 13px;
@@ -377,7 +497,7 @@
         margin: 3px 0;
     }
     .mobile-money-details .merchant strong {
-        color: #667eea;
+        color: #0b7d3b;
     }
 
     .total-display {
@@ -390,7 +510,7 @@
         margin-top: 8px;
     }
     .total-display span {
-        color: #667eea;
+        color: #0b7d3b;
     }
 
     .btn-success {
@@ -425,6 +545,7 @@
         margin-bottom: 10px;
         color: #cbd5e0;
     }
+
     .loading {
         text-align: center;
         padding: 30px;
@@ -435,6 +556,98 @@
         margin-bottom: 10px;
     }
 
+    /* ===== RECEIPTS PANEL ===== */
+    .receipt-panel {
+        background: white;
+        padding: 20px;
+        border-radius: 10px;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        overflow-x: auto;
+        margin-bottom: 20px;
+        grid-column: 1 / -1;
+    }
+    .receipt-panel h3 {
+        color: #2d3748;
+        margin-bottom: 15px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 16px;
+    }
+    .receipt-panel h3 i {
+        color: #4299e1;
+    }
+
+    .receipt-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+        gap: 12px;
+        margin-bottom: 18px;
+    }
+    .receipt-stat {
+        background: #f7fafc;
+        padding: 12px;
+        border-radius: 8px;
+        text-align: center;
+    }
+    .receipt-stat .number {
+        font-size: 22px;
+        font-weight: bold;
+        color: #2d3748;
+    }
+    .receipt-stat .label {
+        font-size: 11px;
+        color: #718096;
+        text-transform: uppercase;
+        margin-top: 3px;
+    }
+    .receipt-stat .number.primary { color: #0b7d3b; }
+    .receipt-stat .number.warning { color: #ed8936; }
+    .receipt-stat .number.success { color: #48bb78; }
+
+    /* ===== PAGINATION ===== */
+    .pagination-wrapper {
+        margin-top: 20px;
+        display: flex;
+        justify-content: center;
+        gap: 5px;
+        flex-wrap: wrap;
+    }
+    .pagination-wrapper button {
+        padding: 6px 14px;
+        border: 1px solid #e2e8f0;
+        background: white;
+        border-radius: 5px;
+        cursor: pointer;
+        transition: 0.2s;
+        font-size: 14px;
+        font-weight: 500;
+        color: #2d3748;
+    }
+    .pagination-wrapper button:hover {
+        background: #ebf4ff;
+        border-color: #0b7d3b;
+        color: #0b7d3b;
+    }
+    .pagination-wrapper button.active {
+        background: #0b7d3b;
+        border-color: #0b7d3b;
+        color: white;
+    }
+    .pagination-wrapper button:disabled {
+        opacity: 0.4;
+        cursor: not-allowed;
+        background: #f7fafc;
+    }
+    .pagination-wrapper .page-info {
+        padding: 6px 14px;
+        color: #718096;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+    }
+
+    /* ===== TOAST ===== */
     .toast {
         position: fixed;
         bottom: 30px;
@@ -459,95 +672,13 @@
         to { transform: translateY(0); opacity: 1; }
     }
 
-    .receipt-panel {
-        background: white;
-        padding: 20px;
-        border-radius: 10px;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-        overflow-x: auto;
-        margin-bottom: 20px;
-    }
-    .receipt-panel h3 {
-        color: #2d3748;
-        margin-bottom: 15px;
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        font-size: 16px;
-    }
-    .receipt-panel h3 i {
-        color: #4299e1;
-    }
-    .receipt-stats {
-        display: grid;
-        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-        gap: 15px;
-        margin-bottom: 20px;
-    }
-    .receipt-stat {
-        background: #f7fafc;
-        padding: 15px;
-        border-radius: 8px;
-        text-align: center;
-    }
-    .receipt-stat .number {
-        font-size: 24px;
-        font-weight: bold;
-        color: #2d3748;
-    }
-    .receipt-stat .label {
-        font-size: 12px;
-        color: #718096;
-        text-transform: uppercase;
-        margin-top: 4px;
-    }
-
-    /* Pagination */
-    .pagination-wrapper {
-        margin-top: 20px;
-        display: flex;
-        justify-content: center;
-        gap: 5px;
-        flex-wrap: wrap;
-    }
-    .pagination-wrapper button {
-        padding: 6px 14px;
-        border: 1px solid #e2e8f0;
-        background: white;
-        border-radius: 5px;
-        cursor: pointer;
-        transition: 0.2s;
-        font-size: 14px;
-        font-weight: 500;
-        color: #2d3748;
-    }
-    .pagination-wrapper button:hover {
-        background: #ebf4ff;
-        border-color: #667eea;
-        color: #667eea;
-    }
-    .pagination-wrapper button.active {
-        background: #667eea;
-        border-color: #667eea;
-        color: white;
-    }
-    .pagination-wrapper button:disabled {
-        opacity: 0.4;
-        cursor: not-allowed;
-        background: #f7fafc;
-    }
-    .pagination-wrapper .page-info {
-        padding: 6px 14px;
-        color: #718096;
-        font-size: 14px;
-        display: flex;
-        align-items: center;
-    }
-
-    /* Responsive */
+    /* ===== RESPONSIVE ===== */
     @media (max-width: 1100px) {
         .dashboard-features {
             flex-direction: column;
+        }
+        .features-content {
+            grid-template-columns: 1fr;
         }
         .sidebar-nav {
             width: 100%;
@@ -562,7 +693,7 @@
         }
         .sidebar-nav .nav-item.active {
             border-left-color: transparent;
-            border-bottom-color: #667eea;
+            border-bottom-color: #0b7d3b;
         }
     }
     @media (max-width: 768px) {
@@ -570,10 +701,15 @@
             flex-direction: column;
         }
         .stats {
-            grid-template-columns: 1fr;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 12px;
         }
         .header h1 {
-            font-size: 24px;
+            font-size: 22px;
+        }
+        .header .summary {
+            gap: 12px;
+            font-size: 12px;
         }
         .table {
             font-size: 12px;
@@ -582,7 +718,25 @@
             padding: 6px 8px;
         }
         .receipt-stats {
-            grid-template-columns: 1fr 1fr;
+            grid-template-columns: repeat(2, 1fr);
+        }
+        .quick-actions .btn {
+            padding: 8px 14px;
+            font-size: 12px;
+        }
+        .features-content {
+            grid-template-columns: 1fr;
+        }
+    }
+    @media (max-width: 480px) {
+        .stats {
+            grid-template-columns: 1fr;
+        }
+        .quick-actions {
+            flex-direction: column;
+        }
+        .quick-actions .btn {
+            justify-content: center;
         }
     }
     </style>
@@ -591,8 +745,15 @@
 <div class="container">
 
     <div class="header">
-        <h1>MIYABALA Pharmacy</h1>
-        <p>Welcome to your pharmacy management dashboard</p>
+        <h1>🏥 MIYABALA Pharmacy</h1>
+        <div class="subtitle">Welcome back, {{ user.get_full_name|default:user.username }}</div>
+        <div class="summary">
+            <span><i class="fas fa-money-bill-wave"></i> Sales: UGX {{ today_sales|floatformat:0 }}</span>
+            <span><i class="fas fa-receipt"></i> {{ today_transactions }} Transactions</span>
+            <span><i class="fas fa-undo-alt"></i> {{ today_returns_count }} Returns</span>
+            <span><i class="fas fa-exclamation-triangle"></i> {{ low_stock_count }} Low Stock</span>
+            <span><i class="fas fa-clock"></i> {{ expiring_soon_count|default:"0" }} Expiring Soon</span>
+        </div>
     </div>
 
     <!-- ===== NAVIGATION ===== -->
@@ -604,29 +765,93 @@
         <a href="/admin/">Admin Panel</a>
     </div>
 
+    <!-- ===== QUICK ACTIONS ===== -->
+    <div class="quick-actions">
+        <a href="{% url 'stock:create_sale' %}" class="btn btn-primary"><i class="fas fa-plus-circle"></i> New Sale</a>
+        <a href="{% url 'stock:drug_create' %}" class="btn btn-success"><i class="fas fa-plus-circle"></i> Add Medicine</a>
+        <a href="{% url 'stock:return_create' %}" class="btn btn-warning"><i class="fas fa-undo-alt"></i> Return Drug</a>
+        <a href="{% url 'stock:reports_dashboard' %}" class="btn btn-info"><i class="fas fa-file-alt"></i> Generate Report</a>
+        <a href="{% url 'stock:add_stock_to_drug' %}" class="btn btn-danger"><i class="fas fa-boxes"></i> Add Stock</a>
+    </div>
+
     <!-- ===== STATISTICS ===== -->
     <div class="stats">
-        <div class="stat-card">
-            <h3>Total Medicines</h3>
-            <div class="number success">{{ total_medicines|default:"0" }}</div>
+        <div class="stat-card primary">
+            <h3><i class="fas fa-money-bill-wave"></i> Gross Sales</h3>
+            <div class="number primary">UGX {{ today_sales|floatformat:0 }}</div>
+            <div class="label">{{ today_transactions }} transactions today</div>
         </div>
-        <div class="stat-card">
-            <h3>Low Stock Items</h3>
-            <div class="number warning">{{ low_stock_count|default:"0" }}</div>
+        <div class="stat-card warning">
+            <h3><i class="fas fa-undo-alt"></i> Returns</h3>
+            <div class="number warning">UGX {{ today_returns|floatformat:0 }}</div>
+            <div class="label">{{ today_returns_count }} items returned</div>
         </div>
-        <div class="stat-card">
-            <h3>Total Suppliers</h3>
+        <div class="stat-card success">
+            <h3><i class="fas fa-check-circle"></i> Net Sales</h3>
+            <div class="number success">UGX {{ net_sales|floatformat:0 }}</div>
+            <div class="label">Sales - Returns</div>
+        </div>
+        <div class="stat-card purple">
+            <h3><i class="fas fa-boxes"></i> Stock Value</h3>
+            <div class="number purple">UGX {{ total_stock_value|floatformat:0 }}</div>
+            <div class="label">Total inventory value</div>
+        </div>
+        <div class="stat-card info">
+            <h3><i class="fas fa-capsules"></i> Medicines</h3>
+            <div class="number info">{{ total_medicines|default:"0" }}</div>
+            <div class="label">Total medicines</div>
+        </div>
+        <div class="stat-card danger">
+            <h3><i class="fas fa-exclamation-triangle"></i> Low Stock</h3>
+            <div class="number danger">{{ low_stock_count|default:"0" }}</div>
+            <div class="label">Need restocking</div>
+        </div>
+        <div class="stat-card warning">
+            <h3><i class="fas fa-clock"></i> Expiring Soon</h3>
+            <div class="number warning">{{ expiring_soon_count|default:"0" }}</div>
+            <div class="label">Within 90 days</div>
+        </div>
+        <div class="stat-card info">
+            <h3><i class="fas fa-truck"></i> Suppliers</h3>
             <div class="number info">{{ total_suppliers|default:"0" }}</div>
+            <div class="label">Total suppliers</div>
         </div>
-        <div class="stat-card">
-            <h3>Total Invoices</h3>
-            <div class="number info">{{ total_invoices|default:"0" }}</div>
+    </div>
+
+    <!-- ===== TODAY'S TOP SELLING ===== -->
+    <div class="content">
+        <h2><i class="fas fa-crown"></i> Today's Top Selling Medicines</h2>
+        {% if top_selling %}
+        <table class="table">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Medicine</th>
+                    <th>Quantity Sold</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for drug, qty in top_selling %}
+                <tr>
+                    <td>{{ forloop.counter }}</td>
+                    <td>{{ drug }}</td>
+                    <td>{{ qty }}</td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <div class="empty-state">
+            <i class="fas fa-chart-bar"></i>
+            <p>No sales have been recorded today.</p>
+            <p style="font-size:13px; color:#cbd5e0;">Sales will appear here once the first transaction is completed.</p>
         </div>
+        {% endif %}
     </div>
 
     <!-- ===== RECENT INVENTORY ===== -->
     <div class="content">
-        <h2>Recent Inventory</h2>
+        <h2><i class="fas fa-boxes"></i> Recent Inventory</h2>
         {% if recent_medicines %}
         <table class="table">
             <thead>
@@ -659,7 +884,10 @@
             </tbody>
         </table>
         {% else %}
-        <p>No medicines available.</p>
+        <div class="empty-state">
+            <i class="fas fa-box-open"></i>
+            <p>No medicines available in the system.</p>
+        </div>
         {% endif %}
     </div>
 
@@ -676,6 +904,10 @@
             <div class="nav-item" data-section="wholesale">
                 <i class="fas fa-warehouse"></i> Whole Sale
             </div>
+            <div class="nav-item" data-section="receipts">
+                <i class="fas fa-receipt"></i> Receipts
+            </div>
+            <div class="divider"></div>
             <a href="{% url 'stock:drug_list' %}" class="nav-item" style="text-decoration:none; color:inherit;">
                 <i class="fas fa-capsules"></i> Medicines
             </a>
@@ -691,12 +923,6 @@
             <a href="{% url 'stock:invoice_list' %}" class="nav-item" style="text-decoration:none; color:inherit;">
                 <i class="fas fa-file-invoice"></i> Invoices
             </a>
-            <a href="{% url 'stock:receipt_list' %}" class="nav-item" style="text-decoration:none; color:inherit;">
-                <i class="fas fa-receipt"></i> Receipts
-            </a>
-            <a href="{% url 'stock:create_sale' %}" class="nav-item" style="text-decoration:none; color:inherit;">
-                <i class="fas fa-cash-register"></i> New Sale
-            </a>
             <a href="{% url 'stock:reports_dashboard' %}" class="nav-item" style="text-decoration:none; color:inherit;">
                 <i class="fas fa-chart-bar"></i> Reports
             </a>
@@ -705,7 +931,7 @@
                 <i class="fas fa-users"></i> Users
             </a>
             {% endif %}
-            <div style="border-top: 1px solid #e2e8f0; margin: 5px 15px;"></div>
+            <div class="divider"></div>
             <a href="{% url 'stock:logout' %}" class="nav-item" style="text-decoration:none; color:inherit;">
                 <i class="fas fa-sign-out-alt"></i> Logout
             </a>
@@ -714,9 +940,9 @@
         <!-- MAIN CONTENT -->
         <div class="features-content">
 
-            <!-- Drug List Panel with Pagination -->
+            <!-- Drug List Panel -->
             <div id="drugListPanel" class="drug-list-panel">
-                <h3><i class="fas fa-clock"></i> Shortest Expiry Drugs <span id="drugCount" style="font-weight:normal; font-size:14px; color:#718096;"></span></h3>
+                <h3><i class="fas fa-clock"></i> Shortest Expiry Drugs <span id="drugCount" style="font-weight:normal; font-size:13px; color:#718096;"></span></h3>
 
                 <div id="loadingMessage" class="loading">
                     <i class="fas fa-spinner fa-spin"></i>
@@ -742,14 +968,6 @@
                 </div>
             </div>
 
-            <!-- Receipts Panel -->
-            <div id="receiptsPanel" class="receipt-panel" style="display:none;">
-                <h3><i class="fas fa-receipt"></i> Today's Receipts</h3>
-                <div id="receiptsContent">
-                    <div class="loading"><i class="fas fa-spinner fa-spin"></i> Loading receipts...</div>
-                </div>
-            </div>
-
             <!-- Sale Panel -->
             <div class="sale-panel" id="salePanel">
                 <h3><i class="fas fa-shopping-cart"></i> Sell Drug</h3>
@@ -758,6 +976,14 @@
                         <i class="fas fa-hand-pointer"></i>
                         <p>Click on a <strong>quantity</strong> in the table to start a sale</p>
                     </div>
+                </div>
+            </div>
+
+            <!-- Receipts Panel (full width) -->
+            <div id="receiptsPanel" class="receipt-panel" style="display:none;">
+                <h3><i class="fas fa-receipt"></i> Today's Receipts</h3>
+                <div id="receiptsContent">
+                    <div class="loading"><i class="fas fa-spinner fa-spin"></i> Loading receipts...</div>
                 </div>
             </div>
 
@@ -812,7 +1038,7 @@ async function fetchDrugs(page = 1) {
         loading.innerHTML = `
             <i class="fas fa-exclamation-circle" style="color:#fc8181; font-size:30px;"></i>
             <p style="margin-top:10px; color:#742a2a;">Error loading drugs: ${error.message}</p>
-            <button onclick="fetchDrugs(1)" style="margin-top:10px; padding:8px 16px; background:#667eea;color:white; border:none; border-radius:5px; cursor:pointer;">
+            <button onclick="fetchDrugs(1)" style="margin-top:10px; padding:8px 16px; background:#0b7d3b;color:white; border:none; border-radius:5px; cursor:pointer;">
                 <i class="fas fa-redo"></i> Retry
             </button>
         `;
@@ -874,19 +1100,16 @@ function renderPagination() {
     }
 
     let html = '';
-    // Previous button
     html += `<button onclick="fetchDrugs(${currentPage - 1})" ${currentPage <= 1 ? 'disabled' : ''}>
         <i class="fas fa-chevron-left"></i> Prev
     </button>`;
 
-    // Page numbers
     const startPage = Math.max(1, currentPage - 2);
     const endPage = Math.min(totalPages, currentPage + 2);
     for (let i = startPage; i <= endPage; i++) {
         html += `<button class="${i === currentPage ? 'active' : ''}" onclick="fetchDrugs(${i})">${i}</button>`;
     }
 
-    // Next button
     html += `<button onclick="fetchDrugs(${currentPage + 1})" ${currentPage >= totalPages ? 'disabled' : ''}>
         Next <i class="fas fa-chevron-right"></i>
     </button>`;
@@ -896,7 +1119,7 @@ function renderPagination() {
 }
 
 // ============================================================
-//  SALE PANEL LOGIC (unchanged)
+//  SALE PANEL LOGIC
 // ============================================================
 function openSale(drugId) {
     const drug = drugData.find(d => d.id === drugId);
@@ -1087,16 +1310,20 @@ function loadReceipts() {
                 let html = `
                     <div class="receipt-stats">
                         <div class="receipt-stat">
-                            <div class="number">UGX ${data.total_sales.toFixed(0)}</div>
-                            <div class="label">Today's Total</div>
+                            <div class="number primary">UGX ${data.total_sales.toFixed(0)}</div>
+                            <div class="label">Gross Sales</div>
+                        </div>
+                        <div class="receipt-stat">
+                            <div class="number warning">UGX ${data.total_returns?.toFixed(0) || '0'}</div>
+                            <div class="label">Returns</div>
+                        </div>
+                        <div class="receipt-stat">
+                            <div class="number success">UGX ${data.net_sales?.toFixed(0) || data.total_sales.toFixed(0)}</div>
+                            <div class="label">Net Sales</div>
                         </div>
                         <div class="receipt-stat">
                             <div class="number">${data.total_transactions}</div>
                             <div class="label">Transactions</div>
-                        </div>
-                        <div class="receipt-stat">
-                            <div class="number">${data.recent_receipts ? data.recent_receipts.length : 0}</div>
-                            <div class="label">Recent</div>
                         </div>
                     </div>
                 `;
@@ -1135,10 +1362,10 @@ function loadReceipts() {
                     });
                     html += `</tbody></table>`;
                 } else {
-                    html += `<p style="text-align:center; color:#a0aec0; padding:20px;">
-                        <i class="fas fa-receipt" style="font-size:30px; display:block; margin-bottom:10px;"></i>
-                        No receipts found for today.
-                    </p>`;
+                    html += `<div class="empty-state">
+                        <i class="fas fa-receipt" style="font-size:30px;"></i>
+                        <p>No receipts found for today.</p>
+                    </div>`;
                 }
                 container.innerHTML = html;
             } else {
@@ -1170,7 +1397,7 @@ function showToast(message, type = 'success') {
 document.addEventListener('DOMContentLoaded', function() {
     fetchDrugs(1);
 
-    document.querySelectorAll('.sidebar-nav .nav-item:not(a)').forEach(item => {
+    document.querySelectorAll('.sidebar-nav .nav-item[data-section]').forEach(item => {
         item.addEventListener('click', function() {
             document.querySelectorAll('.sidebar-nav .nav-item').forEach(i => i.classList.remove('active'));
             this.classList.add('active');
@@ -1178,19 +1405,23 @@ document.addEventListener('DOMContentLoaded', function() {
             const section = this.dataset.section;
             const drugPanel = document.getElementById('drugListPanel');
             const receiptsPanel = document.getElementById('receiptsPanel');
+            const salePanel = document.getElementById('salePanel');
 
             if (section === 'receipts') {
                 drugPanel.style.display = 'none';
                 receiptsPanel.style.display = 'block';
+                salePanel.style.display = 'none';
                 loadReceipts();
             } else if (section === 'retail') {
                 drugPanel.style.display = 'block';
                 receiptsPanel.style.display = 'none';
+                salePanel.style.display = 'block';
                 fetchDrugs(1);
-            } else {
+            } else if (section === 'wholesale') {
                 drugPanel.style.display = 'block';
                 receiptsPanel.style.display = 'none';
-                showToast(`📋 ${this.textContent.trim()} section - Coming soon!`, 'info');
+                salePanel.style.display = 'block';
+                showToast('� wholesale section coming soon!', 'info');
             }
         });
     });
@@ -1206,7 +1437,6 @@ setInterval(function() {
 
 </script>
 
-
 <!-- PWA Service Worker -->
 <script>
 if ('serviceWorker' in navigator) {
@@ -1221,3 +1451,5 @@ if ('serviceWorker' in navigator) {
     });
 }
 </script>
+</body>
+</html>
