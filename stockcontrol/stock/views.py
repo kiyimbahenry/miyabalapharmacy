@@ -1576,14 +1576,48 @@ def return_create(request):
             messages.error(request, f'Error creating return: {str(e)}')
             return redirect('stock:return_create')
 
-    # GET request - show form
+        # GET request - show form with properly JSON-encoded items
+    import json
     receipts = Receipt.objects.all().order_by('-created_at')
-    drugs = Drug.objects.all().order_by('name')
+
+    formatted_receipts = []
+
+    for receipt in receipts:
+        items = receipt.items if isinstance(receipt.items, list) else []
+
+        clean_items = []
+
+        for item in items:
+            if not item:
+                continue
+
+            clean_items.append({
+                'drug_id': item.get('drug_id', item.get('id', 0)),
+                'drug_name': item.get('drug_name', item.get('name', 'Unknown')),
+                'quantity': item.get('quantity', item.get('qty', 0)),
+                'unit_price': float(
+                    item.get('unit_price', item.get('price', 0)) or 0
+                ),
+                'total': float(
+                    item.get('total', item.get('Total', 0)) or 0
+                ),
+            })
+
+        formatted_receipts.append({
+            'id': receipt.id,
+            'receipt_number': receipt.receipt_number,
+            'created_at': receipt.created_at,
+            'total_amount': float(receipt.total_amount or 0),
+            'items': clean_items,
+            'items_json': json.dumps(clean_items),
+            'item_count': len(clean_items),
+        })
 
     context = {
-        'receipts': receipts,
-        'drugs': drugs,
+        'receipts': formatted_receipts,
+        'drugs': Drug.objects.all().order_by('name'),
     }
+
     return render(request, 'stock/return_form.html', context)
 
 @login_required

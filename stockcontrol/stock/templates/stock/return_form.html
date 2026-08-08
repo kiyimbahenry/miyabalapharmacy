@@ -130,9 +130,14 @@
                         <select name="receipt" id="receiptSelect" class="form-select" required>
                             <option value="">-- Select Receipt --</option>
                             {% for receipt in receipts %}
-                                <option value="{{ receipt.id }}" data-items='{{ receipt.items|safe }}'>
-                                    {{ receipt.receipt_number }} - {{ receipt.created_at|date:"d/m/Y H:i" }}
-                                    ({{ receipt.item_count }} items - UGX {{ receipt.total_amount|floatformat:0 }})
+                                <option
+                                    value="{{ receipt.id }}"
+                                    data-items="{{ receipt.items_json|escape }}"
+                                >
+                                    {{ receipt.receipt_number }}
+                                    - {{ receipt.created_at|date:"d/m/Y H:i" }}
+                                    ({{ receipt.item_count }} items -
+                                    UGX {{ receipt.total_amount|floatformat:0 }})
                                 </option>
                             {% endfor %}
                         </select>
