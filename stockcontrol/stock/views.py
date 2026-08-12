@@ -268,7 +268,7 @@ def get_all_drugs_for_sale(request):
         today = timezone.now().date()
         drugs_qs = Drug.objects.filter(
             Q(expiry_date__isnull=True) | Q(expiry_date__gte=today)
-        ).order_by('name')
+        ).order_by('expiry_date')
         data = []
         for drug in drugs_qs:
             data.append({
@@ -279,6 +279,7 @@ def get_all_drugs_for_sale(request):
                 'price': float(drug.selling_price),
                 'qty': drug.stock_quantity,
                 'batch_no': drug.batch_no,
+                'expiry': drug.expiry_date.strftime('%Y-%m-%d') if drug.expiry_date else None,
             })
         return JsonResponse(data, safe=False)
     except Exception as e:
