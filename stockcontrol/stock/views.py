@@ -1900,6 +1900,9 @@ def generate_report_api(request):
 def generate_report_data(report_type):
     """Generate report data based on type (including returns)"""
     today = timezone.now().date()
+    yesterday = today - timedelta(days=1)
+
+
     report_data = {
         'report_type': report_type,
         'generated_at': timezone.now().strftime('%Y-%m-%d %H:%M:%S'),
@@ -1910,24 +1913,24 @@ def generate_report_data(report_type):
     }
 
     if report_type == 'daily':
-        start_date = today
-        end_date = today
-        report_data['period'] = f"Daily Report - {today.strftime('%B %d, %Y')}"
+        start_date = yesterday
+        end_date = yesterday
+        report_data['period'] = f"Daily Report - {yesterday.strftime('%B %d, %Y')}"
     elif report_type == 'weekly':
-        start_date = today - timedelta(days=7)
-        end_date = today
+        end_date = yesterday
+        start_date = end_date - timedelta(days=7)
         report_data['period'] = f"Weekly Report - {start_date.strftime('%B %d')} to {end_date.strftime('%B %d, %Y')}"
     elif report_type == 'monthly':
-        start_date = today.replace(day=1)
-        end_date = today
-        report_data['period'] = f"Monthly Report - {today.strftime('%B %Y')}"
+        end_date = yesterday
+        start_date = end_date.replace(day=1)
+        report_data['period'] = f"Monthly Report - {end_date.strftime('%B %Y')}"
     elif report_type == 'annual':
-        start_date = today.replace(month=1, day=1)
-        end_date = today
-        report_data['period'] = f"Annual Report - {today.year}"
+        end_date = yesterday
+        start_date = end_date.replace(month=1, day=1)
+        report_data['period'] = f"Annual Report - {end_date.year}"
     else:
-        start_date = today
-        end_date = today
+        start_date = yesterday
+        end_date = yesterday
 
     receipts = Receipt.objects.filter(
         created_at__date__gte=start_date,
@@ -2032,24 +2035,28 @@ def send_report_email(report_data, email, report_type):
         )
 
         # Determine report date based on type
+        today = timezone.now().date()
+        yesterday = today - timedelta(days=1)
+
+
         if report_type == 'daily':
-            report_date = timezone.now().date()
+            report_date = yesterday
             start_date = report_date
             end_date = report_date
         elif report_type == 'weekly':
-            end_date = timezone.now().date()
+            end_date = yesterday
             start_date = end_date - timedelta(days=7)
             report_date = end_date
         elif report_type == 'monthly':
-            end_date = timezone.now().date()
+            end_date = yesterday
             start_date = end_date.replace(day=1)
             report_date = end_date
         elif report_type == 'annual':
-            end_date = timezone.now().date()
+            end_date = yesterday
             start_date = end_date.replace(month=1, day=1)
             report_date = end_date
         else:
-            report_date = timezone.now().date()
+            report_date = yesterday
             start_date = report_date
             end_date = report_date
 
