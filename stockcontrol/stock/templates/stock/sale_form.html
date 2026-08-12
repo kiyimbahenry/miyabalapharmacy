@@ -302,6 +302,26 @@
             background: #d4edda;
             color: #155724;
         }
+        .badge-expiry {
+            display: inline-block;
+            padding: 2px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: 600;
+            margin-left: 5px;
+        }
+        .badge-expiry.soon {
+            background: #fff3cd;
+            color: #856404;
+        }
+        .badge-expiry.expired {
+            background: #f8d7da;
+            color: #721c24;
+        }
+        .badge-expiry.good {
+            background: #d4edda;
+            color: #155724;
+        }
         .payment-methods {
             display: flex;
             gap: 10px;
@@ -336,6 +356,13 @@
             border-radius: 4px;
             padding: 4px 2px;
             font-size: 14px;
+        }
+        .expiry-soon-text {
+            color: #dc3545;
+            font-weight: 600;
+        }
+        .expiry-normal-text {
+            color: #28a745;
         }
     </style>
 </head>
@@ -439,7 +466,7 @@
         });
 
         // ============================================================
-        //  LOAD DRUGS – uses the new flat API endpoint
+        //  LOAD DRUGS – sorted by expiry date (shortest first)
         // ============================================================
         function loadDrugs() {
             fetch('/api/drugs/all/')
@@ -448,9 +475,14 @@
                     return response.json();
                 })
                 .then(data => {
-                    // data is a flat array of drugs
-                    allDrugs = data;
-                    displayDrugs(data);
+                    // Sort drugs by expiry date (shortest expiry first)
+                    allDrugs = data.sort((a, b) => {
+                        // If no expiry date, put at end
+                        if (!a.expiry) return 1;
+                        if (!b.expiry) return -1;
+                        return new Date(a.expiry) - new Date(b.expiry);
+                    });
+                    displayDrugs(allDrugs);
                 })
                 .catch(error => {
                     console.error('Error loading drugs:', error);
@@ -475,22 +507,47 @@
             }
 
             let html = '';
+            const today = new Date();
+            today.setHours(0, 0, 0, 0);
+
             drugs.forEach(drug => {
                 const stockClass = drug.qty < 10 ? 'badge-stock low' : 'badge-stock ok';
                 const stockText = drug.qty < 10 ? '⚠️ Low Stock' : '✅ In Stock';
+
+                // Expiry status
+                let expiryClass = 'badge-expiry good';
+                let expiryText = '';
+                if (drug.expiry) {
+                    const expiryDate = new Date(drug.expiry);
+                    const daysUntilExpiry = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
+                    if (daysUntilExpiry < 0) {
+                        expiryClass = 'badge-expiry expired';
+                        expiryText = '🔴 Expired';
+                    } else if (daysUntilExpiry <= 30) {
+                        expiryClass = 'badge-expiry soon';
+                        expiryText = `⚠️ Expires in ${daysUntilExpiry} days`;
+                    } else {
+                        expiryClass = 'badge-expiry good';
+                        expiryText = `📅 Expires: ${drug.expiry}`;
+                    }
+                } else {
+                    expiryText = '📅 No expiry';
+                }
+
                 html += `
                     <div class="drug-item" onclick="addToCart(${drug.id})">
                         <div class="info">
                             <div class="name">${drug.generic || drug.name}</div>
                             <div class="details">
                                 Brand: ${drug.brand || 'N/A'} |
-                                Batch: ${drug.batch_no || 'N/A'}
+                                Stock: <strong>${drug.qty}</strong> units
                                 <span class="${stockClass}">${stockText}</span>
+                                <span class="${expiryClass}">${expiryText}</span>
                             </div>
                         </div>
                         <div class="price">UGX ${drug.price || 0}</div>
-                        <button class="add-btn" onclick="event.stopPropagation(); addToCart(${drug.id})">
-                            ➕ Add
+                        <button class="add-btn" onclick="event.stopPropagation(); addToCart(${drug.id})" ${drug.qty <= 0 ? 'disabled' : ''}>
+                            ${drug.qty <= 0 ? '🚫 Out' : '➕ Add'}
                         </button>
                     </div>
                 `;
@@ -519,6 +576,11 @@
                 return;
             }
 
+            if (drug.qty <= 0) {
+                showToast('Out of stock!', 'error');
+                return;
+            }
+
             const existing = cart.find(item => item.id === drugId);
             if (existing) {
                 if (existing.quantity >= drug.qty) {
@@ -527,10 +589,6 @@
                 }
                 existing.quantity += 1;
             } else {
-                if (drug.qty <= 0) {
-                    showToast('Out of stock!', 'error');
-                    return;
-                }
                 cart.push({
                     id: drug.id,
                     name: drug.generic || drug.name,
