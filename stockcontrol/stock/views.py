@@ -52,10 +52,10 @@ def is_admin_or_manager(user):
         return True
     return user.groups.filter(name__in=['admin', 'manager']).exists()
 
+
 @csrf_exempt
 def run_daily_report(request):
     """Endpoint to trigger daily report via cron-job.org"""
-    # Allow both GET and POST
     if request.method not in ['GET', 'POST']:
         return JsonResponse({'error': 'Method not allowed'}, status=405)
 
@@ -107,7 +107,6 @@ def login_view(request):
         if username_or_email and password:
             user = None
 
-            # Try to find user by email first
             if '@' in username_or_email:
                 try:
                     user_obj = User.objects.get(email=username_or_email)
@@ -115,7 +114,6 @@ def login_view(request):
                 except User.DoesNotExist:
                     pass
 
-            # If not found by email, try by username
             if not user:
                 user = authenticate(request, username=username_or_email, password=password)
 
@@ -139,7 +137,7 @@ def logout_view(request):
 
 
 # ============================================================
-# DASHBOARD VIEW
+# DASHBOARD VIEW (FIXED - Single version)
 # ============================================================
 
 @login_required
@@ -163,6 +161,14 @@ def dashboard(request):
     total_stock_value = 0
     for drug in all_drugs:
         total_stock_value += drug.stock_quantity * drug.selling_price
+
+    # ---- OUT OF STOCK COUNT ----
+    out_of_stock_count = Drug.objects.filter(stock_quantity=0).count()
+    expired_out_of_stock_count = Drug.objects.filter(
+        expiry_date__lt=today,
+        stock_quantity=0
+    ).count()
+    total_out_of_stock = out_of_stock_count + expired_out_of_stock_count
 
     # ---- TODAY'S SALES ----
     today_receipts = Receipt.objects.filter(created_at__date=today)
@@ -202,8 +208,9 @@ def dashboard(request):
         'total_suppliers': total_suppliers,
         'total_invoices': total_invoices,
         'low_stock_count': low_stock_count,
-        'recent_medicines': Drug.objects.all().order_by('-id')[:5],
+        'recent_medicines': recent_medicines,
         'total_stock_value': total_stock_value,
+        'total_out_of_stock': total_out_of_stock,
         # Today's sales data
         'today_sales': today_sales,
         'today_transactions': today_transactions,
@@ -211,42 +218,6 @@ def dashboard(request):
         'today_returns_count': today_returns_count,
         'net_sales': net_sales,
         'top_selling': top_selling,
-    }
-
-    return render(request, 'stock/dashboard.html', context)
-
-@login_required
-def dashboard(request):
-    """
-    Dashboard view showing statistics and recent data
-    """
-    today = timezone.now().date()
-
-    # ---- EXISTING STATISTICS ----
-    total_medicines = Drug.objects.count()
-    total_suppliers = Supplier.objects.count()
-    total_invoices = Invoice.objects.count()
-    low_stock_count = Drug.objects.filter(stock_quantity__lt=10).count()
-
-    # ---- OUT OF STOCK COUNT (NEW) ----
-    out_of_stock_count = Drug.objects.filter(stock_quantity=0).count()
-    expired_out_of_stock_count = Drug.objects.filter(
-        expiry_date__lt=today,
-        stock_quantity=0
-    ).count()
-    total_out_of_stock = out_of_stock_count + expired_out_of_stock_count
-
-    # ... rest of your existing code ...
-
-    context = {
-        'total_medicines': total_medicines,
-        'total_suppliers': total_suppliers,
-        'total_invoices': total_invoices,
-        'low_stock_count': low_stock_count,
-        'recent_medicines': recent_medicines,
-        'total_stock_value': total_stock_value,
-        'total_out_of_stock': total_out_of_stock,  # ← ADD THIS
-        # ... other variables ...
     }
 
     return render(request, 'stock/dashboard.html', context)
@@ -323,16 +294,12 @@ def get_all_drugs_for_sale(request):
 
 
 # ============================================================
-# NEW AUTOCOMPLETE API – searches across name, brand, generic
+# AUTOCOMPLETE API
 # ============================================================
 
 @login_required
 def autocomplete_drugs(request):
-    """
-    API endpoint for drug autocomplete.
-    Searches across name, brand, and generic_name.
-    Used by the Add Stock form and any other autocomplete inputs.
-    """
+    """API endpoint for drug autocomplete."""
     query = request.GET.get('q', '').strip()
     if len(query) < 2:
         return JsonResponse([], safe=False)
@@ -358,15 +325,12 @@ def autocomplete_drugs(request):
 
 
 # ============================================================
-# COMPLETE SALE (unchanged)
+# COMPLETE SALE
 # ============================================================
 
 @login_required
 def complete_sale(request):
-    """
-    API endpoint to complete a drug sale and update stock
-    Supports multiple data formats for maximum compatibility
-    """
+    """API endpoint to complete a drug sale and update stock"""
     if request.method != 'POST':
         return JsonResponse({
             'success': False,
@@ -560,17 +524,14 @@ def drug_list(request):
     """List all drugs/medicines with summary totals, exclude expired, paginated."""
     today = timezone.now().date()
 
-    # Base queryset: exclude expired drugs (expiry_date < today) and order by generic_name
     drugs_qs = Drug.objects.filter(
         Q(expiry_date__isnull=True) | Q(expiry_date__gte=today)
     ).select_related('category', 'supplier').order_by('generic_name')
 
-    # Filter by category
     category_id = request.GET.get('category')
     if category_id:
         drugs_qs = drugs_qs.filter(category_id=category_id)
 
-    # Search
     search_query = request.GET.get('search')
     if search_query:
         drugs_qs = drugs_qs.filter(
@@ -582,8 +543,7 @@ def drug_list(request):
 
     categories = Category.objects.all()
 
-    # ---- PAGINATION ----
-    paginator = Paginator(drugs_qs, 10)  # 10 per page
+    paginator = Paginator(drugs_qs, 10)
     page = request.GET.get('page')
     try:
         drugs = paginator.page(page)
@@ -592,7 +552,6 @@ def drug_list(request):
     except EmptyPage:
         drugs = paginator.page(paginator.num_pages)
 
-    # ---- TOTALS (on the filtered queryset, not just the current page) ----
     total_cost_value = drugs_qs.aggregate(
         total=Sum(ExpressionWrapper(
             F('cost_price') * F('stock_quantity') / F('pack_size'),
@@ -605,7 +564,7 @@ def drug_list(request):
     )['total'] or 0
 
     context = {
-        'drugs': drugs,               # paginated object
+        'drugs': drugs,
         'categories': categories,
         'search_query': search_query,
         'selected_category': category_id,
@@ -621,7 +580,6 @@ def expired_drug_list(request):
     today = timezone.now().date()
     expired_qs = Drug.objects.filter(expiry_date__lt=today).order_by('expiry_date')
 
-    # Search (optional)
     search_query = request.GET.get('search')
     if search_query:
         expired_qs = expired_qs.filter(
@@ -645,40 +603,38 @@ def expired_drug_list(request):
     }
     return render(request, 'stock/expired_drug_list.html', context)
 
+
+# ============================================================
+# OUT OF STOCK VIEW
+# ============================================================
+
 @login_required
 def out_of_stock(request):
     """
     View to show drugs that are out of stock (stock_quantity = 0)
     and expired drugs that are no longer available for sale.
     """
-    # Get all drugs with zero stock
     out_of_stock_drugs = Drug.objects.filter(stock_quantity=0).order_by('name')
-    
-    # Get expired drugs with stock (expired but still have quantity)
+
     today = timezone.now().date()
     expired_with_stock = Drug.objects.filter(
         expiry_date__lt=today,
         stock_quantity__gt=0
     ).order_by('expiry_date')
-    
-    # Get expired drugs with zero stock
+
     expired_out_of_stock = Drug.objects.filter(
         expiry_date__lt=today,
         stock_quantity=0
     ).order_by('expiry_date')
-    
-    # Get drugs with very low stock (for warning)
+
     low_stock_drugs = Drug.objects.filter(
         stock_quantity__gt=0,
         stock_quantity__lte=5
     ).order_by('stock_quantity')
-    
-    # Count total out of stock items
+
     total_out_of_stock = out_of_stock_drugs.count() + expired_out_of_stock.count()
-    
-    # Determine if there are any drugs needing attention
     has_critical = total_out_of_stock > 0 or expired_with_stock.exists()
-    
+
     context = {
         'out_of_stock_drugs': out_of_stock_drugs,
         'expired_with_stock': expired_with_stock,
@@ -688,7 +644,7 @@ def out_of_stock(request):
         'has_critical': has_critical,
         'today': today,
     }
-    
+
     return render(request, 'stock/out_of_stock.html', context)
 
 
@@ -705,7 +661,6 @@ def drug_create(request):
 
     if request.method == 'POST':
         try:
-            # Get form data
             generic_name = request.POST.get('generic_name')
             dosage = request.POST.get('dosage')
             pack_size = int(request.POST.get('pack_size', 1))
@@ -714,13 +669,12 @@ def drug_create(request):
             brand = request.POST.get('brand', '')
             strength = request.POST.get('strength', '')
             batch_no = request.POST.get('batch_no', '')
-            stock_quantity = int(request.POST.get('stock_quantity', 0))  # number of packets
+            stock_quantity = int(request.POST.get('stock_quantity', 0))
             selling_price = float(request.POST.get('selling_price', 0))
             category_id = request.POST.get('category', 1)
             reorder_level = int(request.POST.get('reorder_level', 10))
             invoice_id = request.POST.get('invoice_id')
 
-            # Basic validation
             errors = []
             if not generic_name:
                 errors.append('Generic Name is required.')
@@ -737,7 +691,6 @@ def drug_create(request):
             if not invoice_id:
                 errors.append('Invoice is required.')
 
-            # Convert expiry date format (dd/mm/yyyy → yyyy-mm-dd)
             if expiry_date and '/' in expiry_date:
                 parts = expiry_date.split('/')
                 if len(parts) == 3:
@@ -745,14 +698,12 @@ def drug_create(request):
                 else:
                     errors.append('Invalid date format. Use dd/mm/yyyy')
 
-            # Verify category exists
             try:
                 category = Category.objects.get(id=category_id)
             except Category.DoesNotExist:
                 errors.append('Selected category does not exist.')
                 category = None
 
-            # Verify invoice exists
             try:
                 invoice = Invoice.objects.get(id=invoice_id)
             except Invoice.DoesNotExist:
@@ -770,9 +721,8 @@ def drug_create(request):
                     'selected_invoice_id': invoice_id,
                 })
 
-            # Create the drug (total tablets = packets × pack_size)
             drug = Drug.objects.create(
-                name=generic_name,  # use generic as name if no brand given
+                name=generic_name,
                 generic_name=generic_name,
                 brand=brand,
                 dosage=dosage,
@@ -781,24 +731,21 @@ def drug_create(request):
                 pack_size=pack_size,
                 cost_price=cost_price,
                 selling_price=selling_price,
-                stock_quantity=stock_quantity * pack_size,  # total tablets
+                stock_quantity=stock_quantity * pack_size,
                 expiry_date=expiry_date,
                 reorder_level=reorder_level,
                 category=category,
                 created_by=request.user
             )
 
-            # Create InvoiceItem for this purchase
-            # quantity = number of packets, unit_price = cost per packet
             InvoiceItem.objects.create(
                 invoice=invoice,
                 drug=drug,
-                quantity=stock_quantity,                # packets
-                unit_price=cost_price,                  # cost per packet
-                total=cost_price * stock_quantity       # total cost of this purchase
+                quantity=stock_quantity,
+                unit_price=cost_price,
+                total=cost_price * stock_quantity
             )
 
-            # Optionally update the invoice totals
             invoice.total_items = invoice.items.count()
             invoice.total_amount = invoice.items.aggregate(Sum('total'))['total__sum'] or 0
             invoice.save()
@@ -813,7 +760,6 @@ def drug_create(request):
             import traceback
             traceback.print_exc()
 
-    # GET request
     context = {
         'categories': categories,
         'invoices': invoices,
@@ -823,54 +769,61 @@ def drug_create(request):
     }
     return render(request, 'stock/drug_form.html', context)
 
+
 @login_required
 def add_dosage_form(request):
     """API endpoint to add a new dosage form"""
     if request.method != 'POST':
         return JsonResponse({'success': False, 'error': 'Invalid method'}, status=405)
-    
+
     try:
         data = json.loads(request.body)
         name = data.get('name', '').strip()
-        
+
         if not name:
             return JsonResponse({'success': False, 'error': 'Dosage name is required'})
-        
+
         if len(name) < 2:
             return JsonResponse({'success': False, 'error': 'Name must be at least 2 characters'})
-        
+
         # Check if it already exists
         from .models import Drug
         existing_choices = dict(Drug.DOSAGE_CHOICES)
+
+        # Since DOSAGE_CHOICES is hardcoded, we'll store in cache
+        from django.core.cache import cache
+        custom_choices = cache.get('custom_dosage_forms', {})
         
-        # Add the new dosage form (this would require a model change)
-        # Since DOSAGE_CHOICES is hardcoded, you might want to create a DosageForm model
-        # or update the choices dynamically.
-        # For now, we'll just return success with a note.
+        if name in custom_choices:
+            return JsonResponse({'success': False, 'error': f'"{name}" already exists as a custom dosage form'})
         
+        # Check if it's a standard choice
+        if name in existing_choices:
+            return JsonResponse({'success': False, 'error': f'"{name}" already exists as a standard dosage form'})
+        
+        # Add to custom choices
+        custom_choices[name] = name.title()
+        cache.set('custom_dosage_forms', custom_choices, timeout=None)
+
         return JsonResponse({
             'success': True,
-            'message': f'Dosage form "{name}" added successfully!',
+            'message': f'Dosage form "{name.title()}" added successfully!',
             'added': name
         })
-        
+
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
 # ============================================================
-# DRUG CREATE AJAX - FOR INVOICE MODAL (UPDATED)
+# DRUG CREATE AJAX
 # ============================================================
 
 @login_required
 @require_POST
 def drug_create_ajax(request):
-    """
-    AJAX endpoint to create a new drug from the invoice form modal.
-    Validates that the expiry date is not in the past.
-    """
+    """AJAX endpoint to create a new drug from the invoice form modal."""
     try:
-        # Get form data with safe defaults
         name = request.POST.get('name', '').strip()
         generic_name = request.POST.get('generic_name', '').strip()
         dosage = request.POST.get('dosage', '').strip()
@@ -880,7 +833,6 @@ def drug_create_ajax(request):
         category_id = request.POST.get('category_id')
         expiry_date = request.POST.get('expiry_date')
 
-        # Convert numeric fields safely
         try:
             cost_price = Decimal(str(request.POST.get('cost_price', 0)))
         except (ValueError, TypeError):
@@ -901,10 +853,8 @@ def drug_create_ajax(request):
         except (ValueError, TypeError):
             return JsonResponse({'success': False, 'error': 'Invalid packets format.'})
 
-        # Calculate total stock quantity: packets × pack size
         total_quantity = packets * pack_size
 
-        # ---- Validation ----
         errors = []
 
         if not name:
@@ -921,7 +871,6 @@ def drug_create_ajax(request):
         if not category_id:
             errors.append('Category is required.')
         else:
-            # Verify category exists
             try:
                 from .models import Category
                 Category.objects.get(id=category_id)
@@ -937,7 +886,6 @@ def drug_create_ajax(request):
         if not expiry_date:
             errors.append('Expiry date is required.')
         else:
-            # Check if expiry date is in the past
             today = timezone.now().date()
             try:
                 exp_date = datetime.strptime(expiry_date, '%Y-%m-%d').date()
@@ -946,19 +894,16 @@ def drug_create_ajax(request):
             except ValueError:
                 errors.append('Invalid expiry date format. Use YYYY-MM-DD.')
 
-        # If there are validation errors, return them
         if errors:
             return JsonResponse({
                 'success': False,
-                'error': errors[0],  # Return first error for simplicity
-                'errors': errors     # Include all errors for debugging
+                'error': errors[0],
+                'errors': errors
             }, status=400)
 
-        # Calculate selling price if not provided or invalid
         if selling_price <= 0:
             selling_price = cost_price * Decimal('1.5')
 
-        # Create the drug
         from .models import Drug
         drug = Drug.objects.create(
             name=name,
@@ -968,7 +913,7 @@ def drug_create_ajax(request):
             cost_price=cost_price,
             selling_price=selling_price,
             pack_size=pack_size,
-            stock_quantity=total_quantity,  # Total = packets × pack_size
+            stock_quantity=total_quantity,
             supplier_id=supplier_id if supplier_id else None,
             category_id=category_id,
             expiry_date=expiry_date,
@@ -995,7 +940,7 @@ def drug_create_ajax(request):
 
 
 # ============================================================
-# DRUG EDIT - FIXED + RESTRICTED
+# DRUG EDIT
 # ============================================================
 
 @login_required
@@ -1006,13 +951,11 @@ def drug_edit(request, drug_id):
     categories = Category.objects.all()
     invoices = Invoice.objects.all().select_related('supplier')
 
-    # Get current invoice linked to this drug (if any)
     current_invoice_item = InvoiceItem.objects.filter(drug=drug).first()
     current_invoice_id = current_invoice_item.invoice.id if current_invoice_item else None
 
     if request.method == 'POST':
         try:
-            # Get form data
             generic_name = request.POST.get('generic_name')
             dosage = request.POST.get('dosage')
             pack_size = int(request.POST.get('pack_size', 1))
@@ -1021,13 +964,12 @@ def drug_edit(request, drug_id):
             brand = request.POST.get('brand', '')
             strength = request.POST.get('strength', '')
             batch_no = request.POST.get('batch_no', '')
-            stock_quantity = int(request.POST.get('stock_quantity', 0))  # packets
+            stock_quantity = int(request.POST.get('stock_quantity', 0))
             selling_price = float(request.POST.get('selling_price', 0))
             category_id = request.POST.get('category', 1)
             reorder_level = int(request.POST.get('reorder_level', 10))
             invoice_id = request.POST.get('invoice_id')
 
-            # Validation
             errors = []
             if not generic_name:
                 errors.append('Generic Name is required.')
@@ -1074,7 +1016,6 @@ def drug_edit(request, drug_id):
                     'selected_invoice_id': invoice_id,
                 })
 
-            # Update drug
             drug.generic_name = generic_name
             drug.brand = brand
             drug.dosage = dosage
@@ -1083,17 +1024,14 @@ def drug_edit(request, drug_id):
             drug.pack_size = pack_size
             drug.cost_price = cost_price
             drug.selling_price = selling_price
-            drug.stock_quantity = stock_quantity * pack_size  # tablets
+            drug.stock_quantity = stock_quantity * pack_size
             drug.expiry_date = expiry_date
             drug.reorder_level = reorder_level
             drug.category = category
             drug.save()
 
-            # Update or create InvoiceItem
             if current_invoice_item:
-                # If invoice changed, we need to update or move the item
                 if current_invoice_item.invoice.id != int(invoice_id):
-                    # Delete old item, create new one
                     current_invoice_item.delete()
                     InvoiceItem.objects.create(
                         invoice=invoice,
@@ -1103,13 +1041,11 @@ def drug_edit(request, drug_id):
                         total=cost_price * stock_quantity
                     )
                 else:
-                    # Same invoice – just update fields
                     current_invoice_item.quantity = stock_quantity
                     current_invoice_item.unit_price = cost_price
                     current_invoice_item.total = cost_price * stock_quantity
                     current_invoice_item.save()
             else:
-                # No previous invoice item – create new one
                 InvoiceItem.objects.create(
                     invoice=invoice,
                     drug=drug,
@@ -1118,14 +1054,12 @@ def drug_edit(request, drug_id):
                     total=cost_price * stock_quantity
                 )
 
-            # Recalculate invoice totals for both old and new invoices if they changed
             if current_invoice_item and current_invoice_item.invoice.id != int(invoice_id):
-                # Recalc old invoice
                 old_inv = current_invoice_item.invoice
                 old_inv.total_items = old_inv.items.count()
                 old_inv.total_amount = old_inv.items.aggregate(Sum('total'))['total__sum'] or 0
                 old_inv.save()
-            # Recalc new invoice
+
             invoice.total_items = invoice.items.count()
             invoice.total_amount = invoice.items.aggregate(Sum('total'))['total__sum'] or 0
             invoice.save()
@@ -1140,7 +1074,6 @@ def drug_edit(request, drug_id):
             import traceback
             traceback.print_exc()
 
-    # GET request – prefill the invoice dropdown with current invoice
     context = {
         'drug': drug,
         'categories': categories,
@@ -1152,7 +1085,7 @@ def drug_edit(request, drug_id):
 
 
 # ============================================================
-# DRUG DELETE - FIXED + RESTRICTED
+# DRUG DELETE
 # ============================================================
 
 @login_required
@@ -1165,26 +1098,22 @@ def drug_delete(request, drug_id):
         try:
             from django.db.models import Sum
 
-            # ---- 1. Delete all InvoiceItems linked to this drug ----
             invoice_items = InvoiceItem.objects.filter(drug=drug)
             invoices_to_update = set()
             for item in invoice_items:
                 invoices_to_update.add(item.invoice)
-                item.delete()  # delete the invoice item
+                item.delete()
 
-            # Update each invoice's total_amount and total_items
             for invoice in invoices_to_update:
                 invoice.total_amount = invoice.items.aggregate(Sum('total'))['total__sum'] or 0
                 invoice.total_items = invoice.items.count()
                 invoice.save()
 
-            # ---- 2. Delete other related records ----
             SaleItem.objects.filter(drug=drug).delete()
             StockMovement.objects.filter(drug=drug).delete()
             PatientMedication.objects.filter(drug=drug).delete()
             ReturnedDrug.objects.filter(drug=drug).delete()
 
-            # ---- 3. Finally delete the drug itself ----
             drug_name = drug.name
             drug.delete()
 
@@ -1197,20 +1126,17 @@ def drug_delete(request, drug_id):
             traceback.print_exc()
             return redirect('stock:drug_list')
 
-    # GET request – show confirmation page
     return render(request, 'stock/drug_confirm_delete.html', {'drug': drug})
 
 
 # ============================================================
-# ADD STOCK TO DRUG - RESTRICTED
+# ADD STOCK TO DRUG
 # ============================================================
 
 @login_required
 @user_passes_test(is_admin_or_manager)
 def add_stock_to_drug(request):
-    """
-    Add stock to an existing drug, linked to an invoice.
-    """
+    """Add stock to an existing drug, linked to an invoice."""
     drugs = Drug.objects.all().order_by('name')
     invoices = Invoice.objects.all().order_by('-invoice_date')
     selected_drug = None
@@ -1218,7 +1144,7 @@ def add_stock_to_drug(request):
     drug_id = request.GET.get('drug_id')
     if drug_id:
         try:
-            selected_drug = Drug.objects.get(id=drug_id)  # ✅ fixed typo
+            selected_drug = Drug.objects.get(id=drug_id)
         except Drug.DoesNotExist:
             pass
 
@@ -1240,10 +1166,9 @@ def add_stock_to_drug(request):
                 'selected_drug': selected_drug,
             })
 
-        drug = get_object_or_404(Drug, id=drug_id)  # ✅ fixed typo
+        drug = get_object_or_404(Drug, id=drug_id)
         invoice = get_object_or_404(Invoice, id=invoice_id)
 
-        # ✅ FIX: add total units (packets × pack size)
         total_units = quantity * pack_size
         drug.stock_quantity += total_units
 
@@ -1287,14 +1212,12 @@ def add_stock_to_drug(request):
 
 @login_required
 def supplier_list(request):
-    """List all suppliers"""
     suppliers = Supplier.objects.all()
     return render(request, 'stock/supplier_list.html', {'suppliers': suppliers})
 
 
 @login_required
 def supplier_create(request):
-    """Create a new supplier using SupplierForm"""
     if request.method == 'POST':
         form = SupplierForm(request.POST)
         if form.is_valid():
@@ -1312,7 +1235,6 @@ def supplier_create(request):
 
 @login_required
 def supplier_edit(request, supplier_id):
-    """Edit an existing supplier using SupplierForm"""
     supplier = get_object_or_404(Supplier, id=supplier_id)
     if request.method == 'POST':
         form = SupplierForm(request.POST, instance=supplier)
@@ -1329,7 +1251,6 @@ def supplier_edit(request, supplier_id):
 
 @login_required
 def supplier_delete(request, supplier_id):
-    """Delete a supplier"""
     supplier = get_object_or_404(Supplier, id=supplier_id)
 
     if request.method == 'POST':
@@ -1351,7 +1272,6 @@ def supplier_delete(request, supplier_id):
 
 @login_required
 def receipt_list(request):
-    """List all receipts"""
     receipts = Receipt.objects.all().select_related('created_by').order_by('-created_at')
 
     today = timezone.now().date()
@@ -1374,14 +1294,12 @@ def receipt_list(request):
 
 @login_required
 def receipt_detail(request, receipt_id):
-    """View receipt details"""
     receipt = get_object_or_404(Receipt, id=receipt_id)
     return render(request, 'stock/receipt_detail.html', {'receipt': receipt})
 
 
 @login_required
 def create_sale_receipt(request):
-    """Create a new sale receipt (for retail sale)"""
     if request.method == 'POST':
         try:
             data = json.loads(request.body)
@@ -1460,7 +1378,6 @@ def create_sale_receipt(request):
 
 @login_required
 def print_receipt(request, receipt_id):
-    """Print receipt (returns a printable version)"""
     receipt = get_object_or_404(Receipt, id=receipt_id)
 
     if not receipt.is_printed:
@@ -1473,7 +1390,6 @@ def print_receipt(request, receipt_id):
 
 @login_required
 def get_daily_sales_api(request):
-    """API to get daily sales data for dashboard"""
     try:
         today = timezone.now().date()
         receipts = Receipt.objects.filter(created_at__date=today)
@@ -1510,7 +1426,6 @@ def get_daily_sales_api(request):
 
 @login_required
 def return_list(request):
-    """List all returned drugs"""
     returns = ReturnedDrug.objects.all().select_related('receipt', 'drug', 'created_by').order_by('-returned_date')
     return render(request, 'stock/return_list.html', {'returns': returns})
 
@@ -1518,10 +1433,7 @@ def return_list(request):
 @login_required
 @permission_required("stock.add_returneddrug", raise_exception=True)
 def return_create(request):
-    """
-    Create a new return - supports multiple items from one receipt.
-    Includes transaction safety, duplicate protection, and stock validation.
-    """
+    """Create a new return - supports multiple items from one receipt."""
     if request.method == 'POST':
         try:
             receipt_id = request.POST.get('receipt')
@@ -1529,12 +1441,10 @@ def return_create(request):
                 messages.error(request, 'Please select a receipt.')
                 return redirect('stock:return_create')
 
-            # Get all items from the form (multiple items)
             drug_ids = request.POST.getlist('drug_ids[]')
             quantities = request.POST.getlist('quantities[]')
             reasons = request.POST.getlist('reasons[]')
 
-            # Validate all lists have equal length
             if not (len(drug_ids) == len(quantities) == len(reasons)):
                 messages.error(request, 'Invalid submitted data.')
                 return redirect('stock:return_create')
@@ -1543,28 +1453,21 @@ def return_create(request):
                 messages.error(request, 'No items selected for return.')
                 return redirect('stock:return_create')
 
-            # Use database transaction for atomicity
             with transaction.atomic():
-                # Lock the receipt row to prevent race conditions
                 try:
                     receipt = Receipt.objects.select_for_update().get(id=receipt_id)
                 except Receipt.DoesNotExist:
                     messages.error(request, 'Receipt not found.')
                     return redirect('stock:return_create')
 
-                # Build a robust lookup dictionary for receipt items
-                # This handles different data structures
                 receipt_lookup = {}
 
-                # Log the receipt items for debugging
                 logger.info(f"Receipt {receipt.receipt_number} items: {receipt.items}")
 
                 for item in receipt.items or []:
-                    # Try to find drug_id from various possible keys
                     drug_id = None
                     drug_name = None
 
-                    # Check for drug_id in different formats
                     if 'drug_id' in item:
                         drug_id = item['drug_id']
                     elif 'id' in item:
@@ -1572,7 +1475,6 @@ def return_create(request):
                     elif 'drugId' in item:
                         drug_id = item['drugId']
 
-                    # Check for drug_name in different formats
                     if 'drug_name' in item:
                         drug_name = item['drug_name']
                     elif 'name' in item:
@@ -1580,26 +1482,21 @@ def return_create(request):
                     elif 'drugName' in item:
                         drug_name = item['drugName']
 
-                    # Store in lookup with both string and integer keys
                     if drug_id is not None:
                         try:
-                            # Store with integer key
                             receipt_lookup[int(drug_id)] = item
-                            # Also store with string key
                             receipt_lookup[str(drug_id)] = item
                         except (ValueError, TypeError):
                             pass
 
                     if drug_name:
                         receipt_lookup[drug_name] = item
-                        # Also store lowercase for case-insensitive matching
                         receipt_lookup[drug_name.lower()] = item
 
                 returned_count = 0
                 failed_items = []
 
                 for drug_id_str, quantity_str, reason in zip(drug_ids, quantities, reasons):
-                    # Validate integer conversion
                     try:
                         drug_id = int(drug_id_str)
                         quantity = int(quantity_str)
@@ -1610,17 +1507,14 @@ def return_create(request):
                     if quantity <= 0:
                         continue
 
-                    # Lock the drug row to prevent race conditions
                     try:
                         drug = Drug.objects.select_for_update().get(id=drug_id)
                     except Drug.DoesNotExist:
                         failed_items.append(f'Drug with ID {drug_id} no longer exists.')
                         continue
 
-                    # Check if this drug is actually on the receipt using robust lookup
                     receipt_item = None
 
-                    # Try all possible lookup methods
                     if drug.id in receipt_lookup:
                         receipt_item = receipt_lookup[drug.id]
                     elif str(drug.id) in receipt_lookup:
@@ -1634,9 +1528,7 @@ def return_create(request):
                         failed_items.append(f'"{drug.name}" is not on the selected receipt.')
                         continue
 
-                    # Get sold quantity from receipt safely
                     try:
-                        # Try different possible keys for quantity
                         sold_quantity = (
                             receipt_item.get('quantity') or
                             receipt_item.get('qty') or
@@ -1647,14 +1539,12 @@ def return_create(request):
                     except (TypeError, ValueError):
                         sold_quantity = 0
 
-                    # Prevent returning more than was sold
                     if quantity > sold_quantity:
                         failed_items.append(
                             f'You cannot return {quantity} of "{drug.name}". Only {sold_quantity} were sold.'
                         )
                         continue
 
-                    # Calculate already returned quantity to prevent duplicates
                     already_returned = ReturnedDrug.objects.filter(
                         receipt=receipt,
                         drug=drug
@@ -1662,7 +1552,6 @@ def return_create(request):
                         total=Sum('quantity')
                     )['total'] or 0
 
-                    # Prevent negative remaining values
                     remaining = max(sold_quantity - already_returned, 0)
 
                     if quantity > remaining:
@@ -1672,7 +1561,6 @@ def return_create(request):
                         )
                         continue
 
-                    # Get the unit price from the receipt
                     unit_price = (
                         receipt_item.get('unit_price') or
                         receipt_item.get('price') or
@@ -1684,7 +1572,6 @@ def return_create(request):
                     except (ValueError, TypeError):
                         unit_price = Decimal('0.00')
 
-                    # Create the return record
                     ReturnedDrug.objects.create(
                         receipt=receipt,
                         drug=drug,
@@ -1694,12 +1581,10 @@ def return_create(request):
                         created_by=request.user
                     )
 
-                    # Update stock atomically (prevents race conditions)
                     Drug.objects.filter(id=drug.id).update(
                         stock_quantity=F('stock_quantity') + quantity
                     )
 
-                    # Create stock movement record
                     StockMovement.objects.create(
                         drug=drug,
                         quantity=quantity,
@@ -1711,14 +1596,12 @@ def return_create(request):
 
                     returned_count += 1
 
-                # Show summary messages
                 if returned_count > 0:
                     messages.success(
                         request,
                         f'✅ Successfully returned {returned_count} item(s) from "{receipt.receipt_number}" to stock.'
                     )
 
-                # Show any failed items (summarized)
                 if failed_items:
                     if len(failed_items) <= 5:
                         for fail_msg in failed_items:
@@ -1781,20 +1664,16 @@ def return_create(request):
 
     return render(request, 'stock/return_form.html', context)
 
+
 @login_required
 def get_receipt_items(request, receipt_id):
-    """
-    AJAX endpoint to get items for a specific receipt.
-    Used by the return form to display receipt items.
-    """
+    """AJAX endpoint to get items for a specific receipt."""
     try:
         receipt = get_object_or_404(Receipt, id=receipt_id)
         items = receipt.items if isinstance(receipt.items, list) else []
 
-        # Clean up items and handle different data structures
         clean_items = []
         for item in items:
-            # Get drug_id from various possible keys
             drug_id = (
                 item.get('drug_id') or
                 item.get('id') or
@@ -1806,7 +1685,6 @@ def get_receipt_items(request, receipt_id):
             except (ValueError, TypeError):
                 drug_id = 0
 
-            # Get drug_name from various possible keys
             drug_name = (
                 item.get('drug_name') or
                 item.get('name') or
@@ -1814,7 +1692,6 @@ def get_receipt_items(request, receipt_id):
                 'Unknown'
             )
 
-            # Get quantity from various possible keys
             quantity = (
                 item.get('quantity') or
                 item.get('qty') or
@@ -1826,7 +1703,6 @@ def get_receipt_items(request, receipt_id):
             except (ValueError, TypeError):
                 quantity = 0
 
-            # Get unit_price from various possible keys
             unit_price = (
                 item.get('unit_price') or
                 item.get('price') or
@@ -1838,7 +1714,6 @@ def get_receipt_items(request, receipt_id):
             except (ValueError, TypeError):
                 unit_price = 0
 
-            # Get total from various possible keys
             total = (
                 item.get('total') or
                 item.get('Total') or
@@ -1887,7 +1762,6 @@ def reports_dashboard(request):
     daily_total = daily_receipts.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
     daily_count = daily_receipts.count()
 
-    # Yesterday
     yesterday_receipts = Receipt.objects.filter(created_at__date=yesterday)
     yesterday_total = yesterday_receipts.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
     yesterday_count = yesterday_receipts.count()
@@ -1970,7 +1844,7 @@ def generate_report_api(request):
         email = data.get('email', 'kiyimbahenry314@gmail.com')
 
         today = timezone.now().date()
-        
+
         if report_type == 'daily':
             report_date = today
         elif report_type == 'weekly':
@@ -1984,7 +1858,6 @@ def generate_report_api(request):
 
         report_data = generate_report_data(report_type, report_date)
 
-        # Send email
         success = send_report_email(report_data, email, report_type)
 
         if success:
@@ -2020,25 +1893,22 @@ def generate_report_api(request):
 
 
 # ============================================================
-# FIXED: generate_report_data – returns now included correctly
+# generate_report_data
 # ============================================================
 
-def generate_report_data(report_type, report_date=None):  # ← NEW: Added report_date parameter
+def generate_report_data(report_type, report_date=None):
     """
     Generate report data based on type (including returns)
     """
-    # ================================================================
-    # NEW: Use report_date if provided, otherwise fallback to yesterday
-    # ================================================================
     if report_date is None:
-        report_date = timezone.now().date()  # ← NEW: Fallback date
-    
-    today = report_date  # ← NEW: Use the passed date
-    yesterday = today - timedelta(days=1)  # ← CHANGED: Use today instead of timezone.now()
+        report_date = timezone.now().date()
+
+    today = report_date
+    yesterday = today - timedelta(days=1)
 
     report_data = {
         'report_type': report_type,
-        'report_date': report_date.isoformat(),  # ← NEW: Store the date in report_data
+        'report_date': report_date.isoformat(),
         'generated_at': timezone.now().strftime('%Y-%m-%d %H:%M:%S'),
         'sales': {},
         'invoices': {},
@@ -2046,31 +1916,27 @@ def generate_report_data(report_type, report_date=None):  # ← NEW: Added repor
         'top_products': []
     }
 
-    # ================================================================
-    # FIX: Use the passed report_date for all calculations
-    # ================================================================
     if report_type == 'daily':
-        start_date = report_date  # ← CHANGED: Use report_date instead of yesterday
-        end_date = report_date    # ← CHANGED: Use report_date instead of yesterday
-        report_data['period'] = f"Daily Report - {report_date.strftime('%B %d, %Y')}"  # ← CHANGED
+        start_date = report_date
+        end_date = report_date
+        report_data['period'] = f"Daily Report - {report_date.strftime('%B %d, %Y')}"
     elif report_type == 'weekly':
-        end_date = report_date    # ← CHANGED: Use report_date instead of yesterday
+        end_date = report_date
         start_date = end_date - timedelta(days=7)
         report_data['period'] = f"Weekly Report - {start_date.strftime('%B %d')} to {end_date.strftime('%B %d, %Y')}"
     elif report_type == 'monthly':
-        end_date = report_date    # ← CHANGED: Use report_date instead of yesterday
+        end_date = report_date
         start_date = end_date.replace(day=1)
         report_data['period'] = f"Monthly Report - {end_date.strftime('%B %Y')}"
     elif report_type == 'annual':
-        end_date = report_date    # ← CHANGED: Use report_date instead of yesterday
+        end_date = report_date
         start_date = end_date.replace(month=1, day=1)
         report_data['period'] = f"Annual Report - {end_date.year}"
     else:
-        start_date = report_date   # ← CHANGED: Use report_date instead of yesterday
-        end_date = report_date     # ← CHANGED: Use report_date instead of yesterday
+        start_date = report_date
+        end_date = report_date
 
-    # ⚠️ FIX: 'Receipts' → 'Receipt' (model name)
-    receipts = Receipt.objects.filter(  # ← FIXED: Changed from 'Receipts' to 'Receipt'
+    receipts = Receipt.objects.filter(
         created_at__date__gte=start_date,
         created_at__date__lte=end_date
     )
@@ -2080,8 +1946,7 @@ def generate_report_data(report_type, report_date=None):  # ← NEW: Added repor
         returned_date__date__lte=end_date
     )
 
-    # ⚠️ FIX: '__sum' not '_sum' (double underscore)
-    total_sales = receipts.aggregate(Sum('total_amount'))['total_amount__sum'] or 0  # ← FIXED
+    total_sales = receipts.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
     total_transactions = receipts.count()
     total_items_sold = 0
     for receipt in receipts:
@@ -2089,9 +1954,8 @@ def generate_report_data(report_type, report_date=None):  # ← NEW: Added repor
             for item in receipt.items:
                 total_items_sold += item.get('quantity', 0)
 
-    # ⚠️ FIX: '__sum' not '_sum' (double underscore)
-    total_returned_amount = returns.aggregate(Sum('total_refund'))['total_refund__sum'] or 0  # ← FIXED
-    total_returned_items = returns.aggregate(Sum('quantity'))['quantity__sum'] or 0  # ← FIXED
+    total_returned_amount = returns.aggregate(Sum('total_refund'))['total_refund__sum'] or 0
+    total_returned_items = returns.aggregate(Sum('quantity'))['quantity__sum'] or 0
 
     net_sales = total_sales - total_returned_amount
 
@@ -2160,12 +2024,10 @@ def send_report_email(report_data, email, report_type):
         from datetime import datetime, timedelta
         from django.utils import timezone
         from .utils.invoice_pdf import get_invoices_zip, get_invoices_zip_range
-        from .utils.report_generator import generate_daily_report_pdf
+        from .utils.report_generator import generate_daily_report_pdf, generate_comprehensive_report_pdf
         from stock.models import Invoice
 
-        # ---- USE THE REPORT DATE FROM report_data ----
-        report_date = report_data.get('report_date')  # ← NEW: Get the date from report_data
-        
+        report_date = report_data.get('report_date')
         if report_date is None:
             report_date = timezone.now().date()
             print("⚠️ Warning: report_date not found in report_data, using today")
@@ -2174,7 +2036,6 @@ def send_report_email(report_data, email, report_type):
         print("Recipient:", email)
         print("Report Type:", report_type)
 
-        # Configure Brevo API
         configuration = sib_api_v3_sdk.Configuration()
         configuration.api_key['api-key'] = os.environ.get("BREVO_API_KEY")
 
@@ -2182,33 +2043,29 @@ def send_report_email(report_data, email, report_type):
             sib_api_v3_sdk.ApiClient(configuration)
         )
 
-        # Determine report date based on type
         today = timezone.now().date()
-        yesterday = today - timedelta(days=1)
-
 
         if report_type == 'daily':
-            report_date = yesterday
+            report_date = today
             start_date = report_date
             end_date = report_date
         elif report_type == 'weekly':
-            end_date = yesterday
+            end_date = today
             start_date = end_date - timedelta(days=7)
             report_date = end_date
         elif report_type == 'monthly':
-            end_date = yesterday
+            end_date = today
             start_date = end_date.replace(day=1)
             report_date = end_date
         elif report_type == 'annual':
-            end_date = yesterday
+            end_date = today
             start_date = end_date.replace(month=1, day=1)
             report_date = end_date
         else:
-            report_date = yesterday
+            report_date = today
             start_date = report_date
             end_date = report_date
 
-        # Get sales data from report_data
         sales = report_data.get("sales", {})
         invoices_data = report_data.get("invoices", {})
         payment_breakdown = report_data.get("payment_breakdown", [])
@@ -2216,11 +2073,9 @@ def send_report_email(report_data, email, report_type):
         period = report_data.get("period", f"{report_type.capitalize()} Report")
         generated_at = report_data.get("generated_at", timezone.now().strftime('%Y-%m-%d %H:%M:%S'))
 
-        # --- 1. Generate PDF Report ---
         pdf_buffer = generate_comprehensive_report_pdf(report_date)
         pdf_encoded = base64.b64encode(pdf_buffer.getvalue()).decode('utf-8')
 
-        # --- 2. Generate ZIP of all invoices ---
         if report_type == 'daily':
             zip_buffer = get_invoices_zip(report_date)
         else:
@@ -2232,7 +2087,6 @@ def send_report_email(report_data, email, report_type):
 
         zip_encoded = base64.b64encode(zip_buffer.getvalue()).decode('utf-8')
 
-        # --- 3. Build payment breakdown rows ---
         payment_rows = ""
         for method in payment_breakdown:
             payment_rows += f"""
@@ -2243,7 +2097,6 @@ def send_report_email(report_data, email, report_type):
             </tr>
             """
 
-        # --- 4. Build top products rows ---
         product_rows = ""
         for i, product in enumerate(top_products[:10], 1):
             product_rows += f"""
@@ -2255,10 +2108,8 @@ def send_report_email(report_data, email, report_type):
             </tr>
             """
 
-        # --- 5. Subject ---
         subject = f"{report_type.capitalize()} Sales Report - Miyabala Pharmacy"
 
-        # --- 6. HTML Email Content ---
         html_content = f"""
         <html>
         <head>
@@ -2332,76 +2183,36 @@ def send_report_email(report_data, email, report_type):
 
         <body>
         <div class="container">
-
             <div class="header">
                 <h1>🏥 MIYABALA PHARMACY</h1>
                 <h3>{report_type.capitalize()} Sales Report</h3>
             </div>
-
             <div class="section">
-
                 <p><strong>Report Period:</strong> {period}</p>
                 <p><strong>Generated:</strong> {generated_at}</p>
-
                 <table>
-                    <tr>
-                        <th>Description</th>
-                        <th>Value</th>
-                    </tr>
-                    <tr>
-                        <td>Total Sales</td>
-                        <td>UGX {sales.get('total_amount', 0):,.0f}</td>
-                    </tr>
-                    <tr>
-                        <td>Net Sales</td>
-                        <td>UGX {sales.get('net_sales', 0):,.0f}</td>
-                    </tr>
-                    <tr>
-                        <td>Total Returns</td>
-                        <td>UGX {sales.get('total_returns', 0):,.0f}</td>
-                    </tr>
-                    <tr>
-                        <td>Total Transactions</td>
-                        <td>{sales.get('total_transactions', 0)}</td>
-                    </tr>
-                    <tr>
-                        <td>Total Medicines Sold</td>
-                        <td>{sales.get('total_items_sold', 0)}</td>
-                    </tr>
-                    <tr>
-                        <td>Total Invoices</td>
-                        <td>{invoices_data.get('total_invoices', 0)}</td>
-                    </tr>
-                    <tr>
-                        <td>Average Transaction</td>
-                        <td>UGX {sales.get('average_transaction', 0):,.0f}</td>
-                    </tr>
+                    <tr><th>Description</th><th>Value</th></tr>
+                    <tr><td>Total Sales</td><td>UGX {sales.get('total_amount', 0):,.0f}</td></tr>
+                    <tr><td>Net Sales</td><td>UGX {sales.get('net_sales', 0):,.0f}</td></tr>
+                    <tr><td>Total Returns</td><td>UGX {sales.get('total_returns', 0):,.0f}</td></tr>
+                    <tr><td>Total Transactions</td><td>{sales.get('total_transactions', 0)}</td></tr>
+                    <tr><td>Total Medicines Sold</td><td>{sales.get('total_items_sold', 0)}</td></tr>
+                    <tr><td>Total Invoices</td><td>{invoices_data.get('total_invoices', 0)}</td></tr>
+                    <tr><td>Average Transaction</td><td>UGX {sales.get('average_transaction', 0):,.0f}</td></tr>
                 </table>
 
-                <!-- Payment Breakdown -->
                 <h3 style="margin-top: 30px;">💳 Payment Breakdown</h3>
                 <table>
-                    <tr>
-                        <th>Method</th>
-                        <th>Amount</th>
-                        <th>Transactions</th>
-                    </tr>
+                    <tr><th>Method</th><th>Amount</th><th>Transactions</th></tr>
                     {payment_rows}
-                    </table>
+                </table>
 
-                <!-- Top Products -->
                 <h3 style="margin-top: 30px;">🏆 Top Selling Products</h3>
                 <table>
-                    <tr>
-                        <th>#</th>
-                        <th>Product</th>
-                        <th>Quantity</th>
-                        <th>Total</th>
-                    </tr>
+                    <tr><th>#</th><th>Product</th><th>Quantity</th><th>Total</th></tr>
                     {product_rows}
                 </table>
 
-                <!-- Attachments -->
                 <div class="attachments">
                     <h3>📎 Attachments</h3>
                     <ul>
@@ -2409,21 +2220,17 @@ def send_report_email(report_data, email, report_type):
                         <li><strong>📦 Invoices_{report_date.strftime('%Y-%m-%d')}.zip</strong> – All purchase invoices</li>
                     </ul>
                 </div>
-
             </div>
-
             <div class="footer">
                 <b>Miyabala Pharmacy Stock Management System</b>
                 <br><br>
                 This report was generated automatically.
             </div>
-
         </div>
         </body>
         </html>
         """
 
-        # --- 7. Send email via Brevo with attachments (TWO RECIPIENTS) ---
         send_smtp_email = sib_api_v3_sdk.SendSmtpEmail(
             to=[
                 {"email": "kiyimbahenry314@gmail.com", "name": "Henry"},
@@ -2472,7 +2279,6 @@ def send_report_email(report_data, email, report_type):
 
 @login_required
 def invoice_list(request):
-    """List all invoices"""
     invoices = Invoice.objects.all().select_related('supplier', 'created_by').order_by('-created_at')
     return render(request, 'stock/invoice_list.html', {'invoices': invoices})
 
@@ -2480,7 +2286,6 @@ def invoice_list(request):
 @login_required
 @user_passes_test(is_admin_or_manager)
 def invoice_create(request):
-    """Create a new invoice - Admin/Manager only"""
     suppliers = Supplier.objects.all()
     categories = Category.objects.all()
     drugs = Drug.objects.all()
@@ -2492,7 +2297,6 @@ def invoice_create(request):
             invoice.created_by = request.user
             invoice.save()
 
-            # Process invoice items
             drug_ids = request.POST.getlist('drug[]')
             quantities = request.POST.getlist('quantity[]')
             unit_prices = request.POST.getlist('unit_price[]')
@@ -2504,7 +2308,6 @@ def invoice_create(request):
                 quantity = int(quantities[i])
                 unit_price = float(unit_prices[i])
                 if drug_id and quantity > 0 and unit_price > 0:
-                    # Create InvoiceItem
                     InvoiceItem.objects.create(
                         invoice=invoice,
                         drug_id=drug_id,
@@ -2515,7 +2318,6 @@ def invoice_create(request):
                     total_amount += quantity * unit_price
                     total_items_count += 1
 
-            # Update invoice totals
             invoice.total_amount = total_amount
             invoice.total_items = total_items_count
             invoice.total_cost = total_amount
@@ -2547,7 +2349,6 @@ def invoice_create(request):
 @login_required
 @user_passes_test(is_admin_or_manager)
 def invoice_edit(request, invoice_id):
-    """Edit an existing invoice - Admin/Manager only"""
     invoice = get_object_or_404(Invoice, id=invoice_id)
     suppliers = Supplier.objects.all()
     categories = Category.objects.all()
@@ -2560,7 +2361,6 @@ def invoice_edit(request, invoice_id):
             invoice = form.save(commit=False)
             invoice.save()
 
-            # Delete existing items and recreate from POST
             invoice.items.all().delete()
 
             drug_ids = request.POST.getlist('drug[]')
@@ -2613,7 +2413,6 @@ def invoice_edit(request, invoice_id):
 
 @login_required
 def invoice_detail(request, invoice_id):
-    """View invoice details"""
     invoice = get_object_or_404(Invoice, id=invoice_id)
     items = invoice.items.all().select_related('drug')
     return render(request, 'stock/invoice_detail.html', {
@@ -2625,7 +2424,6 @@ def invoice_detail(request, invoice_id):
 @login_required
 @user_passes_test(is_admin_or_manager)
 def invoice_delete(request, invoice_id):
-    """Delete an invoice - Admin/Manager only"""
     invoice = get_object_or_404(Invoice, id=invoice_id)
 
     if request.method == 'POST':
@@ -2652,7 +2450,6 @@ def invoice_delete(request, invoice_id):
 
 @login_required
 def category_list(request):
-    """List all categories"""
     categories = Category.objects.all()
     return render(request, 'stock/category_list.html', {'categories': categories})
 
@@ -2663,7 +2460,6 @@ def category_list(request):
 
 @login_required
 def calculate_selling_price(request):
-    """API endpoint to calculate selling price"""
     if request.method == 'POST':
         try:
             data = json.loads(request.body)
@@ -2690,14 +2486,12 @@ def calculate_selling_price(request):
 # ============================================================
 
 def is_admin(user):
-    """Check if user is admin/superuser"""
     return user.is_superuser
 
 
 @login_required
 @user_passes_test(is_admin_or_manager)
 def user_list(request):
-    """List all users (admin or manager)"""
     users = User.objects.all()
     return render(request, 'stock/user_list.html', {'users': users})
 
@@ -2705,8 +2499,6 @@ def user_list(request):
 @login_required
 @user_passes_test(is_admin_or_manager)
 def user_create(request):
-    """Create a new user (admin or manager)"""
-
     ROLE_CHOICES = [
         ('admin', 'Admin'),
         ('manager', 'Manager'),
@@ -2761,7 +2553,6 @@ def user_create(request):
 @login_required
 @user_passes_test(is_admin_or_manager)
 def user_detail(request, user_id):
-    """View user details (admin only)"""
     user = get_object_or_404(User, id=user_id)
     return render(request, 'stock/user_detail.html', {'user': user})
 
@@ -2769,7 +2560,6 @@ def user_detail(request, user_id):
 @login_required
 @user_passes_test(is_admin_or_manager)
 def user_edit(request, user_id):
-    """Edit a user (admin or manager)"""
     user = get_object_or_404(User, id=user_id)
 
     ROLE_CHOICES = [
@@ -2843,7 +2633,6 @@ def user_edit(request, user_id):
 @login_required
 @user_passes_test(is_admin_or_manager)
 def user_delete(request, user_id):
-    """Delete a user (admin or manager)"""
     user = get_object_or_404(User, id=user_id)
 
     if request.method == 'POST':
@@ -2858,13 +2647,13 @@ def user_delete(request, user_id):
 
     return render(request, 'stock/user_delete.html', {'user': user})
 
+
 # ============================================================
 # CHRONIC PATIENT VIEWS
 # ============================================================
 
 @login_required
 def patient_list(request):
-    """List all chronic patients"""
     patients = ChronicPatient.objects.all().select_related('created_by')
 
     search_query = request.GET.get('search')
@@ -2892,7 +2681,6 @@ def patient_list(request):
 
 @login_required
 def patient_create(request):
-    """Create a new chronic patient"""
     if request.method == 'POST':
         try:
             first_name = request.POST.get('first_name', '').strip()
@@ -2967,7 +2755,6 @@ def patient_create(request):
 
 @login_required
 def patient_edit(request, patient_id):
-    """Edit a chronic patient"""
     patient = get_object_or_404(ChronicPatient, id=patient_id)
 
     if request.method == 'POST':
@@ -3008,14 +2795,12 @@ def patient_edit(request, patient_id):
 
 @login_required
 def patient_detail(request, patient_id):
-    """View patient details"""
     patient = get_object_or_404(ChronicPatient, id=patient_id)
     return render(request, 'stock/patient_detail.html', {'patient': patient})
 
 
 @login_required
 def patient_delete(request, patient_id):
-    """Delete a patient"""
     patient = get_object_or_404(ChronicPatient, id=patient_id)
 
     if request.method == 'POST':
@@ -3032,7 +2817,6 @@ def patient_delete(request, patient_id):
 
 @login_required
 def patient_add_medication(request, patient_id):
-    """Add medication to patient"""
     patient = get_object_or_404(ChronicPatient, id=patient_id)
 
     if request.method == 'POST':
@@ -3066,7 +2850,6 @@ def patient_add_medication(request, patient_id):
 
 @login_required
 def patient_remove_medication(request, medication_id):
-    """Remove medication from patient"""
     medication = get_object_or_404(PatientMedication, id=medication_id)
     patient_id = medication.patient.id
 
@@ -3082,27 +2865,16 @@ def patient_remove_medication(request, medication_id):
 # ============================================================
 
 def create_test_drugs():
-    """Create test drugs if none exist"""
     from django.contrib.auth.models import User
 
     if Drug.objects.count() > 0:
         print(f"✅ {Drug.objects.count()} drugs already exist")
         return
 
-    # Full list of categories as requested
     categories_data = [
-        'Antibiotic',
-        'Anti-hypertensives',
-        'Anti-diabetics',
-        'Anti-Ulcer',
-        'Cough and Flu',
-        'Neuro Care',
-        'Anti-fungals',
-        'Anti-infectives',
-        'Painkillers',
-        'Beauty and Cosmetics',
-        'Vitamins and Minerals',
-        'Supplements'
+        'Antibiotic', 'Anti-hypertensives', 'Anti-diabetics', 'Anti-Ulcer',
+        'Cough and Flu', 'Neuro Care', 'Anti-fungals', 'Anti-infectives',
+        'Painkillers', 'Beauty and Cosmetics', 'Vitamins and Minerals', 'Supplements'
     ]
 
     for name in categories_data:
