@@ -1,0 +1,363 @@
+{% extends 'stock/base.html' %}
+{% load static %}
+
+{% block title %}Out of Stock Drugs{% endblock %}
+
+{% block extra_css %}
+<style>
+    .out-of-stock-card {
+        border-radius: 10px;
+        padding: 20px;
+        margin-bottom: 25px;
+    }
+    .out-of-stock-card.danger {
+        background: #fff5f5;
+        border: 1px solid #feb2b2;
+    }
+    .out-of-stock-card.warning {
+        background: #fffff0;
+        border: 1px solid #f6e05e;
+    }
+    .out-of-stock-card.info {
+        background: #ebf8ff;
+        border: 1px solid #90cdf4;
+    }
+    .out-of-stock-card.success {
+        background: #f0fff4;
+        border: 1px solid #9ae6b4;
+    }
+    .out-of-stock-card .count {
+        font-size: 36px;
+        font-weight: bold;
+    }
+    .out-of-stock-card .label {
+        font-size: 14px;
+        color: #4a5568;
+    }
+    .status-badge {
+        padding: 3px 12px;
+        border-radius: 20px;
+        font-size: 12px;
+        font-weight: 600;
+    }
+    .status-badge.out-of-stock {
+        background: #fed7d7;
+        color: #742a2a;
+    }
+    .status-badge.expired {
+        background: #feb2b2;
+        color: #742a2a;
+    }
+    .status-badge.low-stock {
+        background: #feebc8;
+        color: #7b341e;
+    }
+    .status-badge.available {
+        background: #c6f6d5;
+        color: #22543d;
+    }
+    .drug-row {
+        transition: all 0.2s;
+    }
+    .drug-row:hover {
+        background: #f7fafc;
+        transform: scale(1.002);
+    }
+    .summary-stats {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 15px;
+        margin-bottom: 25px;
+    }
+    .summary-stat {
+        background: white;
+        padding: 15px;
+        border-radius: 8px;
+        text-align: center;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.05);
+        border-top: 4px solid #e2e8f0;
+    }
+    .summary-stat.danger { border-top-color: #fc8181; }
+    .summary-stat.warning { border-top-color: #f6ad55; }
+    .summary-stat.info { border-top-color: #63b3ed; }
+    .summary-stat.success { border-top-color: #68d391; }
+    .summary-stat .number {
+        font-size: 28px;
+        font-weight: bold;
+        color: #2d3748;
+    }
+    .summary-stat .label {
+        font-size: 12px;
+        color: #718096;
+        text-transform: uppercase;
+        margin-top: 4px;
+    }
+    .export-btn {
+        background: #48bb78;
+        color: white;
+        border: none;
+        padding: 8px 20px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: 600;
+        transition: 0.3s;
+    }
+    .export-btn:hover {
+        background: #38a169;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h4><i class="fas fa-box-open"></i> Out of Stock Drugs</h4>
+        <hr>
+    </div>
+</div>
+
+<!-- Summary Stats -->
+<div class="summary-stats">
+    <div class="summary-stat danger">
+        <div class="number">{{ out_of_stock_drugs|length|add:expired_out_of_stock|length }}</div>
+        <div class="label">🛑 Out of Stock</div>
+    </div>
+    <div class="summary-stat warning">
+        <div class="number">{{ expired_with_stock|length }}</div>
+        <div class="label">⚠️ Expired (with stock)</div>
+    </div>
+    <div class="summary-stat info">
+        <div class="number">{{ expired_out_of_stock|length }}</div>
+        <div class="label">🔴 Expired (out of stock)</div>
+    </div>
+    <div class="summary-stat success">
+        <div class="number">{{ low_stock_drugs|length }}</div>
+        <div class="label">🟡 Low Stock (≤5)</div>
+    </div>
+</div>
+
+<!-- Quick Actions -->
+<div class="mb-3">
+    <a href="{% url 'stock:drug_list' %}" class="btn btn-primary btn-sm">
+        <i class="fas fa-pills"></i> View All Medicines
+    </a>
+    <a href="{% url 'stock:add_stock_to_drug' %}" class="btn btn-success btn-sm">
+        <i class="fas fa-plus-circle"></i> Add Stock
+    </a>
+    <button onclick="window.print()" class="btn btn-info btn-sm">
+        <i class="fas fa-print"></i> Print List
+    </button>
+</div>
+
+<!-- ============================================================
+     OUT OF STOCK DRUGS
+     ============================================================ -->
+{% if out_of_stock_drugs or expired_out_of_stock %}
+<div class="out-of-stock-card danger">
+    <h5><i class="fas fa-exclamation-triangle text-danger"></i> Out of Stock Drugs</h5>
+    <p class="text-muted">These drugs are currently not available in the pharmacy.</p>
+    
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Drug Name</th>
+                    <th>Brand</th>
+                    <th>Generic</th>
+                    <th>Stock</th>
+                    <th>Expiry Date</th>
+                    <th>Status</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                <!-- Out of Stock (not expired) -->
+                {% for drug in out_of_stock_drugs %}
+                <tr class="drug-row">
+                    <td>{{ forloop.counter }}</td>
+                    <td><strong>{{ drug.name }}</strong></td>
+                    <td>{{ drug.brand|default:'N/A' }}</td>
+                    <td>{{ drug.generic_name|default:'N/A' }}</td>
+                    <td><span class="text-danger font-weight-bold">0</span></td>
+                    <td>{{ drug.expiry_date|date:'d/m/Y'|default:'N/A' }}</td>
+                    <td>
+                        <span class="status-badge out-of-stock">Out of Stock</span>
+                    </td>
+                    <td>
+                        <a href="{% url 'stock:add_stock_to_drug' %}?drug_id={{ drug.id }}" class="btn btn-sm btn-success">
+                            <i class="fas fa-plus"></i> Reorder
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+                <!-- Expired and Out of Stock -->
+                {% for drug in expired_out_of_stock %}
+                <tr class="drug-row">
+                    <td>{{ forloop.counter|add:out_of_stock_drugs.count }}</td>
+                    <td><strong>{{ drug.name }}</strong></td>
+                    <td>{{ drug.brand|default:'N/A' }}</td>
+                    <td>{{ drug.generic_name|default:'N/A' }}</td>
+                    <td><span class="text-danger font-weight-bold">0</span></td>
+                    <td><span class="text-danger">{{ drug.expiry_date|date:'d/m/Y' }}</span></td>
+                    <td>
+                        <span class="status-badge expired">Expired</span>
+                    </td>
+                    <td>
+                        <a href="{% url 'stock:add_stock_to_drug' %}?drug_id={{ drug.id }}" class="btn btn-sm btn-warning">
+                            <i class="fas fa-plus"></i> Reorder
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% else %}
+<div class="out-of-stock-card success">
+    <div class="text-center py-4">
+        <i class="fas fa-check-circle text-success" style="font-size: 48px;"></i>
+        <h5 class="mt-3">🎉 All Drugs Are In Stock!</h5>
+        <p class="text-muted">No drugs are currently out of stock.</p>
+    </div>
+</div>
+{% endif %}
+
+<!-- ============================================================
+     EXPIRED DRUGS WITH STOCK (Needs Attention)
+     ============================================================ -->
+{% if expired_with_stock %}
+<div class="out-of-stock-card warning">
+    <h5><i class="fas fa-clock text-warning"></i> Expired Drugs (Still in Stock)</h5>
+    <p class="text-muted">These drugs are expired but still have stock. They should be removed.</p>
+    
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Drug Name</th>
+                    <th>Brand</th>
+                    <th>Generic</th>
+                    <th>Stock</th>
+                    <th>Expiry Date</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for drug in expired_with_stock %}
+                <tr class="drug-row">
+                    <td>{{ forloop.counter }}</td>
+                    <td><strong>{{ drug.name }}</strong></td>
+                    <td>{{ drug.brand|default:'N/A' }}</td>
+                    <td>{{ drug.generic_name|default:'N/A' }}</td>
+                    <td>{{ drug.stock_quantity }}</td>
+                    <td><span class="text-danger">{{ drug.expiry_date|date:'d/m/Y' }}</span></td>
+                    <td>
+                        <a href="{% url 'stock:drug_edit' drug.id %}" class="btn btn-sm btn-danger">
+                            <i class="fas fa-trash"></i> Remove
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<!-- ============================================================
+     LOW STOCK DRUGS (Warning)
+     ============================================================ -->
+{% if low_stock_drugs %}
+<div class="out-of-stock-card info">
+    <h5><i class="fas fa-exclamation-circle text-info"></i> Low Stock Drugs (≤5 units)</h5>
+    <p class="text-muted">These drugs are running low and should be reordered soon.</p>
+    
+    <div class="table-responsive">
+        <table class="table table-striped">
+            <thead>
+                <tr>
+                    <th>#</th>
+                    <th>Drug Name</th>
+                    <th>Brand</th>
+                    <th>Generic</th>
+                    <th>Stock</th>
+                    <th>Reorder Level</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for drug in low_stock_drugs %}
+                <tr class="drug-row">
+                    <td>{{ forloop.counter }}</td>
+                    <td><strong>{{ drug.name }}</strong></td>
+                    <td>{{ drug.brand|default:'N/A' }}</td>
+                    <td>{{ drug.generic_name|default:'N/A' }}</td>
+                    <td><span class="text-warning font-weight-bold">{{ drug.stock_quantity }}</span></td>
+                    <td>{{ drug.reorder_level }}</td>
+                    <td>
+                        <a href="{% url 'stock:add_stock_to_drug' %}?drug_id={{ drug.id }}" class="btn btn-sm btn-success">
+                            <i class="fas fa-plus"></i> Reorder
+                        </a>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endif %}
+
+<!-- ============================================================
+     COMPLETE SUMMARY (for ordering)
+     ============================================================ -->
+<div class="card mt-3">
+    <div class="card-header bg-success text-white">
+        <h5 class="mb-0"><i class="fas fa-clipboard-list"></i> Order Summary</h5>
+    </div>
+    <div class="card-body">
+        <p><strong>Total drugs to reorder:</strong> {{ out_of_stock_drugs|length|add:expired_out_of_stock|length }}</p>
+        <p><strong>Expired drugs to remove:</strong> {{ expired_with_stock|length }}</p>
+        <p><strong>Low stock items (≤5):</strong> {{ low_stock_drugs|length }}</p>
+        
+        <hr>
+        
+        <div class="row">
+            <div class="col-md-6">
+                <h6>📋 Out of Stock List</h6>
+                <ul>
+                    {% for drug in out_of_stock_drugs %}
+                    <li>{{ drug.name }} ({{ drug.brand|default:'No brand' }})</li>
+                    {% empty %}
+                    <li class="text-muted">None</li>
+                    {% endfor %}
+                    {% for drug in expired_out_of_stock %}
+                    <li>{{ drug.name }} (Expired) - {{ drug.expiry_date|date:'d/m/Y' }}</li>
+                    {% endfor %}
+                </ul>
+            </div>
+            <div class="col-md-6">
+                <h6>⚠️ Low Stock List (≤5)</h6>
+                <ul>
+                    {% for drug in low_stock_drugs %}
+                    <li>{{ drug.name }} - <span class="text-warning">{{ drug.stock_quantity }}</span> units</li>
+                    {% empty %}
+                    <li class="text-muted">None</li>
+                    {% endfor %}
+                </ul>
+            </div>
+        </div>
+        
+        <div class="mt-3">
+            <a href="{% url 'stock:drug_list' %}" class="btn btn-primary">
+                <i class="fas fa-pills"></i> View All Medicines
+            </a>
+            <a href="{% url 'stock:add_stock_to_drug' %}" class="btn btn-success">
+                <i class="fas fa-boxes"></i> Add Stock
+            </a>
+        </div>
+    </div>
+</div>
+{% endblock %}

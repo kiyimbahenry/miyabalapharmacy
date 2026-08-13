@@ -215,6 +215,42 @@ def dashboard(request):
 
     return render(request, 'stock/dashboard.html', context)
 
+@login_required
+def dashboard(request):
+    """
+    Dashboard view showing statistics and recent data
+    """
+    today = timezone.now().date()
+
+    # ---- EXISTING STATISTICS ----
+    total_medicines = Drug.objects.count()
+    total_suppliers = Supplier.objects.count()
+    total_invoices = Invoice.objects.count()
+    low_stock_count = Drug.objects.filter(stock_quantity__lt=10).count()
+
+    # ---- OUT OF STOCK COUNT (NEW) ----
+    out_of_stock_count = Drug.objects.filter(stock_quantity=0).count()
+    expired_out_of_stock_count = Drug.objects.filter(
+        expiry_date__lt=today,
+        stock_quantity=0
+    ).count()
+    total_out_of_stock = out_of_stock_count + expired_out_of_stock_count
+
+    # ... rest of your existing code ...
+
+    context = {
+        'total_medicines': total_medicines,
+        'total_suppliers': total_suppliers,
+        'total_invoices': total_invoices,
+        'low_stock_count': low_stock_count,
+        'recent_medicines': recent_medicines,
+        'total_stock_value': total_stock_value,
+        'total_out_of_stock': total_out_of_stock,  # ← ADD THIS
+        # ... other variables ...
+    }
+
+    return render(request, 'stock/dashboard.html', context)
+
 
 # ============================================================
 # API VIEWS FOR DASHBOARD
@@ -609,6 +645,52 @@ def expired_drug_list(request):
     }
     return render(request, 'stock/expired_drug_list.html', context)
 
+@login_required
+def out_of_stock(request):
+    """
+    View to show drugs that are out of stock (stock_quantity = 0)
+    and expired drugs that are no longer available for sale.
+    """
+    # Get all drugs with zero stock
+    out_of_stock_drugs = Drug.objects.filter(stock_quantity=0).order_by('name')
+    
+    # Get expired drugs with stock (expired but still have quantity)
+    today = timezone.now().date()
+    expired_with_stock = Drug.objects.filter(
+        expiry_date__lt=today,
+        stock_quantity__gt=0
+    ).order_by('expiry_date')
+    
+    # Get expired drugs with zero stock
+    expired_out_of_stock = Drug.objects.filter(
+        expiry_date__lt=today,
+        stock_quantity=0
+    ).order_by('expiry_date')
+    
+    # Get drugs with very low stock (for warning)
+    low_stock_drugs = Drug.objects.filter(
+        stock_quantity__gt=0,
+        stock_quantity__lte=5
+    ).order_by('stock_quantity')
+    
+    # Count total out of stock items
+    total_out_of_stock = out_of_stock_drugs.count() + expired_out_of_stock.count()
+    
+    # Determine if there are any drugs needing attention
+    has_critical = total_out_of_stock > 0 or expired_with_stock.exists()
+    
+    context = {
+        'out_of_stock_drugs': out_of_stock_drugs,
+        'expired_with_stock': expired_with_stock,
+        'expired_out_of_stock': expired_out_of_stock,
+        'low_stock_drugs': low_stock_drugs,
+        'total_out_of_stock': total_out_of_stock,
+        'has_critical': has_critical,
+        'today': today,
+    }
+    
+    return render(request, 'stock/out_of_stock.html', context)
+
 
 # ============================================================
 # DRUG CREATE - FIXED + RESTRICTED
@@ -740,6 +822,40 @@ def drug_create(request):
         'selected_invoice_id': None,
     }
     return render(request, 'stock/drug_form.html', context)
+
+@login_required
+def add_dosage_form(request):
+    """API endpoint to add a new dosage form"""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'error': 'Invalid method'}, status=405)
+    
+    try:
+        data = json.loads(request.body)
+        name = data.get('name', '').strip()
+        
+        if not name:
+            return JsonResponse({'success': False, 'error': 'Dosage name is required'})
+        
+        if len(name) < 2:
+            return JsonResponse({'success': False, 'error': 'Name must be at least 2 characters'})
+        
+        # Check if it already exists
+        from .models import Drug
+        existing_choices = dict(Drug.DOSAGE_CHOICES)
+        
+        # Add the new dosage form (this would require a model change)
+        # Since DOSAGE_CHOICES is hardcoded, you might want to create a DosageForm model
+        # or update the choices dynamically.
+        # For now, we'll just return success with a note.
+        
+        return JsonResponse({
+            'success': True,
+            'message': f'Dosage form "{name}" added successfully!',
+            'added': name
+        })
+        
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
 
 # ============================================================

@@ -58,6 +58,8 @@ urlpatterns = [
     path('add-stock-to-drug/', views.add_stock_to_drug, name='add_stock_to_drug'),
     path('drugs/<int:drug_id>/edit/', views.drug_edit, name='drug_edit'),
     path('drugs/<int:drug_id>/delete/', views.drug_delete, name='drug_delete'),
+    path('out-of-stock/', views.out_of_stock, name='out_of_stock'),
+    path('api/add-dosage-form/', views.add_dosage_form, name='add_dosage_form'),
 
     # ============================================================
     # CHRONIC PATIENT URLs
