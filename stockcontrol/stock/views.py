@@ -202,7 +202,7 @@ def dashboard(request):
         'total_suppliers': total_suppliers,
         'total_invoices': total_invoices,
         'low_stock_count': low_stock_count,
-        'recent_medicines': Drug.objects.all().order_by('-id')[:5]
+        'recent_medicines': Drug.objects.all().order_by('-id')[:5],
         'total_stock_value': total_stock_value,
         # Today's sales data
         'today_sales': today_sales,
