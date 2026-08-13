@@ -21,7 +21,9 @@ class Command(BaseCommand):
         try:
             self.stdout.write('🔄 Generating daily report...')
 
+            # ================================================================
             # Determine which date to report on
+            # ================================================================
             if options.get('test'):
                 report_date = timezone.now().date()
                 self.stdout.write(f"🔄 TEST MODE: Running report for {report_date}")
@@ -30,15 +32,18 @@ class Command(BaseCommand):
                 report_date = timezone.now().date() - timedelta(days=1)
                 self.stdout.write(f"🔄 Running daily report for {report_date}")
 
-            # Generate report data (reusing your existing function)
-            report_data = generate_report_data('daily')
-            report_data['period'] = f"Daily Report - {report_date.strftime('%B %d, %Y')}"
+            # ================================================================
+            # FIX: Pass report_date to generate_report_data
+            # ================================================================
+            report_data = generate_report_data('daily', report_date)  # ← CHANGED: Pass report_date
+
+            # REMOVED: report_data['period'] = f"Daily Report - {report_date.strftime('%B %d, %Y')}"
+            # The period is now set inside generate_report_data
 
             # List of recipients
             recipients = ['kiyimbahenry314@gmail.com', 'daveedaviyam@gmail.com']
 
             # Send email using your existing send_report_email function
-            # This creates the SAME beautiful HTML, PDF, and ZIP you already have!
             success = send_report_email(report_data, recipients[0], 'daily')
 
             if success:

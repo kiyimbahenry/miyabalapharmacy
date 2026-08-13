@@ -1853,10 +1853,28 @@ def generate_report_api(request):
         report_type = data.get('report_type', 'daily')
         email = data.get('email', 'kiyimbahenry314@gmail.com')
 
-        # Generate report data
-        report_data = generate_report_data(report_type)
+        # ================================================================
+        # NEW: Determine the report date based on report_type
+        # ================================================================
+        today = timezone.now().date()
+        
+        if report_type == 'daily':
+            report_date = today  # For manual reports from dashboard, use today
+        elif report_type == 'weekly':
+            report_date = today
+        elif report_type == 'monthly':
+            report_date = today
+        elif report_type == 'annual':
+            report_date = today
+        else:
+            report_date = today
 
-        # Send email (this will skip actual sending in DEBUG mode)
+        # ================================================================
+        # FIX: Pass report_date to generate_report_data
+        # ================================================================
+        report_data = generate_report_data(report_type, report_date)  # ← CHANGED: Pass report_date
+
+        # Send email
         success = send_report_email(report_data, email, report_type)
 
         if success:
@@ -1897,14 +1915,22 @@ def generate_report_api(request):
 # FIXED: generate_report_data – returns now included correctly
 # ============================================================
 
-def generate_report_data(report_type):
-    """Generate report data based on type (including returns)"""
-    today = timezone.now().date()
-    yesterday = today - timedelta(days=1)
-
+def generate_report_data(report_type, report_date=None):  # ← NEW: Added report_date parameter
+    """
+    Generate report data based on type (including returns)
+    """
+    # ================================================================
+    # NEW: Use report_date if provided, otherwise fallback to yesterday
+    # ================================================================
+    if report_date is None:
+        report_date = timezone.now().date()  # ← NEW: Fallback date
+    
+    today = report_date  # ← NEW: Use the passed date
+    yesterday = today - timedelta(days=1)  # ← CHANGED: Use today instead of timezone.now()
 
     report_data = {
         'report_type': report_type,
+        'report_date': report_date,  # ← NEW: Store the date in report_data
         'generated_at': timezone.now().strftime('%Y-%m-%d %H:%M:%S'),
         'sales': {},
         'invoices': {},
@@ -1912,27 +1938,31 @@ def generate_report_data(report_type):
         'top_products': []
     }
 
+    # ================================================================
+    # FIX: Use the passed report_date for all calculations
+    # ================================================================
     if report_type == 'daily':
-        start_date = yesterday
-        end_date = yesterday
-        report_data['period'] = f"Daily Report - {yesterday.strftime('%B %d, %Y')}"
+        start_date = report_date  # ← CHANGED: Use report_date instead of yesterday
+        end_date = report_date    # ← CHANGED: Use report_date instead of yesterday
+        report_data['period'] = f"Daily Report - {report_date.strftime('%B %d, %Y')}"  # ← CHANGED
     elif report_type == 'weekly':
-        end_date = yesterday
+        end_date = report_date    # ← CHANGED: Use report_date instead of yesterday
         start_date = end_date - timedelta(days=7)
         report_data['period'] = f"Weekly Report - {start_date.strftime('%B %d')} to {end_date.strftime('%B %d, %Y')}"
     elif report_type == 'monthly':
-        end_date = yesterday
+        end_date = report_date    # ← CHANGED: Use report_date instead of yesterday
         start_date = end_date.replace(day=1)
         report_data['period'] = f"Monthly Report - {end_date.strftime('%B %Y')}"
     elif report_type == 'annual':
-        end_date = yesterday
+        end_date = report_date    # ← CHANGED: Use report_date instead of yesterday
         start_date = end_date.replace(month=1, day=1)
         report_data['period'] = f"Annual Report - {end_date.year}"
     else:
-        start_date = yesterday
-        end_date = yesterday
+        start_date = report_date   # ← CHANGED: Use report_date instead of yesterday
+        end_date = report_date     # ← CHANGED: Use report_date instead of yesterday
 
-    receipts = Receipt.objects.filter(
+    # ⚠️ FIX: 'Receipts' → 'Receipt' (model name)
+    receipts = Receipt.objects.filter(  # ← FIXED: Changed from 'Receipts' to 'Receipt'
         created_at__date__gte=start_date,
         created_at__date__lte=end_date
     )
@@ -1942,7 +1972,8 @@ def generate_report_data(report_type):
         returned_date__date__lte=end_date
     )
 
-    total_sales = receipts.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
+    # ⚠️ FIX: '__sum' not '_sum' (double underscore)
+    total_sales = receipts.aggregate(Sum('total_amount'))['total_amount__sum'] or 0  # ← FIXED
     total_transactions = receipts.count()
     total_items_sold = 0
     for receipt in receipts:
@@ -1950,8 +1981,9 @@ def generate_report_data(report_type):
             for item in receipt.items:
                 total_items_sold += item.get('quantity', 0)
 
-    total_returned_amount = returns.aggregate(Sum('total_refund'))['total_refund__sum'] or 0
-    total_returned_items = returns.aggregate(Sum('quantity'))['quantity__sum'] or 0
+    # ⚠️ FIX: '__sum' not '_sum' (double underscore)
+    total_returned_amount = returns.aggregate(Sum('total_refund'))['total_refund__sum'] or 0  # ← FIXED
+    total_returned_items = returns.aggregate(Sum('quantity'))['quantity__sum'] or 0  # ← FIXED
 
     net_sales = total_sales - total_returned_amount
 
@@ -1971,6 +2003,7 @@ def generate_report_data(report_type):
         total=Sum('total_amount'),
         count=Count('id')
     )
+
     for item in payment_breakdown:
         report_data['payment_breakdown'].append({
             'method': item['payment_method'] or 'unknown',
@@ -2021,6 +2054,13 @@ def send_report_email(report_data, email, report_type):
         from .utils.invoice_pdf import get_invoices_zip, get_invoices_zip_range
         from .utils.report_generator import generate_daily_report_pdf
         from stock.models import Invoice
+
+        # ---- USE THE REPORT DATE FROM report_data ----
+        report_date = report_data.get('report_date')  # ← NEW: Get the date from report_data
+        
+        if report_date is None:
+            report_date = timezone.now().date()
+            print("⚠️ Warning: report_date not found in report_data, using today")
 
         print("===== BREVO API EMAIL =====")
         print("Recipient:", email)
