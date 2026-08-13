@@ -1853,13 +1853,10 @@ def generate_report_api(request):
         report_type = data.get('report_type', 'daily')
         email = data.get('email', 'kiyimbahenry314@gmail.com')
 
-        # ================================================================
-        # NEW: Determine the report date based on report_type
-        # ================================================================
         today = timezone.now().date()
         
         if report_type == 'daily':
-            report_date = today  # For manual reports from dashboard, use today
+            report_date = today
         elif report_type == 'weekly':
             report_date = today
         elif report_type == 'monthly':
@@ -1869,16 +1866,12 @@ def generate_report_api(request):
         else:
             report_date = today
 
-        # ================================================================
-        # FIX: Pass report_date to generate_report_data
-        # ================================================================
-        report_data = generate_report_data(report_type, report_date)  # ← CHANGED: Pass report_date
+        report_data = generate_report_data(report_type, report_date)
 
         # Send email
         success = send_report_email(report_data, email, report_type)
 
         if success:
-            # Save report to database
             report = Report.objects.create(
                 report_type=report_type,
                 data=report_data,
@@ -1899,7 +1892,6 @@ def generate_report_api(request):
             }, status=500)
 
     except Exception as e:
-        # In DEBUG mode, return detailed error
         if settings.DEBUG:
             import traceback
             return JsonResponse({
@@ -1930,7 +1922,7 @@ def generate_report_data(report_type, report_date=None):  # ← NEW: Added repor
 
     report_data = {
         'report_type': report_type,
-        'report_date': report_date,  # ← NEW: Store the date in report_data
+        'report_date': report_date.isoformat(),  # ← NEW: Store the date in report_data
         'generated_at': timezone.now().strftime('%Y-%m-%d %H:%M:%S'),
         'sales': {},
         'invoices': {},
