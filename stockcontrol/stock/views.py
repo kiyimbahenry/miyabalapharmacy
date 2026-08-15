@@ -2026,15 +2026,25 @@ def send_report_email(report_data, email, report_type):
         from .utils.invoice_pdf import get_invoices_zip, get_invoices_zip_range
         from .utils.report_generator import generate_daily_report_pdf, generate_comprehensive_report_pdf
         from stock.models import Invoice
-
+    
+        # ================================================================
+        # GET THE REPORT DATE FROM report_data (DON'T OVERWRITE IT!)
+        # ================================================================
         report_date = report_data.get('report_date')
+        
+        # If it's a string (ISO format), convert to date
+        if isinstance(report_date, str):
+            report_date = datetime.strptime(report_date, "%Y-%m-%d").date()
+        
+        # Fallback if not found
         if report_date is None:
-            report_date = timezone.now().date()
+            report_date = timezone.localdate()
             print("⚠️ Warning: report_date not found in report_data, using today")
 
         print("===== BREVO API EMAIL =====")
         print("Recipient:", email)
         print("Report Type:", report_type)
+        print(f"📅 Report Date: {report_date}")
 
         configuration = sib_api_v3_sdk.Configuration()
         configuration.api_key['api-key'] = os.environ.get("BREVO_API_KEY")
@@ -2043,26 +2053,22 @@ def send_report_email(report_data, email, report_type):
             sib_api_v3_sdk.ApiClient(configuration)
         )
 
-        today = timezone.now().date()
-
+        # ================================================================
+        # USE THE REPORT DATE (NOT TODAY!)
+        # ================================================================
         if report_type == 'daily':
-            report_date = today
             start_date = report_date
             end_date = report_date
         elif report_type == 'weekly':
-            end_date = today
+            end_date = report_date
             start_date = end_date - timedelta(days=7)
-            report_date = end_date
         elif report_type == 'monthly':
-            end_date = today
+            end_date = report_date
             start_date = end_date.replace(day=1)
-            report_date = end_date
         elif report_type == 'annual':
-            end_date = today
+            end_date = report_date
             start_date = end_date.replace(month=1, day=1)
-            report_date = end_date
         else:
-            report_date = today
             start_date = report_date
             end_date = report_date
 
@@ -2073,9 +2079,11 @@ def send_report_email(report_data, email, report_type):
         period = report_data.get("period", f"{report_type.capitalize()} Report")
         generated_at = report_data.get("generated_at", timezone.now().strftime('%Y-%m-%d %H:%M:%S'))
 
+        # --- 1. Generate PDF Report ---
         pdf_buffer = generate_comprehensive_report_pdf(report_date)
         pdf_encoded = base64.b64encode(pdf_buffer.getvalue()).decode('utf-8')
 
+        # --- 2. Generate ZIP of all invoices ---
         if report_type == 'daily':
             zip_buffer = get_invoices_zip(report_date)
         else:
