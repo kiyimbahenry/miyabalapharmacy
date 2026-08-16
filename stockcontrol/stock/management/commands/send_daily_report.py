@@ -1,6 +1,5 @@
 from django.core.management.base import BaseCommand
 from django.utils import timezone
-from datetime import timedelta
 
 # Import your existing functions from views
 from stock.views import generate_report_data, send_report_email
@@ -25,20 +24,24 @@ class Command(BaseCommand):
             # Determine which date to report on
             # ================================================================
             if options.get('test'):
-                report_date = timezone.now().date()
+                # Test mode - use current local date
+                report_date = timezone.localdate()
                 self.stdout.write(f"🔄 TEST MODE: Running report for {report_date}")
             else:
-                # Daily report - run for yesterday
-                report_date = timezone.now().date() - timedelta(days=1)
+                # ============================================================
+                # Use current local date
+                # The cron job runs at midnight, so we want the report for
+                # the current local date (which is yesterday in UTC)
+                # ============================================================
+                report_date = timezone.localdate()
                 self.stdout.write(f"🔄 Running daily report for {report_date}")
 
             # ================================================================
-            # FIX: Pass report_date to generate_report_data
+            # Pass report_date to generate_report_data
             # ================================================================
-            report_data = generate_report_data('daily', report_date)  # ← CHANGED: Pass report_date
+            report_data = generate_report_data('daily', report_date)
 
-            # REMOVED: report_data['period'] = f"Daily Report - {report_date.strftime('%B %d, %Y')}"
-            # The period is now set inside generate_report_data
+            # The period is set inside generate_report_data
 
             # List of recipients
             recipients = ['kiyimbahenry314@gmail.com', 'daveedaviyam@gmail.com']
@@ -47,7 +50,7 @@ class Command(BaseCommand):
             success = send_report_email(report_data, recipients[0], 'daily')
 
             if success:
-                # Save report to database
+                # Save report to database with local time
                 admin_user = User.objects.filter(is_superuser=True).first()
                 if admin_user:
                     Report.objects.create(
@@ -55,7 +58,7 @@ class Command(BaseCommand):
                         data=report_data,
                         generated_by=admin_user,
                         sent_to_email=True,
-                        email_sent_at=timezone.now()
+                        email_sent_at=timezone.localtime()  # ← Local time
                     )
                 else:
                     # If no admin user, save without generated_by
@@ -63,7 +66,7 @@ class Command(BaseCommand):
                         report_type='daily',
                         data=report_data,
                         sent_to_email=True,
-                        email_sent_at=timezone.now()
+                        email_sent_at=timezone.localtime()  # ← Local time
                     )
 
                 self.stdout.write(

@@ -1909,7 +1909,7 @@ def generate_report_data(report_type, report_date=None):
     report_data = {
         'report_type': report_type,
         'report_date': report_date.isoformat(),
-        'generated_at': timezone.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'generated_at': timezone.localtime().strftime('%Y-%m-%d %H:%M:%S'),
         'sales': {},
         'invoices': {},
         'payment_breakdown': [],
