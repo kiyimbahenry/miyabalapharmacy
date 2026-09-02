@@ -128,7 +128,6 @@ class Drug(models.Model):
             models.Index(fields=["name"]),
             models.Index(fields=["batch_no"]),
             models.Index(fields=["expiry_date"]),
-            # 🆕 Indexes for brand and generic_name to speed up searches
             models.Index(fields=["brand"]),
             models.Index(fields=["generic_name"]),
         ]
@@ -157,14 +156,163 @@ class Drug(models.Model):
 
     def save(self, *args, **kwargs):
         """Save the drug"""
-        # Commented out to fix the multiplication error
-        # if self.cost_price:
-        #     self.selling_price = self.cost_price * (1 + self.markup_percentage / 100)
-        #     self.selling_price = round(self.selling_price, 2)
         super().save(*args, **kwargs)
 
 
-# INVOICE MODEL (FIXED)
+# ============================================================
+# DOSAGE FORM MODEL
+# ============================================================
+class DosageForm(models.Model):
+    """
+    Custom dosage forms that users can add.
+    These appear alongside the standard DOSAGE_CHOICES in drug forms.
+    """
+    name = models.CharField(max_length=50, unique=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='dosage_forms_created'
+    )
+
+    class Meta:
+        ordering = ['name']
+        verbose_name = "Dosage Form"
+        verbose_name_plural = "Dosage Forms"
+
+    def __str__(self):
+        return self.name
+
+
+# ============================================================
+# CREDIT SALE MODEL (NEW - ADDED)
+# ============================================================
+class CreditSale(models.Model):
+    """
+    Model to track credit sales where customers buy now and pay later.
+    """
+    STATUS_CHOICES = [
+        ('pending', 'Pending'),
+        ('partial', 'Partial Payment'),
+        ('paid', 'Fully Paid'),
+        ('overdue', 'Overdue'),
+    ]
+
+    credit_receipt_number = models.CharField(max_length=50, unique=True)
+    customer_name = models.CharField(max_length=200)
+    customer_phone = models.CharField(max_length=20, blank=True)
+    total_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    amount_paid = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    remaining_balance = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    payment_method = models.CharField(max_length=20, default='cash')
+    items = models.JSONField(default=list)
+    due_date = models.DateField(null=True, blank=True)
+    credit_limit = models.DecimalField(max_digits=12, decimal_places=2, default=0)
+    status = models.CharField(max_length=10, choices=STATUS_CHOICES, default='pending')
+    notes = models.TextField(blank=True, null=True)
+
+    # Audit Fields
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='credit_sales_created'
+    )
+    updated_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='credit_sales_updated'
+    )
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['credit_receipt_number']),
+            models.Index(fields=['customer_name']),
+            models.Index(fields=['status']),
+            models.Index(fields=['due_date']),
+            models.Index(fields=['created_at']),
+        ]
+        verbose_name = "Credit Sale"
+        verbose_name_plural = "Credit Sales"
+
+    def __str__(self):
+        return f"Credit #{self.credit_receipt_number} - {self.customer_name} (UGX {self.remaining_balance:,.0f})"
+
+    def save(self, *args, **kwargs):
+        if not self.credit_receipt_number:
+            today = timezone.now().strftime('%Y%m%d')
+            count = CreditSale.objects.filter(created_at__date=timezone.now().date()).count() + 1
+            self.credit_receipt_number = f"CR-{today}-{str(count).zfill(4)}"
+        
+        # Update status based on remaining balance and due date
+        if self.remaining_balance <= 0:
+            self.status = 'paid'
+        elif self.due_date and self.due_date < timezone.now().date() and self.remaining_balance > 0:
+            self.status = 'overdue'
+        elif self.amount_paid > 0 and self.remaining_balance > 0:
+            self.status = 'partial'
+        else:
+            self.status = 'pending'
+        
+        super().save(*args, **kwargs)
+
+
+# ============================================================
+# CREDIT PAYMENT MODEL (NEW - ADDED)
+# ============================================================
+class CreditPayment(models.Model):
+    """
+    Model to track individual payments made against credit sales.
+    """
+    credit_sale = models.ForeignKey(
+        CreditSale,
+        on_delete=models.CASCADE,
+        related_name='payments'
+    )
+    amount = models.DecimalField(max_digits=12, decimal_places=2)
+    payment_method = models.CharField(max_length=20, default='cash')
+    reference = models.CharField(max_length=100, blank=True)
+    notes = models.TextField(blank=True, null=True)
+
+    # Audit Fields
+    created_at = models.DateTimeField(auto_now_add=True)
+    created_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        related_name='credit_payments_created'
+    )
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['credit_sale']),
+            models.Index(fields=['created_at']),
+        ]
+        verbose_name = "Credit Payment"
+        verbose_name_plural = "Credit Payments"
+
+    def __str__(self):
+        return f"Payment of UGX {self.amount:,.0f} for Credit #{self.credit_sale.credit_receipt_number}"
+
+    def save(self, *args, **kwargs):
+        super().save(*args, **kwargs)
+        # Update the credit sale's paid amount and remaining balance
+        credit = self.credit_sale
+        total_paid = credit.payments.aggregate(models.Sum('amount'))['amount__sum'] or 0
+        credit.amount_paid = total_paid
+        credit.remaining_balance = credit.total_amount - total_paid
+        credit.save()
+
+
+# INVOICE MODEL
 class Invoice(models.Model):
     """Invoice model for purchases from suppliers"""
     STATUS_CHOICES = [
@@ -188,8 +336,6 @@ class Invoice(models.Model):
     paid_amount = models.DecimalField(max_digits=12, decimal_places=2, default=0)
     status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='pending')
     payment_mode = models.CharField(max_length=10, choices=PAYMENT_MODE_CHOICES, default='cash')
-
-    # ✅ CHANGED: Removed 'notes' and added 'total_cost'
     total_cost = models.DecimalField(max_digits=12, decimal_places=2, default=0, help_text="Total cost of all items on this invoice")
 
     created_at = models.DateTimeField(auto_now_add=True)
@@ -332,11 +478,35 @@ class Receipt(models.Model):
     is_printed = models.BooleanField(default=False)
     printed_at = models.DateTimeField(null=True, blank=True)
 
+    # Credit Sales Fields
+    is_credit = models.BooleanField(default=False, help_text="True if this is a credit sale")
+    is_cleared = models.BooleanField(default=False, help_text="True if credit has been paid")
+    cleared_date = models.DateTimeField(null=True, blank=True, help_text="When the credit was cleared")
+    cleared_by = models.ForeignKey(
+        User,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='cleared_receipts',
+        help_text="User who cleared this credit"
+    )
+    
+    # Link to Credit Sale
+    credit_sale = models.ForeignKey(
+        CreditSale,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name='receipts',
+        help_text="Reference to the credit sale if this receipt is from a credit transaction"
+    )
+
     class Meta:
         ordering = ['-created_at']
         indexes = [
             models.Index(fields=['receipt_number']),
             models.Index(fields=['created_at']),
+            models.Index(fields=['is_credit']),
         ]
 
     def __str__(self):

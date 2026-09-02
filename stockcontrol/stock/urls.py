@@ -12,7 +12,7 @@ urlpatterns = [
     path('logout/', views.logout_view, name='logout'),
 
     # ============================================================
-    # PASSWORD RESET URLs - ADDED
+    # PASSWORD RESET URLs
     # ============================================================
     path('password-reset/',
          auth_views.PasswordResetView.as_view(
@@ -60,6 +60,7 @@ urlpatterns = [
     path('drugs/<int:drug_id>/delete/', views.drug_delete, name='drug_delete'),
     path('out-of-stock/', views.out_of_stock, name='out_of_stock'),
     path('api/add-dosage-form/', views.add_dosage_form, name='add_dosage_form'),
+    path('api/dosage-forms/', views.get_dosage_forms_api, name='get_dosage_forms_api'),
 
     # ============================================================
     # CHRONIC PATIENT URLs
@@ -103,9 +104,23 @@ urlpatterns = [
     path('receipts/<int:receipt_id>/print/', views.print_receipt, name='print_receipt'),
     path('sale/create/', views.create_sale_receipt, name='create_sale'),
     path('api/complete-sale/', views.complete_sale, name='complete_sale'),
+    
+    # ============================================================
+    # RETURN URLs
+    # ============================================================
     path('returns/', views.return_list, name='return_list'),
     path('returns/create/', views.return_create, name='return_create'),
     path('api/receipt/<int:receipt_id>/items/', views.get_receipt_items, name='get_receipt_items'),
+
+    # ============================================================
+    # CREDIT SALE URLs (NEW)
+    # ============================================================
+    path('credits/', views.credit_list, name='credit_list'),
+    path('credits/<int:credit_id>/', views.credit_detail, name='credit_detail'),
+    path('credits/<int:credit_id>/payment/', views.credit_payment, name='credit_payment'),
+    path('credits/<int:credit_id>/delete/', views.credit_delete, name='credit_delete'),
+    path('api/credit-summary/', views.get_credit_summary_api, name='get_credit_summary_api'),
+
     # ============================================================
     # REPORT URLs
     # ============================================================

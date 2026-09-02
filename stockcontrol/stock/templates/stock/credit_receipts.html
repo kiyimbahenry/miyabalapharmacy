@@ -1,0 +1,194 @@
+{% extends 'stock/base.html' %}
+{% load static %}
+
+{% block title %}Credit Receipts - Miyabala Pharmacy{% endblock %}
+
+{% block content %}
+<div class="row">
+    <div class="col-12">
+        <h4><i class="fas fa-credit-card text-warning"></i> Credit Receipts Management</h4>
+        <hr>
+    </div>
+</div>
+
+<!-- Summary Stats -->
+<div class="row">
+    <div class="col-md-3 col-sm-6">
+        <div class="card bg-warning text-dark mb-3">
+            <div class="card-body text-center">
+                <h5>UGX {{ pending_total|floatformat:0 }}</h5>
+                <small>Pending Credits ({{ pending_count }})</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6">
+        <div class="card bg-success text-white mb-3">
+            <div class="card-body text-center">
+                <h5>UGX {{ cleared_total|floatformat:0 }}</h5>
+                <small>Cleared Credits ({{ cleared_count }})</small>
+            </div>
+        </div>
+    </div>
+    <div class="col-md-3 col-sm-6">
+        <div class="card bg-info text-white mb-3">
+            <div class="card-body text-center">
+                <h5>{{ pending_count|add:cleared_count }}</h5>
+                <small>Total Credit Transactions</small>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Pending Credits -->
+<div class="card shadow mb-4">
+    <div class="card-header bg-warning text-dark">
+        <h5><i class="fas fa-clock"></i> Pending Credits</h5>
+    </div>
+    <div class="card-body">
+        {% if pending_credits %}
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Receipt #</th>
+                        <th>Customer</th>
+                        <th>Amount (UGX)</th>
+                        <th>Date</th>
+                        <th>Items</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for receipt in pending_credits %}
+                    <tr>
+                        <td><strong>{{ receipt.receipt_number }}</strong></td>
+                        <td>{{ receipt.customer_name|default:'Walk-in' }}</td>
+                        <td><strong>UGX {{ receipt.total_amount|floatformat:0 }}</strong></td>
+                        <td>{{ receipt.created_at|date:'d/m/Y H:i' }}</td>
+                        <td>{{ receipt.items|length }} items</td>
+                        <td>
+                            <button class="btn btn-sm btn-success" onclick="clearCredit({{ receipt.id }})">
+                                <i class="fas fa-check-circle"></i> Clear Payment
+                            </button>
+                        </td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted text-center py-3">
+            <i class="fas fa-check-circle text-success"></i> No pending credits.
+        </p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Cleared Credits -->
+<div class="card shadow">
+    <div class="card-header bg-success text-white">
+        <h5><i class="fas fa-check-circle"></i> Cleared Credits</h5>
+    </div>
+    <div class="card-body">
+        {% if cleared_credits %}
+        <div class="table-responsive">
+            <table class="table table-striped">
+                <thead>
+                    <tr>
+                        <th>Receipt #</th>
+                        <th>Customer</th>
+                        <th>Amount (UGX)</th>
+                        <th>Credit Date</th>
+                        <th>Cleared Date</th>
+                        <th>Cleared By</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for receipt in cleared_credits %}
+                    <tr>
+                        <td><strong>{{ receipt.receipt_number }}</strong></td>
+                        <td>{{ receipt.customer_name|default:'Walk-in' }}</td>
+                        <td><strong>UGX {{ receipt.total_amount|floatformat:0 }}</strong></td>
+                        <td>{{ receipt.created_at|date:'d/m/Y H:i' }}</td>
+                        <td>{{ receipt.cleared_date|date:'d/m/Y H:i' }}</td>
+                        <td>{{ receipt.cleared_by.username }}</td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+        {% else %}
+        <p class="text-muted text-center py-3">
+            <i class="fas fa-info-circle"></i> No cleared credits yet.
+        </p>
+        {% endif %}
+    </div>
+</div>
+
+<!-- Toast Notification -->
+<div id="toast" class="toast-custom"></div>
+
+<style>
+    .toast-custom {
+        position: fixed;
+        bottom: 30px;
+        right: 30px;
+        padding: 15px 25px;
+        border-radius: 10px;
+        color: white;
+        font-weight: 500;
+        z-index: 1000;
+        display: none;
+        box-shadow: 0 8px 24px rgba(0,0,0,0.2);
+        animation: slideUp 0.3s ease;
+    }
+    .toast-custom.success { background: #28a745; }
+    .toast-custom.error { background: #dc3545; }
+    .toast-custom.info { background: #17a2b8; }
+    .toast-custom.show { display: block; }
+    @keyframes slideUp {
+        from { transform: translateY(20px); opacity: 0; }
+        to { transform: translateY(0); opacity: 1; }
+    }
+</style>
+
+<script>
+function clearCredit(receiptId) {
+    if (!confirm('Are you sure you want to mark this credit as cleared?')) {
+        return;
+    }
+    
+    fetch('{% url "stock:clear_credit" %}', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+            'X-CSRFToken': document.querySelector('meta[name="csrf-token"]')?.content || '',
+        },
+        body: JSON.stringify({ receipt_id: receiptId })
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            showToast(data.message, 'success');
+            setTimeout(() => window.location.reload(), 1500);
+        } else {
+            showToast(data.error || 'Failed to clear credit.', 'error');
+        }
+    })
+    .catch(error => {
+        showToast('Network error. Please try again.', 'error');
+        console.error('Error:', error);
+    });
+}
+
+function showToast(message, type = 'info') {
+    const toast = document.getElementById('toast');
+    toast.textContent = message;
+    toast.className = 'toast-custom ' + type + ' show';
+    clearTimeout(toast._timeout);
+    toast._timeout = setTimeout(() => {
+        toast.classList.remove('show');
+    }, 5000);
+}
+</script>
+{% endblock %}

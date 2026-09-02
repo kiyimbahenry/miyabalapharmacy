@@ -8,8 +8,9 @@ db.sqlite3
 .env
 *.env
 
-# Static files (optional, if you collect them locally)
-/staticfiles/
+# Local settings with SQLite - DO NOT PUSH TO GITHUB
+settings.py
+stockcontrol/settings.py
 
 # IDE / OS
 .DS_Store

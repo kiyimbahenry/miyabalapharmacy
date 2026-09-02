@@ -36,7 +36,7 @@ from .models import (
     Drug, Supplier, Invoice, Category, InvoiceItem,
     Sale, SaleItem, Receipt, Report, ChronicPatient,
     PatientMedication, PatientVisit,
-    ReturnedDrug, StockMovement
+    ReturnedDrug, StockMovement, CreditSale, CreditPayment
 )
 
 # FORM IMPORTS
@@ -178,6 +178,14 @@ def dashboard(request):
     )
     today_transactions = today_receipts.count()
 
+    # ---- TODAY'S CREDIT SALES ----
+    today_credit_sales = CreditSale.objects.filter(created_at__date=today)
+    today_credit_total = (
+        today_credit_sales.aggregate(Sum('total_amount'))['total_amount__sum']
+        or Decimal("0.00")
+    )
+    today_credit_count = today_credit_sales.count()
+
     # ---- TODAY'S RETURNS ----
     today_returns = ReturnedDrug.objects.filter(returned_date__date=today)
     today_returns_amount = (
@@ -203,6 +211,19 @@ def dashboard(request):
 
     top_selling = sorted(top_drugs.items(), key=lambda x: x[1], reverse=True)[:5]
 
+    # ---- TOTAL OUTSTANDING CREDIT ----
+    total_outstanding = CreditSale.objects.filter(
+        status__in=['pending', 'partial']
+    ).aggregate(
+        total=Sum('remaining_balance')
+    )['total'] or Decimal("0.00")
+
+    # ---- OVERDUE CREDIT SALES ----
+    overdue_credits = CreditSale.objects.filter(
+        status__in=['pending', 'partial'],
+        due_date__lt=today
+    ).count()
+
     context = {
         'total_medicines': total_medicines,
         'total_suppliers': total_suppliers,
@@ -218,6 +239,11 @@ def dashboard(request):
         'today_returns_count': today_returns_count,
         'net_sales': net_sales,
         'top_selling': top_selling,
+        # Credit sales data
+        'today_credit_total': today_credit_total,
+        'today_credit_count': today_credit_count,
+        'total_outstanding': total_outstanding,
+        'overdue_credits': overdue_credits,
     }
 
     return render(request, 'stock/dashboard.html', context)
@@ -390,6 +416,11 @@ def complete_sale(request):
         payment_method = data.get('payment_method', 'cash')
         sale_type = data.get('sale_type', 'retail')
 
+        # Credit sale fields
+        is_credit = data.get('is_credit', False)
+        due_date = data.get('due_date')
+        credit_limit = data.get('credit_limit', 0)
+
         sale_items = []
         total_amount = 0
 
@@ -468,6 +499,63 @@ def complete_sale(request):
                 'message': 'No valid items to process after validation'
             }, status=400)
 
+        # Handle Credit Sale
+        if is_credit:
+            # Create credit sale
+            credit_sale = CreditSale.objects.create(
+                customer_name=customer_name,
+                customer_phone=customer_phone,
+                total_amount=total_amount,
+                amount_paid=amount_paid,
+                remaining_balance=total_amount - amount_paid,
+                payment_method=payment_method,
+                items=sale_items,
+                due_date=due_date,
+                credit_limit=credit_limit,
+                status='pending' if amount_paid < total_amount else 'paid',
+                created_by=request.user
+            )
+
+            # Record the payment if any was made
+            if amount_paid > 0:
+                CreditPayment.objects.create(
+                    credit_sale=credit_sale,
+                    amount=amount_paid,
+                    payment_method=payment_method,
+                    reference=f"Initial payment - {payment_method}",
+                    created_by=request.user
+                )
+
+            # Create receipt for the paid portion
+            if amount_paid > 0:
+                receipt = Receipt.objects.create(
+                    customer_name=customer_name,
+                    customer_phone=customer_phone,
+                    total_amount=amount_paid,
+                    amount_paid=amount_paid,
+                    change_due=0,
+                    payment_method=payment_method,
+                    items=sale_items,
+                    created_by=request.user,
+                    is_credit=True,
+                    credit_sale_id=credit_sale.id
+                )
+
+            return JsonResponse({
+                'success': True,
+                'message': 'Credit sale created successfully!',
+                'is_credit': True,
+                'credit_sale_id': credit_sale.id,
+                'receipt_number': credit_sale.credit_receipt_number,
+                'total_amount': float(total_amount),
+                'amount_paid': float(amount_paid),
+                'remaining_balance': float(credit_sale.remaining_balance),
+                'due_date': credit_sale.due_date.strftime('%Y-%m-%d') if credit_sale.due_date else None,
+                'items': sale_items,
+                'credit_url': f'/credits/{credit_sale.id}/'
+            })
+
+        # Regular sale (cash)
         change_due = amount_paid - total_amount if amount_paid > total_amount else 0
 
         receipt = Receipt.objects.create(
@@ -478,7 +566,8 @@ def complete_sale(request):
             change_due=change_due,
             payment_method=payment_method,
             items=sale_items,
-            created_by=request.user
+            created_by=request.user,
+            is_credit=False
         )
 
         print(f"✅ Sale completed successfully!")
@@ -513,6 +602,222 @@ def complete_sale(request):
             'success': False,
             'message': f'Error processing sale: {str(e)}'
         }, status=500)
+
+
+# ============================================================
+# CREDIT SALE VIEWS
+# ============================================================
+
+@login_required
+def credit_list(request):
+    """List all credit sales with filtering and pagination"""
+    credits = CreditSale.objects.all().select_related('created_by').order_by('-created_at')
+
+    # Filter by status
+    status_filter = request.GET.get('status')
+    if status_filter:
+        credits = credits.filter(status=status_filter)
+
+    # Filter by date range
+    date_from = request.GET.get('date_from')
+    date_to = request.GET.get('date_to')
+    if date_from:
+        credits = credits.filter(created_at__date__gte=date_from)
+    if date_to:
+        credits = credits.filter(created_at__date__lte=date_to)
+
+    # Search by customer name or phone
+    search_query = request.GET.get('search')
+    if search_query:
+        credits = credits.filter(
+            Q(customer_name__icontains=search_query) |
+            Q(customer_phone__icontains=search_query) |
+            Q(credit_receipt_number__icontains=search_query)
+        )
+
+    # Pagination
+    paginator = Paginator(credits, 20)
+    page = request.GET.get('page')
+    try:
+        credits_page = paginator.page(page)
+    except PageNotAnInteger:
+        credits_page = paginator.page(1)
+    except EmptyPage:
+        credits_page = paginator.page(paginator.num_pages)
+
+    # Statistics
+    total_outstanding = CreditSale.objects.filter(
+        status__in=['pending', 'partial']
+    ).aggregate(
+        total=Sum('remaining_balance')
+    )['total'] or Decimal("0.00")
+
+    overdue_count = CreditSale.objects.filter(
+        status__in=['pending', 'partial'],
+        due_date__lt=timezone.now().date()
+    ).count()
+
+    total_credit_sales = CreditSale.objects.aggregate(
+        total=Sum('total_amount')
+    )['total'] or Decimal("0.00")
+
+    total_paid = CreditSale.objects.aggregate(
+        total=Sum('amount_paid')
+    )['total'] or Decimal("0.00")
+
+    context = {
+        'credits': credits_page,
+        'status_filter': status_filter,
+        'search_query': search_query,
+        'date_from': date_from,
+        'date_to': date_to,
+        'total_outstanding': total_outstanding,
+        'overdue_count': overdue_count,
+        'total_credit_sales': total_credit_sales,
+        'total_paid': total_paid,
+        'status_choices': CreditSale.STATUS_CHOICES,
+    }
+    return render(request, 'stock/credit_list.html', context)
+
+
+@login_required
+def credit_detail(request, credit_id):
+    """View credit sale details"""
+    credit = get_object_or_404(CreditSale, id=credit_id)
+    payments = credit.payments.all().order_by('-created_at')
+    return render(request, 'stock/credit_detail.html', {
+        'credit': credit,
+        'payments': payments,
+    })
+
+
+@login_required
+def credit_payment(request, credit_id):
+    """Record a payment for a credit sale"""
+    credit = get_object_or_404(CreditSale, id=credit_id)
+
+    if credit.status == 'paid':
+        messages.warning(request, 'This credit sale is already fully paid.')
+        return redirect('stock:credit_detail', credit_id=credit.id)
+
+    if request.method == 'POST':
+        try:
+            amount = Decimal(request.POST.get('amount', 0))
+            payment_method = request.POST.get('payment_method', 'cash')
+            reference = request.POST.get('reference', '')
+
+            if amount <= 0:
+                messages.error(request, 'Payment amount must be greater than zero.')
+                return redirect('stock:credit_detail', credit_id=credit.id)
+
+            if amount > credit.remaining_balance:
+                messages.error(request, f'Payment amount cannot exceed remaining balance of UGX {credit.remaining_balance:,.0f}.')
+                return redirect('stock:credit_detail', credit_id=credit.id)
+
+            # Record the payment
+            payment = CreditPayment.objects.create(
+                credit_sale=credit,
+                amount=amount,
+                payment_method=payment_method,
+                reference=reference or f"Payment - {payment_method}",
+                created_by=request.user
+            )
+
+            # Update credit sale
+            credit.amount_paid += amount
+            credit.remaining_balance -= amount
+
+            if credit.remaining_balance <= 0:
+                credit.status = 'paid'
+                credit.remaining_balance = Decimal("0.00")
+            else:
+                credit.status = 'partial'
+
+            credit.save()
+
+            messages.success(request, f'Payment of UGX {amount:,.0f} recorded successfully!')
+            return redirect('stock:credit_detail', credit_id=credit.id)
+
+        except Exception as e:
+            messages.error(request, f'Error recording payment: {str(e)}')
+            return redirect('stock:credit_detail', credit_id=credit.id)
+
+    return render(request, 'stock/credit_payment.html', {'credit': credit})
+
+
+@login_required
+def credit_delete(request, credit_id):
+    """Delete a credit sale (admin only)"""
+    credit = get_object_or_404(CreditSale, id=credit_id)
+
+    if not is_admin_or_manager(request.user):
+        messages.error(request, 'You do not have permission to delete credit sales.')
+        return redirect('stock:credit_list')
+
+    if request.method == 'POST':
+        try:
+            credit_number = credit.credit_receipt_number
+            credit.delete()
+            messages.success(request, f'Credit sale #{credit_number} deleted successfully!')
+            return redirect('stock:credit_list')
+        except Exception as e:
+            messages.error(request, f'Error deleting credit sale: {str(e)}')
+            return redirect('stock:credit_list')
+
+    return render(request, 'stock/credit_confirm_delete.html', {'credit': credit})
+
+
+@login_required
+def get_credit_summary_api(request):
+    """API endpoint to get credit sales summary"""
+    try:
+        today = timezone.now().date()
+
+        total_outstanding = CreditSale.objects.filter(
+            status__in=['pending', 'partial']
+        ).aggregate(
+            total=Sum('remaining_balance')
+        )['total'] or Decimal("0.00")
+
+        overdue_count = CreditSale.objects.filter(
+            status__in=['pending', 'partial'],
+            due_date__lt=today
+        ).count()
+
+        today_credits = CreditSale.objects.filter(created_at__date=today)
+        today_total = today_credits.aggregate(
+            total=Sum('total_amount')
+        )['total'] or Decimal("0.00")
+        today_count = today_credits.count()
+
+        recent_credits = CreditSale.objects.filter(
+            status__in=['pending', 'partial']
+        ).order_by('-created_at')[:10]
+
+        recent_data = []
+        for credit in recent_credits:
+            recent_data.append({
+                'id': credit.id,
+                'credit_receipt_number': credit.credit_receipt_number,
+                'customer_name': credit.customer_name,
+                'total_amount': float(credit.total_amount),
+                'remaining_balance': float(credit.remaining_balance),
+                'due_date': credit.due_date.strftime('%Y-%m-%d') if credit.due_date else None,
+                'status': credit.status,
+                'created_at': credit.created_at.strftime('%Y-%m-%d %H:%M'),
+            })
+
+        return JsonResponse({
+            'success': True,
+            'total_outstanding': float(total_outstanding),
+            'overdue_count': overdue_count,
+            'today_total': float(today_total),
+            'today_count': today_count,
+            'recent_credits': recent_data,
+        })
+
+    except Exception as e:
+        return JsonResponse({'success': False, 'message': str(e)}, status=500)
 
 
 # ============================================================
@@ -793,14 +1098,14 @@ def add_dosage_form(request):
         # Since DOSAGE_CHOICES is hardcoded, we'll store in cache
         from django.core.cache import cache
         custom_choices = cache.get('custom_dosage_forms', {})
-        
+
         if name in custom_choices:
             return JsonResponse({'success': False, 'error': f'"{name}" already exists as a custom dosage form'})
-        
+
         # Check if it's a standard choice
         if name in existing_choices:
             return JsonResponse({'success': False, 'error': f'"{name}" already exists as a standard dosage form'})
-        
+
         # Add to custom choices
         custom_choices[name] = name.title()
         cache.set('custom_dosage_forms', custom_choices, timeout=None)
@@ -809,6 +1114,31 @@ def add_dosage_form(request):
             'success': True,
             'message': f'Dosage form "{name.title()}" added successfully!',
             'added': name
+        })
+
+    except Exception as e:
+        return JsonResponse({'success': False, 'error': str(e)}, status=500)
+
+
+@login_required
+def get_dosage_forms_api(request):
+    """API endpoint to get all dosage forms (standard + custom)"""
+    try:
+        from .models import Drug
+        from django.core.cache import cache
+
+        # Standard choices
+        standard_choices = [{'value': key, 'label': label} for key, label in Drug.DOSAGE_CHOICES]
+
+        # Custom choices from cache
+        custom_choices = cache.get('custom_dosage_forms', {})
+        custom_list = [{'value': key, 'label': label} for key, label in custom_choices.items()]
+
+        return JsonResponse({
+            'success': True,
+            'standard': standard_choices,
+            'custom': custom_list,
+            'all': standard_choices + custom_list
         })
 
     except Exception as e:
@@ -1807,6 +2137,18 @@ def reports_dashboard(request):
 
     top_selling = sorted(drug_summary.items(), key=lambda x: x[1]['quantity'], reverse=True)[:10]
 
+    # Credit sales statistics
+    total_outstanding = CreditSale.objects.filter(
+        status__in=['pending', 'partial']
+    ).aggregate(
+        total=Sum('remaining_balance')
+    )['total'] or Decimal("0.00")
+
+    overdue_credits = CreditSale.objects.filter(
+        status__in=['pending', 'partial'],
+        due_date__lt=today
+    ).count()
+
     context = {
         'daily_total': daily_total,
         'daily_count': daily_count,
@@ -1827,6 +2169,8 @@ def reports_dashboard(request):
         'week_start': week_start,
         'month_start': month_start,
         'year_start': year_start,
+        'total_outstanding': total_outstanding,
+        'overdue_credits': overdue_credits,
     }
 
     return render(request, 'stock/reports_dashboard.html', context)
@@ -1898,7 +2242,7 @@ def generate_report_api(request):
 
 def generate_report_data(report_type, report_date=None):
     """
-    Generate report data based on type (including returns)
+    Generate report data based on type (including returns and credit sales)
     """
     if report_date is None:
         report_date = timezone.now().date()
@@ -1913,7 +2257,8 @@ def generate_report_data(report_type, report_date=None):
         'sales': {},
         'invoices': {},
         'payment_breakdown': [],
-        'top_products': []
+        'top_products': [],
+        'credit_sales': {}
     }
 
     if report_type == 'daily':
@@ -1946,6 +2291,11 @@ def generate_report_data(report_type, report_date=None):
         returned_date__date__lte=end_date
     )
 
+    credit_sales = CreditSale.objects.filter(
+        created_at__date__gte=start_date,
+        created_at__date__lte=end_date
+    )
+
     total_sales = receipts.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
     total_transactions = receipts.count()
     total_items_sold = 0
@@ -1959,6 +2309,11 @@ def generate_report_data(report_type, report_date=None):
 
     net_sales = total_sales - total_returned_amount
 
+    # Credit sales data
+    total_credit_amount = credit_sales.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
+    total_credit_paid = credit_sales.aggregate(Sum('amount_paid'))['amount_paid__sum'] or 0
+    total_credit_outstanding = total_credit_amount - total_credit_paid
+
     report_data['sales'] = {
         'total_amount': float(total_sales),
         'net_sales': float(net_sales),
@@ -1969,6 +2324,17 @@ def generate_report_data(report_type, report_date=None):
         'average_transaction': float(total_sales / total_transactions) if total_transactions > 0 else 0,
         'start_date': start_date.strftime('%Y-%m-%d'),
         'end_date': end_date.strftime('%Y-%m-%d'),
+    }
+
+    report_data['credit_sales'] = {
+        'total_credit_amount': float(total_credit_amount),
+        'total_credit_paid': float(total_credit_paid),
+        'total_credit_outstanding': float(total_credit_outstanding),
+        'total_credit_transactions': credit_sales.count(),
+        'overdue_count': credit_sales.filter(
+            status__in=['pending', 'partial'],
+            due_date__lt=timezone.now().date()
+        ).count(),
     }
 
     payment_breakdown = receipts.values('payment_method').annotate(
@@ -2026,16 +2392,16 @@ def send_report_email(report_data, email, report_type):
         from .utils.invoice_pdf import get_invoices_zip, get_invoices_zip_range
         from .utils.report_generator import generate_daily_report_pdf, generate_comprehensive_report_pdf
         from stock.models import Invoice
-    
+
         # ================================================================
         # GET THE REPORT DATE FROM report_data (DON'T OVERWRITE IT!)
         # ================================================================
         report_date = report_data.get('report_date')
-        
+
         # If it's a string (ISO format), convert to date
         if isinstance(report_date, str):
             report_date = datetime.strptime(report_date, "%Y-%m-%d").date()
-        
+
         # Fallback if not found
         if report_date is None:
             report_date = timezone.localdate()
@@ -2076,6 +2442,7 @@ def send_report_email(report_data, email, report_type):
         invoices_data = report_data.get("invoices", {})
         payment_breakdown = report_data.get("payment_breakdown", [])
         top_products = report_data.get("top_products", [])
+        credit_sales = report_data.get("credit_sales", {})
         period = report_data.get("period", f"{report_type.capitalize()} Report")
         generated_at = report_data.get("generated_at", timezone.now().strftime('%Y-%m-%d %H:%M:%S'))
 
@@ -2213,6 +2580,16 @@ def send_report_email(report_data, email, report_type):
                 <table>
                     <tr><th>Method</th><th>Amount</th><th>Transactions</th></tr>
                     {payment_rows}
+                </table>
+
+                <h3 style="margin-top: 30px;">📊 Credit Sales</h3>
+                <table>
+                    <tr><th>Description</th><th>Value</th></tr>
+                    <tr><td>Total Credit Sales</td><td>UGX {credit_sales.get('total_credit_amount', 0):,.0f}</td></tr>
+                    <tr><td>Total Paid</td><td>UGX {credit_sales.get('total_credit_paid', 0):,.0f}</td></tr>
+                    <tr><td>Total Outstanding</td><td>UGX {credit_sales.get('total_credit_outstanding', 0):,.0f}</td></tr>
+                    <tr><td>Total Credit Transactions</td><td>{credit_sales.get('total_credit_transactions', 0)}</td></tr>
+                    <tr><td>Overdue Credits</td><td>{credit_sales.get('overdue_count', 0)}</td></tr>
                 </table>
 
                 <h3 style="margin-top: 30px;">🏆 Top Selling Products</h3>
