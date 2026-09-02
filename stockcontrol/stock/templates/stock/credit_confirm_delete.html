@@ -1,0 +1,38 @@
+{% extends "stock/base.html" %}
+{% load static %}
+
+{% block title %}Delete Credit - Miyabala Pharmacy{% endblock %}
+
+{% block content %}
+<div class="container py-4">
+    <div class="row justify-content-center">
+        <div class="col-md-6">
+            <div class="card">
+                <div class="card-header bg-danger text-white">
+                    <h4><i class="fas fa-exclamation-triangle"></i> Confirm Delete</h4>
+                </div>
+                <div class="card-body">
+                    <p>Are you sure you want to delete credit sale <strong>#{{ credit.credit_receipt_number }}</strong>?</p>
+                    <p><strong>Customer:</strong> {{ credit.customer_name }}</p>
+                    <p><strong>Amount:</strong> UGX {{ credit.total_amount|floatformat:0 }}</p>
+                    <p><strong>Status:</strong> {{ credit.get_status_display }}</p>
+                    
+                    <div class="alert alert-danger">
+                        <i class="fas fa-warning"></i> This action cannot be undone!
+                    </div>
+
+                    <form method="post">
+                        {% csrf_token %}
+                        <div class="d-grid gap-2 d-md-flex justify-content-md-end">
+                            <a href="{% url 'stock:credit_list' %}" class="btn btn-secondary">Cancel</a>
+                            <button type="submit" class="btn btn-danger">
+                                <i class="fas fa-trash"></i> Delete
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %}
