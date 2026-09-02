@@ -694,7 +694,7 @@ def credit_detail(request, credit_id):
 @login_required
 def credit_payment(request, credit_id):
     """Record a payment for a credit sale"""
-    credit = get_object_or_404(CreditSale, id=credit_id)
+    credit = get_object_or_404(CreditSale, id=credit_id)  # Fixed: CreditSale not CreditsSale
 
     if credit.status == 'paid':
         messages.warning(request, 'This credit sale is already fully paid.')
@@ -702,7 +702,7 @@ def credit_payment(request, credit_id):
 
     if request.method == 'POST':
         try:
-            amount = Decimal(request.POST.get('amount', 0))
+            amount = Decimal(request.POST.get('amount', 0))  # Fixed: request.POST not credit.POST
             payment_method = request.POST.get('payment_method', 'cash')
             reference = request.POST.get('reference', '')
 
