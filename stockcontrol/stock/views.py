@@ -15,6 +15,7 @@ from django.views.decorators.csrf import csrf_exempt
 from django.views.decorators.http import require_POST
 from django.core.management import call_command
 from django.db import transaction
+from django.db import models
 import json
 import os
 import base64
@@ -694,7 +695,7 @@ def credit_detail(request, credit_id):
 @login_required
 def credit_payment(request, credit_id):
     """Record a payment for a credit sale"""
-    credit = get_object_or_404(CreditSale, id=credit_id)  # Fixed: CreditSale not CreditsSale
+    credit = get_object_or_404(CreditSale, id=credit_id)
 
     if credit.status == 'paid':
         messages.warning(request, 'This credit sale is already fully paid.')
@@ -702,7 +703,7 @@ def credit_payment(request, credit_id):
 
     if request.method == 'POST':
         try:
-            amount = Decimal(request.POST.get('amount', 0))  # Fixed: request.POST not credit.POST
+            amount = Decimal(request.POST.get('amount', 0))
             payment_method = request.POST.get('payment_method', 'cash')
             reference = request.POST.get('reference', '')
 
@@ -714,8 +715,8 @@ def credit_payment(request, credit_id):
                 messages.error(request, f'Payment amount cannot exceed remaining balance of UGX {credit.remaining_balance:,.0f}.')
                 return redirect('stock:credit_detail', credit_id=credit.id)
 
-            # Record the payment
-            payment = CreditPayment.objects.create(
+            # Create the payment record
+            CreditPayment.objects.create(
                 credit_sale=credit,
                 amount=amount,
                 payment_method=payment_method,
@@ -723,9 +724,11 @@ def credit_payment(request, credit_id):
                 created_by=request.user
             )
 
-            # Update credit sale
-            credit.amount_paid += amount
-            credit.remaining_balance -= amount
+            # RECALCULATE from all payments (this is the key fix)
+            total_paid = credit.payments.aggregate(models.Sum('amount'))['amount__sum'] or Decimal('0.00')
+            
+            credit.amount_paid = total_paid
+            credit.remaining_balance = credit.total_amount - total_paid
 
             if credit.remaining_balance <= 0:
                 credit.status = 'paid'
@@ -740,6 +743,8 @@ def credit_payment(request, credit_id):
 
         except Exception as e:
             messages.error(request, f'Error recording payment: {str(e)}')
+            import traceback
+            traceback.print_exc()
             return redirect('stock:credit_detail', credit_id=credit.id)
 
     return render(request, 'stock/credit_payment.html', {'credit': credit})
