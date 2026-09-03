@@ -1654,6 +1654,10 @@ def receipt_detail(request, receipt_id):
     return render(request, 'stock/receipt_detail.html', {'receipt': receipt})
 
 
+# ============================================================
+# UPDATED: create_sale_receipt - Now creates CreditSale records
+# ============================================================
+
 @login_required
 def create_sale_receipt(request):
     if request.method == 'POST':
@@ -1702,6 +1706,9 @@ def create_sale_receipt(request):
 
             change_due = amount_paid - total_amount if amount_paid > total_amount else 0
 
+            # ============================================================
+            # CREATE RECEIPT
+            # ============================================================
             receipt = Receipt.objects.create(
                 customer_name=customer_name,
                 customer_phone=customer_phone,
@@ -1712,6 +1719,50 @@ def create_sale_receipt(request):
                 items=sale_items,
                 created_by=request.user
             )
+
+            # ============================================================
+            # CREATE CREDIT SALE IF PAYMENT METHOD IS CREDIT
+            # ============================================================
+            if payment_method.lower() == 'credit':
+                # Check if credit sale already exists for this receipt
+                if not hasattr(receipt, 'credit_sale') or not receipt.credit_sale:
+                    remaining = total_amount - amount_paid
+                    
+                    # Create CreditSale record
+                    credit_sale = CreditSale.objects.create(
+                        credit_receipt_number=f"CR-{timezone.now().strftime('%Y%m%d')}-{CreditSale.objects.filter(created_at__date=timezone.now().date()).count() + 1:04d}",
+                        customer_name=customer_name,
+                        customer_phone=customer_phone,
+                        total_amount=total_amount,
+                        amount_paid=amount_paid,
+                        remaining_balance=max(remaining, Decimal('0.00')),
+                        payment_method=payment_method,
+                        items=sale_items,
+                        due_date=timezone.now().date() + timedelta(days=30),
+                        status=(
+                            'paid' if amount_paid >= total_amount
+                            else 'partial' if amount_paid > 0
+                            else 'pending'
+                        ),
+                        created_by=request.user
+                    )
+                    
+                    # Link receipt to credit sale
+                    receipt.credit_sale = credit_sale
+                    receipt.is_credit = True
+                    receipt.save()
+                    
+                    # If payment was made, create CreditPayment
+                    if amount_paid > 0:
+                        CreditPayment.objects.create(
+                            credit_sale=credit_sale,
+                            amount=amount_paid,
+                            payment_method=payment_method,
+                            reference=f"Initial payment - {payment_method}",
+                            created_by=request.user
+                        )
+                    
+                    print(f"✅ Created CreditSale: {credit_sale.credit_receipt_number} for receipt {receipt.receipt_number}")
 
             return JsonResponse({
                 'success': True,
@@ -2909,12 +2960,7 @@ def user_list(request):
 
 @login_required
 @user_passes_test(is_admin_or_manager)
-def user_create(request):
-    ROLE_CHOICES = [
         ('admin', 'Admin'),
-        ('manager', 'Manager'),
-        ('pharmacist', 'Pharmacist'),
-        ('cashier', 'Cashier'),
         ('dispenser', 'Dispenser'),
         ('viewer', 'Viewer (Read-only)'),
     ]
@@ -3014,15 +3060,21 @@ def user_edit(request, user_id):
 
             user.username = username
             user.email = email
+        ('manager', 'Manager'),
+        ('pharmacist', 'Pharmacist'),
+        ('cashier', 'Cashier'),
             user.first_name = first_name
             user.last_name = last_name
+
             if password:
                 user.set_password(password)
             user.save()
 
+
             if role:
                 user.groups.clear()
                 from django.contrib.auth.models import Group
+
                 group, _ = Group.objects.get_or_create(name=role)
                 user.groups.add(group)
 
@@ -3075,14 +3127,17 @@ def patient_list(request):
             Q(patient_id__icontains=search_query) |
             Q(phone__icontains=search_query) |
             Q(location__icontains=search_query)
+
         )
 
     disease_filter = request.GET.get('disease')
+
     if disease_filter:
         patients = patients.filter(disease_type=disease_filter)
 
     context = {
         'patients': patients,
+
         'search_query': search_query,
         'disease_filter': disease_filter,
         'disease_choices': ChronicPatient.DISEASE_CHOICES,
@@ -3125,9 +3180,11 @@ def patient_create(request):
                 for error in errors:
                     messages.error(request, error)
                 return render(request, 'stock/patient_form.html', {
+
                     'disease_choices': ChronicPatient.DISEASE_CHOICES,
                     'is_edit': False
                 })
+
 
             patient = ChronicPatient.objects.create(
                 first_name=first_name,
@@ -3135,6 +3192,7 @@ def patient_create(request):
                 date_of_birth=date_of_birth,
                 gender=gender,
                 phone=phone,
+
                 alternate_phone=alternate_phone,
                 email=email,
                 location=location,
@@ -3191,6 +3249,7 @@ def patient_edit(request, patient_id):
             patient.save()
 
             messages.success(request, f'Patient "{patient.first_name} {patient.last_name}" updated successfully!')
+
             return redirect('stock:patient_list')
 
         except Exception as e:
@@ -3264,6 +3323,7 @@ def patient_remove_medication(request, medication_id):
     medication = get_object_or_404(PatientMedication, id=medication_id)
     patient_id = medication.patient.id
 
+
     if request.method == 'POST':
         medication.delete()
         messages.success(request, 'Medication removed successfully!')
@@ -3271,8 +3331,10 @@ def patient_remove_medication(request, medication_id):
     return redirect('stock:patient_detail', patient_id=patient_id)
 
 
+
 # ============================================================
 # HELPER FUNCTION TO CREATE TEST DRUGS
+
 # ============================================================
 
 def create_test_drugs():
@@ -3281,6 +3343,7 @@ def create_test_drugs():
     if Drug.objects.count() > 0:
         print(f"✅ {Drug.objects.count()} drugs already exist")
         return
+
 
     categories_data = [
         'Antibiotic', 'Anti-hypertensives', 'Anti-diabetics', 'Anti-Ulcer',
