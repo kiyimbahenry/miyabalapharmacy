@@ -500,7 +500,9 @@ def complete_sale(request):
                 'message': 'No valid items to process after validation'
             }, status=400)
 
-        # Handle Credit Sale
+        # ============================================================
+        # Handle Credit Sale - UPDATED to always create receipt
+        # ============================================================
         if is_credit:
             # Create credit sale
             credit_sale = CreditSale.objects.create(
@@ -513,7 +515,14 @@ def complete_sale(request):
                 items=sale_items,
                 due_date=due_date,
                 credit_limit=credit_limit,
-                status='pending' if amount_paid < total_amount else 'paid',
+                # ============================================================
+                # FIXED: Proper status based on payment amount
+                # ============================================================
+                status=(
+                    'paid' if amount_paid >= total_amount
+                    else 'partial' if amount_paid > 0
+                    else 'pending'
+                ),
                 created_by=request.user
             )
 
@@ -527,33 +536,34 @@ def complete_sale(request):
                     created_by=request.user
                 )
 
-            # Create receipt for the paid portion
-            if amount_paid > 0:
-                receipt = Receipt.objects.create(
-                    customer_name=customer_name,
-                    customer_phone=customer_phone,
-                    total_amount=amount_paid,
-                    amount_paid=amount_paid,
-                    change_due=0,
-                    payment_method=payment_method,
-                    items=sale_items,
-                    created_by=request.user,
-                    is_credit=True,
-                    credit_sale_id=credit_sale.id
-                )
+            # ALWAYS CREATE A RECEIPT - even with zero payment
+            receipt = Receipt.objects.create(
+                customer_name=customer_name,
+                customer_phone=customer_phone,
+                total_amount=total_amount,  # Full amount, not just amount_paid
+                amount_paid=amount_paid,
+                change_due=0,
+                payment_method=payment_method,
+                items=sale_items,
+                created_by=request.user,
+                is_credit=True,
+                credit_sale=credit_sale
+            )
 
             return JsonResponse({
                 'success': True,
                 'message': 'Credit sale created successfully!',
                 'is_credit': True,
                 'credit_sale_id': credit_sale.id,
-                'receipt_number': credit_sale.credit_receipt_number,
+                'receipt_number': receipt.receipt_number,
+                'credit_receipt_number': credit_sale.credit_receipt_number,
                 'total_amount': float(total_amount),
                 'amount_paid': float(amount_paid),
                 'remaining_balance': float(credit_sale.remaining_balance),
                 'due_date': credit_sale.due_date.strftime('%Y-%m-%d') if credit_sale.due_date else None,
                 'items': sale_items,
-                'credit_url': f'/credits/{credit_sale.id}/'
+                'credit_url': f'/credits/{credit_sale.id}/',
+                'receipt_url': f'/receipts/{receipt.id}/'
             })
 
         # Regular sale (cash)
@@ -606,17 +616,22 @@ def complete_sale(request):
 
 
 # ============================================================
-# CREDIT SALE VIEWS
+# CREDIT SALE VIEWS - UPDATED
 # ============================================================
 
 @login_required
 def credit_list(request):
-    """List all credit sales with filtering and pagination"""
-    credits = CreditSale.objects.all().select_related('created_by').order_by('-created_at')
+    """List only active (unpaid) credit sales with filtering and pagination"""
+    # Only show pending and partial credits (active credits)
+    credits = CreditSale.objects.filter(
+        status__in=['pending', 'partial']
+    ).select_related('created_by').order_by('-created_at')
 
-    # Filter by status
+    # Filter by status (optional - allows viewing paid credits)
     status_filter = request.GET.get('status')
-    if status_filter:
+    if status_filter == 'all':
+        credits = CreditSale.objects.all().select_related('created_by').order_by('-created_at')
+    elif status_filter:
         credits = credits.filter(status=status_filter)
 
     # Filter by date range
@@ -646,7 +661,7 @@ def credit_list(request):
     except EmptyPage:
         credits_page = paginator.page(paginator.num_pages)
 
-    # Statistics
+    # Statistics (only from active credits)
     total_outstanding = CreditSale.objects.filter(
         status__in=['pending', 'partial']
     ).aggregate(
@@ -666,6 +681,9 @@ def credit_list(request):
         total=Sum('amount_paid')
     )['total'] or Decimal("0.00")
 
+    # Show a count of paid credits (for reference)
+    paid_count = CreditSale.objects.filter(status='paid').count()
+
     context = {
         'credits': credits_page,
         'status_filter': status_filter,
@@ -676,6 +694,7 @@ def credit_list(request):
         'overdue_count': overdue_count,
         'total_credit_sales': total_credit_sales,
         'total_paid': total_paid,
+        'paid_count': paid_count,
         'status_choices': CreditSale.STATUS_CHOICES,
     }
     return render(request, 'stock/credit_list.html', context)
@@ -699,7 +718,7 @@ def credit_payment(request, credit_id):
 
     if credit.status == 'paid':
         messages.warning(request, 'This credit sale is already fully paid.')
-        return redirect('stock:credit_detail', credit_id=credit.id)
+        return redirect('stock:credit_list')
 
     if request.method == 'POST':
         try:
@@ -724,15 +743,17 @@ def credit_payment(request, credit_id):
                 created_by=request.user
             )
 
-            # RECALCULATE from all payments (this is the key fix)
+            # RECALCULATE from all payments
             total_paid = credit.payments.aggregate(models.Sum('amount'))['amount__sum'] or Decimal('0.00')
-            
+
             credit.amount_paid = total_paid
             credit.remaining_balance = credit.total_amount - total_paid
 
             if credit.remaining_balance <= 0:
                 credit.status = 'paid'
                 credit.remaining_balance = Decimal("0.00")
+                messages.success(request, f'✅ Credit #{credit.credit_receipt_number} is now fully paid!')
+                return redirect('stock:credit_list')
             else:
                 credit.status = 'partial'
 
