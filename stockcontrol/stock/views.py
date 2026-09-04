@@ -55,7 +55,72 @@ def is_admin_or_manager(user):
 
 
 # ============================================================
-# SEND REPORT EMAIL - COMPLETE VERSION (ADDED BACK)
+# AUTO SYNC CREDIT RECEIPTS - ADDED
+# ============================================================
+
+def auto_sync_credit_receipts():
+    """Automatically sync credit receipts to CreditSale records"""
+    credit_receipts = Receipt.objects.filter(
+        payment_method__icontains='credit',
+        credit_sale__isnull=True
+    )
+    
+    created = 0
+    for receipt in credit_receipts:
+        try:
+            remaining = receipt.total_amount - receipt.amount_paid
+            
+            if remaining <= 0:
+                status = 'paid'
+            elif receipt.amount_paid > 0:
+                status = 'partial'
+            else:
+                status = 'pending'
+            
+            # Count existing credits for today
+            today_count = CreditSale.objects.filter(
+                created_at__date=receipt.created_at.date()
+            ).count()
+            
+            credit_sale = CreditSale.objects.create(
+                credit_receipt_number=f"CR-{receipt.created_at.strftime('%Y%m%d')}-{today_count + 1:04d}",
+                customer_name=receipt.customer_name or "Walk-in Customer",
+                customer_phone=receipt.customer_phone or "",
+                total_amount=receipt.total_amount,
+                amount_paid=receipt.amount_paid,
+                remaining_balance=max(remaining, Decimal('0.00')),
+                payment_method=receipt.payment_method,
+                items=receipt.items or [],
+                due_date=receipt.created_at.date() + timedelta(days=30),
+                status=status,
+                created_by=receipt.created_by,
+                created_at=receipt.created_at
+            )
+            
+            receipt.credit_sale = credit_sale
+            receipt.is_credit = True
+            receipt.save()
+            created += 1
+            
+            if receipt.amount_paid > 0:
+                CreditPayment.objects.create(
+                    credit_sale=credit_sale,
+                    amount=receipt.amount_paid,
+                    payment_method=receipt.payment_method,
+                    reference=f"Initial payment from receipt {receipt.receipt_number}",
+                    created_by=receipt.created_by,
+                    created_at=receipt.created_at
+                )
+            
+            print(f"✅ Auto-synced: {receipt.receipt_number} → {credit_sale.credit_receipt_number}")
+        except Exception as e:
+            print(f"❌ Error syncing {receipt.receipt_number}: {str(e)}")
+    
+    return created
+
+
+# ============================================================
+# SEND REPORT EMAIL - COMPLETE VERSION
 # ============================================================
 
 def send_report_email(report_data, email, report_type):
@@ -316,7 +381,7 @@ def send_report_email(report_data, email, report_type):
 
 
 # ============================================================
-# DAILY REPORT - FIXED
+# DAILY REPORT
 # ============================================================
 
 @csrf_exempt
@@ -621,7 +686,7 @@ def autocomplete_drugs(request):
 
 
 # ============================================================
-# COMPLETE SALE - FIXED (Cart clears properly)
+# COMPLETE SALE - FIXED WITH CLEAR_CART
 # ============================================================
 
 @login_required
@@ -776,6 +841,8 @@ def complete_sale(request):
             # For credit sales, amount_paid should be 0 (customer pays later)
             credit_amount_paid = amount_paid if amount_paid > 0 else 0
 
+            print(f"Creating credit sale: total={total_amount}, paid={credit_amount_paid}")
+
             # Create credit sale
             credit_sale = CreditSale.objects.create(
                 customer_name=customer_name,
@@ -795,6 +862,8 @@ def complete_sale(request):
                 created_by=request.user
             )
 
+            print(f"✅ CreditSale created: {credit_sale.credit_receipt_number}")
+
             # Record the payment if any was made
             if credit_amount_paid > 0:
                 CreditPayment.objects.create(
@@ -804,6 +873,7 @@ def complete_sale(request):
                     reference=f"Initial payment - {payment_method}",
                     created_by=request.user
                 )
+                print(f"✅ CreditPayment created: UGX {credit_amount_paid}")
 
             # ALWAYS CREATE A RECEIPT
             receipt = Receipt.objects.create(
@@ -819,11 +889,14 @@ def complete_sale(request):
                 credit_sale=credit_sale
             )
 
+            print(f"✅ Receipt created: {receipt.receipt_number}")
+
             return JsonResponse({
                 'success': True,
                 'message': 'Credit sale created successfully!',
                 'is_credit': True,
                 'credit_sale_id': credit_sale.id,
+                'receipt_id': receipt.id,
                 'receipt_number': receipt.receipt_number,
                 'credit_receipt_number': credit_sale.credit_receipt_number,
                 'total_amount': float(total_amount),
@@ -1117,71 +1190,6 @@ def get_credit_summary_api(request):
 
 
 # ============================================================
-# AUTO SYNC CREDIT RECEIPTS
-# ============================================================
-
-def auto_sync_credit_receipts():
-    """Automatically sync credit receipts to CreditSale records"""
-    credit_receipts = Receipt.objects.filter(
-        payment_method__icontains='credit',
-        credit_sale__isnull=True
-    )
-    
-    created = 0
-    for receipt in credit_receipts:
-        try:
-            remaining = receipt.total_amount - receipt.amount_paid
-            
-            if remaining <= 0:
-                status = 'paid'
-            elif receipt.amount_paid > 0:
-                status = 'partial'
-            else:
-                status = 'pending'
-            
-            # Count existing credits for today
-            today_count = CreditSale.objects.filter(
-                created_at__date=receipt.created_at.date()
-            ).count()
-            
-            credit_sale = CreditSale.objects.create(
-                credit_receipt_number=f"CR-{receipt.created_at.strftime('%Y%m%d')}-{today_count + 1:04d}",
-                customer_name=receipt.customer_name or "Walk-in Customer",
-                customer_phone=receipt.customer_phone or "",
-                total_amount=receipt.total_amount,
-                amount_paid=receipt.amount_paid,
-                remaining_balance=max(remaining, Decimal('0.00')),
-                payment_method=receipt.payment_method,
-                items=receipt.items or [],
-                due_date=receipt.created_at.date() + timedelta(days=30),
-                status=status,
-                created_by=receipt.created_by,
-                created_at=receipt.created_at
-            )
-            
-            receipt.credit_sale = credit_sale
-            receipt.is_credit = True
-            receipt.save()
-            created += 1
-            
-            if receipt.amount_paid > 0:
-                CreditPayment.objects.create(
-                    credit_sale=credit_sale,
-                    amount=receipt.amount_paid,
-                    payment_method=receipt.payment_method,
-                    reference=f"Initial payment from receipt {receipt.receipt_number}",
-                    created_by=receipt.created_by,
-                    created_at=receipt.created_at
-                )
-            
-            print(f"✅ Auto-synced: {receipt.receipt_number} → {credit_sale.credit_receipt_number}")
-        except Exception as e:
-            print(f"❌ Error syncing {receipt.receipt_number}: {str(e)}")
-    
-    return created
-
-
-# ============================================================
 # DRUG (MEDICINE) VIEWS
 # ============================================================
 
@@ -1315,7 +1323,7 @@ def out_of_stock(request):
 
 
 # ============================================================
-# DRUG CREATE - FIXED + RESTRICTED
+# DRUG CREATE
 # ============================================================
 
 @login_required
