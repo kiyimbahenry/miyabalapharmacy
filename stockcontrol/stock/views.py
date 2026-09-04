@@ -54,6 +54,271 @@ def is_admin_or_manager(user):
     return user.groups.filter(name__in=['admin', 'manager']).exists()
 
 
+# ============================================================
+# SEND REPORT EMAIL - COMPLETE VERSION (ADDED BACK)
+# ============================================================
+
+def send_report_email(report_data, email, report_type):
+    try:
+        import base64
+        from datetime import datetime, timedelta
+        from django.utils import timezone
+        from .utils.invoice_pdf import get_invoices_zip, get_invoices_zip_range
+        from .utils.report_generator import generate_daily_report_pdf, generate_comprehensive_report_pdf
+        from stock.models import Invoice
+
+        report_date = report_data.get('report_date')
+        if isinstance(report_date, str):
+            report_date = datetime.strptime(report_date, "%Y-%m-%d").date()
+        if report_date is None:
+            report_date = timezone.localdate()
+
+        print("===== BREVO API EMAIL =====")
+        print("Recipient:", email)
+        print("Report Type:", report_type)
+        print(f"📅 Report Date: {report_date}")
+
+        configuration = sib_api_v3_sdk.Configuration()
+        configuration.api_key['api-key'] = os.environ.get("BREVO_API_KEY")
+
+        api_instance = sib_api_v3_sdk.TransactionalEmailsApi(
+            sib_api_v3_sdk.ApiClient(configuration)
+        )
+
+        if report_type == 'daily':
+            start_date = report_date
+            end_date = report_date
+        elif report_type == 'weekly':
+            end_date = report_date
+            start_date = end_date - timedelta(days=7)
+        elif report_type == 'monthly':
+            end_date = report_date
+            start_date = end_date.replace(day=1)
+        elif report_type == 'annual':
+            end_date = report_date
+            start_date = end_date.replace(month=1, day=1)
+        else:
+            start_date = report_date
+            end_date = report_date
+
+        sales = report_data.get("sales", {})
+        invoices_data = report_data.get("invoices", {})
+        payment_breakdown = report_data.get("payment_breakdown", [])
+        top_products = report_data.get("top_products", [])
+        credit_sales = report_data.get("credit_sales", {})
+        period = report_data.get("period", f"{report_type.capitalize()} Report")
+        generated_at = report_data.get("generated_at", timezone.now().strftime('%Y-%m-%d %H:%M:%S'))
+
+        pdf_buffer = generate_comprehensive_report_pdf(report_date)
+        pdf_encoded = base64.b64encode(pdf_buffer.getvalue()).decode('utf-8')
+
+        if report_type == 'daily':
+            zip_buffer = get_invoices_zip(report_date)
+        else:
+            invoices_qs = Invoice.objects.filter(
+                invoice_date__gte=start_date,
+                invoice_date__lte=end_date
+            )
+            zip_buffer = get_invoices_zip_range(invoices_qs)
+
+        zip_encoded = base64.b64encode(zip_buffer.getvalue()).decode('utf-8')
+
+        payment_rows = ""
+        for method in payment_breakdown:
+            payment_rows += f"""
+            <tr>
+                <td>{method.get('method', 'Unknown')}</td>
+                <td>UGX {method.get('total', 0):,.0f}</td>
+                <td>{method.get('count', 0)}</td>
+            </tr>
+            """
+
+        product_rows = ""
+        for i, product in enumerate(top_products[:10], 1):
+            product_rows += f"""
+            <tr>
+                <td>{i}</td>
+                <td>{product.get('name', 'Unknown')}</td>
+                <td>{product.get('quantity', 0)}</td>
+                <td>UGX {product.get('total', 0):,.0f}</td>
+            </tr>
+            """
+
+        subject = f"{report_type.capitalize()} Sales Report - Miyabala Pharmacy"
+
+        html_content = f"""
+        <html>
+        <head>
+        <style>
+            body {{
+                font-family: Arial, Helvetica, sans-serif;
+                background: #f4f6f9;
+                padding: 30px;
+            }}
+            .container {{
+                max-width: 700px;
+                margin: auto;
+                background: white;
+                border-radius: 10px;
+                overflow: hidden;
+                box-shadow: 0 0 10px rgba(0,0,0,.15);
+            }}
+            .header {{
+                background: #0b7d3b;
+                color: white;
+                text-align: center;
+                padding: 25px;
+            }}
+            .header h1 {{
+                margin: 0;
+            }}
+            .header h3 {{
+                margin-top: 8px;
+                font-weight: normal;
+            }}
+            .section {{
+                padding: 25px;
+            }}
+            table {{
+                width: 100%;
+                border-collapse: collapse;
+            }}
+            th {{
+                background: #0b7d3b;
+                color: white;
+                padding: 12px;
+                text-align: left;
+            }}
+            td {{
+                border: 1px solid #ddd;
+                padding: 12px;
+            }}
+            .footer {{
+                background: #f1f1f1;
+                text-align: center;
+                padding: 20px;
+                color: #666;
+                font-size: 14px;
+            }}
+            .attachments {{
+                background: #ebf8ff;
+                padding: 15px;
+                border-radius: 8px;
+                margin: 15px 0;
+                border-left: 4px solid #0b7d3b;
+            }}
+            .attachments ul {{
+                margin: 5px 0;
+                padding-left: 20px;
+            }}
+            .attachments li {{
+                margin: 3px 0;
+            }}
+        </style>
+        </head>
+
+        <body>
+        <div class="container">
+            <div class="header">
+                <h1>🏥 MIYABALA PHARMACY</h1>
+                <h3>{report_type.capitalize()} Sales Report</h3>
+            </div>
+            <div class="section">
+                <p><strong>Report Period:</strong> {period}</p>
+                <p><strong>Generated:</strong> {generated_at}</p>
+                <table>
+                    <tr><th>Description</th><th>Value</th></tr>
+                    <tr><td>Total Sales</td><td>UGX {sales.get('total_amount', 0):,.0f}</td></tr>
+                    <tr><td>Net Sales</td><td>UGX {sales.get('net_sales', 0):,.0f}</td></tr>
+                    <tr><td>Total Returns</td><td>UGX {sales.get('total_returns', 0):,.0f}</td></tr>
+                    <tr><td>Total Transactions</td><td>{sales.get('total_transactions', 0)}</td></tr>
+                    <tr><td>Total Medicines Sold</td><td>{sales.get('total_items_sold', 0)}</td></tr>
+                    <tr><td>Total Invoices</td><td>{invoices_data.get('total_invoices', 0)}</td></tr>
+                    <tr><td>Average Transaction</td><td>UGX {sales.get('average_transaction', 0):,.0f}</td></tr>
+                </table>
+
+                <h3 style="margin-top: 30px;">💳 Payment Breakdown</h3>
+                <table>
+                    <tr><th>Method</th><th>Amount</th><th>Transactions</th></tr>
+                    {payment_rows}
+                </table>
+
+                <h3 style="margin-top: 30px;">📊 Credit Sales</h3>
+                <table>
+                    <tr><th>Description</th><th>Value</th></tr>
+                    <tr><td>Total Credit Sales</td><td>UGX {credit_sales.get('total_credit_amount', 0):,.0f}</td></tr>
+                    <tr><td>Total Paid</td><td>UGX {credit_sales.get('total_credit_paid', 0):,.0f}</td></tr>
+                    <tr><td>Total Outstanding</td><td>UGX {credit_sales.get('total_credit_outstanding', 0):,.0f}</td></tr>
+                    <tr><td>Total Credit Transactions</td><td>{credit_sales.get('total_credit_transactions', 0)}</td></tr>
+                    <tr><td>Overdue Credits</td><td>{credit_sales.get('overdue_count', 0)}</td></tr>
+                </table>
+
+                <h3 style="margin-top: 30px;">🏆 Top Selling Products</h3>
+                <table>
+                    <tr><th>#</th><th>Product</th><th>Quantity</th><th>Total</th></tr>
+                    {product_rows}
+                </table>
+
+                <div class="attachments">
+                    <h3>📎 Attachments</h3>
+                    <ul>
+                        <li><strong>📄 Daily_Report_{report_date.strftime('%Y-%m-%d')}.pdf</strong> – Full report with all details</li>
+                        <li><strong>📦 Invoices_{report_date.strftime('%Y-%m-%d')}.zip</strong> – All purchase invoices</li>
+                    </ul>
+                </div>
+            </div>
+            <div class="footer">
+                <b>Miyabala Pharmacy Stock Management System</b>
+                <br><br>
+                This report was generated automatically.
+            </div>
+        </div>
+        </body>
+        </html>
+        """
+
+        send_smtp_email = sib_api_v3_sdk.SendSmtpEmail(
+            to=[
+                {"email": "kiyimbahenry314@gmail.com", "name": "Henry"},
+                {"email": "daveedaviyam@gmail.com", "name": "David"}
+            ],
+            sender={
+                "name": "Miyabala Pharmacy",
+                "email": "kiyimbahenry314@gmail.com"
+            },
+            subject=subject,
+            html_content=html_content,
+            attachment=[
+                {
+                    "content": pdf_encoded,
+                    "name": f"Daily_Report_{report_date.strftime('%Y-%m-%d')}.pdf"
+                },
+                {
+                    "content": zip_encoded,
+                    "name": f"Invoices_{report_date.strftime('%Y-%m-%d')}.zip"
+                }
+            ]
+        )
+
+        response = api_instance.send_transac_email(send_smtp_email)
+        print("✅ EMAIL SENT SUCCESSFULLY via Brevo!")
+        return True
+
+    except ApiException as e:
+        print("❌ BREVO API ERROR")
+        print(e.body)
+        return False
+    except Exception as e:
+        print("❌ GENERAL ERROR")
+        print(str(e))
+        traceback.print_exc()
+        return False
+
+
+# ============================================================
+# DAILY REPORT - FIXED
+# ============================================================
+
 @csrf_exempt
 def run_daily_report(request):
     """Endpoint to trigger daily report via cron-job.org"""
@@ -61,8 +326,14 @@ def run_daily_report(request):
         return JsonResponse({'error': 'Method not allowed'}, status=405)
 
     try:
-        call_command('send_daily_report')
-        return JsonResponse({'success': True, 'message': 'Daily report sent successfully'})
+        today = timezone.now().date()
+        report_data = generate_report_data('daily', today)
+        success = send_report_email(report_data, 'kiyimbahenry314@gmail.com', 'daily')
+        
+        if success:
+            return JsonResponse({'success': True, 'message': 'Daily report sent successfully'})
+        else:
+            return JsonResponse({'success': False, 'error': 'Failed to send email'}, status=500)
     except Exception as e:
         return JsonResponse({'success': False, 'error': str(e)}, status=500)
 
@@ -350,7 +621,7 @@ def autocomplete_drugs(request):
 
 
 # ============================================================
-# COMPLETE SALE - FIXED
+# COMPLETE SALE - FIXED (Cart clears properly)
 # ============================================================
 
 @login_required
@@ -499,13 +770,12 @@ def complete_sale(request):
             }, status=400)
 
         # ============================================================
-        # Handle Credit Sale - FIXED
+        # Handle Credit Sale - FIXED with clear_cart signal
         # ============================================================
         if is_credit:
             # For credit sales, amount_paid should be 0 (customer pays later)
-            # If the user entered an amount, it's a partial payment
             credit_amount_paid = amount_paid if amount_paid > 0 else 0
-            
+
             # Create credit sale
             credit_sale = CreditSale.objects.create(
                 customer_name=customer_name,
@@ -562,7 +832,8 @@ def complete_sale(request):
                 'due_date': credit_sale.due_date.strftime('%Y-%m-%d') if credit_sale.due_date else None,
                 'items': sale_items,
                 'credit_url': f'/credits/{credit_sale.id}/',
-                'receipt_url': f'/receipts/{receipt.id}/'
+                'receipt_url': f'/receipts/{receipt.id}/',
+                'clear_cart': True  # Signal to clear the cart
             })
 
         # Regular sale (cash/mobile/card)
@@ -594,7 +865,8 @@ def complete_sale(request):
             'amount_paid': float(amount_paid),
             'change_due': float(change_due),
             'items': sale_items,
-            'receipt_url': f'/receipts/{receipt.id}/'
+            'receipt_url': f'/receipts/{receipt.id}/',
+            'clear_cart': True  # Signal to clear the cart
         })
 
     except json.JSONDecodeError as e:
@@ -680,7 +952,6 @@ def credit_list(request):
         total=Sum('amount_paid')
     )['total'] or Decimal("0.00")
 
-    # Show a count of paid credits (for reference)
     paid_count = CreditSale.objects.filter(status='paid').count()
 
     context = {
@@ -846,88 +1117,68 @@ def get_credit_summary_api(request):
 
 
 # ============================================================
-# SYNC EXISTING CREDIT RECEIPTS
+# AUTO SYNC CREDIT RECEIPTS
 # ============================================================
 
-@login_required
-def sync_credit_receipts(request):
-    """API endpoint to sync existing credit receipts to CreditSale"""
-    if request.method != 'POST':
-        return JsonResponse({'success': False, 'message': 'Invalid method'}, status=405)
-
-    try:
-        # Find all credit receipts without CreditSale
-        credit_receipts = Receipt.objects.filter(
-            payment_method__icontains='credit',
-            credit_sale__isnull=True
-        )
-
-        count = credit_receipts.count()
-        created = 0
-        skipped = 0
-
-        for receipt in credit_receipts:
-            try:
-                remaining = receipt.total_amount - receipt.amount_paid
-
-                # Determine status
-                if remaining <= 0:
-                    status = 'paid'
-                elif receipt.amount_paid > 0:
-                    status = 'partial'
-                else:
-                    status = 'pending'
-
-                # Create CreditSale
-                credit_sale = CreditSale.objects.create(
-                    credit_receipt_number=f"CR-{receipt.created_at.strftime('%Y%m%d')}-{CreditSale.objects.filter(created_at__date=receipt.created_at.date()).count() + 1:04d}",
-                    customer_name=receipt.customer_name or "Walk-in Customer",
-                    customer_phone=receipt.customer_phone or "",
-                    total_amount=receipt.total_amount,
-                    amount_paid=receipt.amount_paid,
-                    remaining_balance=max(remaining, Decimal('0.00')),
+def auto_sync_credit_receipts():
+    """Automatically sync credit receipts to CreditSale records"""
+    credit_receipts = Receipt.objects.filter(
+        payment_method__icontains='credit',
+        credit_sale__isnull=True
+    )
+    
+    created = 0
+    for receipt in credit_receipts:
+        try:
+            remaining = receipt.total_amount - receipt.amount_paid
+            
+            if remaining <= 0:
+                status = 'paid'
+            elif receipt.amount_paid > 0:
+                status = 'partial'
+            else:
+                status = 'pending'
+            
+            # Count existing credits for today
+            today_count = CreditSale.objects.filter(
+                created_at__date=receipt.created_at.date()
+            ).count()
+            
+            credit_sale = CreditSale.objects.create(
+                credit_receipt_number=f"CR-{receipt.created_at.strftime('%Y%m%d')}-{today_count + 1:04d}",
+                customer_name=receipt.customer_name or "Walk-in Customer",
+                customer_phone=receipt.customer_phone or "",
+                total_amount=receipt.total_amount,
+                amount_paid=receipt.amount_paid,
+                remaining_balance=max(remaining, Decimal('0.00')),
+                payment_method=receipt.payment_method,
+                items=receipt.items or [],
+                due_date=receipt.created_at.date() + timedelta(days=30),
+                status=status,
+                created_by=receipt.created_by,
+                created_at=receipt.created_at
+            )
+            
+            receipt.credit_sale = credit_sale
+            receipt.is_credit = True
+            receipt.save()
+            created += 1
+            
+            if receipt.amount_paid > 0:
+                CreditPayment.objects.create(
+                    credit_sale=credit_sale,
+                    amount=receipt.amount_paid,
                     payment_method=receipt.payment_method,
-                    items=receipt.items or [],
-                    due_date=receipt.created_at.date() + timedelta(days=30),
-                    status=status,
+                    reference=f"Initial payment from receipt {receipt.receipt_number}",
                     created_by=receipt.created_by,
                     created_at=receipt.created_at
                 )
-
-                # Link receipt to credit sale
-                receipt.credit_sale = credit_sale
-                receipt.is_credit = True
-                receipt.save()
-
-                created += 1
-
-                # Create payment record if any
-                if receipt.amount_paid > 0:
-                    CreditPayment.objects.create(
-                        credit_sale=credit_sale,
-                        amount=receipt.amount_paid,
-                        payment_method=receipt.payment_method,
-                        reference=f"Initial payment from receipt {receipt.receipt_number}",
-                        created_by=receipt.created_by,
-                        created_at=receipt.created_at
-                    )
-
-                print(f"✅ Synced: {receipt.receipt_number} → {credit_sale.credit_receipt_number}")
-
-            except Exception as e:
-                skipped += 1
-                print(f"❌ Error syncing {receipt.receipt_number}: {str(e)}")
-
-        return JsonResponse({
-            'success': True,
-            'message': f'Successfully synced {created} credit receipts. {skipped} skipped.',
-            'created': created,
-            'skipped': skipped,
-            'total': count
-        })
-
-    except Exception as e:
-        return JsonResponse({'success': False, 'message': str(e)}, status=500)
+            
+            print(f"✅ Auto-synced: {receipt.receipt_number} → {credit_sale.credit_receipt_number}")
+        except Exception as e:
+            print(f"❌ Error syncing {receipt.receipt_number}: {str(e)}")
+    
+    return created
 
 
 # ============================================================
@@ -1737,7 +1988,7 @@ def receipt_detail(request, receipt_id):
 
 
 # ============================================================
-# create_sale_receipt - FIXED
+# create_sale_receipt - FIXED with clear_cart signal
 # ============================================================
 
 @login_required
@@ -1802,11 +2053,8 @@ def create_sale_receipt(request):
 
             # CREATE CREDIT SALE IF PAYMENT METHOD IS CREDIT
             if payment_method.lower() == 'credit':
-                # For credit, amount_paid should be 0 (customer pays later)
-                # If user entered an amount, it's a partial payment
                 credit_amount_paid = amount_paid if amount_paid > 0 else 0
-                
-                # Create CreditSale record
+
                 credit_sale = CreditSale.objects.create(
                     credit_receipt_number=f"CR-{timezone.now().strftime('%Y%m%d')}-{CreditSale.objects.filter(created_at__date=timezone.now().date()).count() + 1:04d}",
                     customer_name=customer_name,
@@ -1825,12 +2073,10 @@ def create_sale_receipt(request):
                     created_by=request.user
                 )
 
-                # Link receipt to credit sale
                 receipt.credit_sale = credit_sale
                 receipt.is_credit = True
                 receipt.save()
 
-                # If payment was made, create CreditPayment
                 if credit_amount_paid > 0:
                     CreditPayment.objects.create(
                         credit_sale=credit_sale,
@@ -1842,6 +2088,17 @@ def create_sale_receipt(request):
 
                 print(f"✅ Created CreditSale: {credit_sale.credit_receipt_number} for receipt {receipt.receipt_number}")
 
+                return JsonResponse({
+                    'success': True,
+                    'message': 'Credit sale completed successfully!',
+                    'receipt_id': receipt.id,
+                    'receipt_number': receipt.receipt_number,
+                    'total_amount': total_amount,
+                    'change_due': change_due,
+                    'receipt_url': f'/receipts/{receipt.id}/',
+                    'clear_cart': True  # Signal to clear the cart
+                })
+
             return JsonResponse({
                 'success': True,
                 'message': 'Sale completed successfully!',
@@ -1849,7 +2106,8 @@ def create_sale_receipt(request):
                 'receipt_number': receipt.receipt_number,
                 'total_amount': total_amount,
                 'change_due': change_due,
-                'receipt_url': f'/receipts/{receipt.id}/'
+                'receipt_url': f'/receipts/{receipt.id}/',
+                'clear_cart': True  # Signal to clear the cart
             })
 
         except Drug.DoesNotExist:
