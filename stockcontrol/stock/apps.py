@@ -5,4 +5,7 @@ class StockConfig(AppConfig):
     name = 'stock'
 
     def ready(self):
-        import stock.signals
+        try:
+            import stock.signals
+        except ImportError:
+            pass
