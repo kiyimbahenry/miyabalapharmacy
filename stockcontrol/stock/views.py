@@ -55,68 +55,83 @@ def is_admin_or_manager(user):
 
 
 # ============================================================
-# AUTO SYNC CREDIT RECEIPTS - UPDATED WITH DUPLICATE PROTECTION
+# AUTO SYNC CREDIT RECEIPTS - IMPROVED VERSION
+# ============================================================
+# This function now:
+#   1. Looks for BOTH is_credit=True receipts AND credit payment_method receipts
+#   2. Only processes receipts that don't have a credit_sale linked yet
+#   3. Handles duplicates safely (checks for existing CreditSale with same data)
+#   4. Records initial payments if amount_paid > 0
+#   5. Generates unique credit_receipt_numbers to avoid collisions
 # ============================================================
 
 def auto_sync_credit_receipts():
-    """Automatically sync credit receipts to CreditSale records (safe from duplicates)"""
-    # Only get receipts that are credit but don't have a credit_sale linked yet
+    """
+    Automatically sync credit receipts to CreditSale records.
+    Safe to run repeatedly. Only processes receipts that don't
+    already have a credit_sale linked.
+    """
+    # Find ALL credit-related receipts that don't yet have a CreditSale
     credit_receipts = Receipt.objects.filter(
-        payment_method__icontains='credit',
+        Q(payment_method__icontains='credit') | Q(is_credit=True),
         credit_sale__isnull=True
-    )
+    ).order_by('created_at')
 
     created = 0
-    skipped = 0
     linked = 0
-    
+    skipped = 0
+    errors = 0
+
     for receipt in credit_receipts:
-        # Check if a CreditSale already exists for this receipt (safety check)
-        if receipt.credit_sale:
+        # Double-safety check
+        if receipt.credit_sale_id:
             skipped += 1
             continue
-            
-        # Check if there's an existing CreditSale with the same receipt data
-        # to avoid duplicates
-        existing = CreditSale.objects.filter(
-            customer_name=receipt.customer_name,
-            total_amount=receipt.total_amount,
-            created_at__date=receipt.created_at.date(),
-            payment_method__icontains='credit'
-        ).first()
-        
-        if existing:
-            # If found, link it to this receipt
-            receipt.credit_sale = existing
-            receipt.is_credit = True
-            receipt.save()
-            linked += 1
-            print(f"⏭️ Linked existing CreditSale to receipt {receipt.receipt_number}")
-            continue
-        
+
         try:
+            # Check for a pre-existing CreditSale with matching data (legacy imports)
+            existing = CreditSale.objects.filter(
+                customer_name=receipt.customer_name,
+                total_amount=receipt.total_amount,
+                created_at__date=receipt.created_at.date(),
+            ).first()
+
+            if existing:
+                receipt.credit_sale = existing
+                receipt.is_credit = True
+                receipt.save(update_fields=['credit_sale', 'is_credit'])
+                linked += 1
+                print(f"⏭️ Linked existing CreditSale to receipt {receipt.receipt_number}")
+                continue
+
             remaining = receipt.total_amount - receipt.amount_paid
 
             if remaining <= 0:
                 status = 'paid'
+                remaining = Decimal('0.00')
             elif receipt.amount_paid > 0:
                 status = 'partial'
             else:
                 status = 'pending'
 
-            # Count existing credits for today
-            today_count = CreditSale.objects.filter(
+            # Generate a unique credit receipt number
+            base_count = CreditSale.objects.filter(
                 created_at__date=receipt.created_at.date()
             ).count()
 
+            credit_number = f"CR-{receipt.created_at.strftime('%Y%m%d')}-{base_count + 1:04d}"
+            while CreditSale.objects.filter(credit_receipt_number=credit_number).exists():
+                base_count += 1
+                credit_number = f"CR-{receipt.created_at.strftime('%Y%m%d')}-{base_count + 1:04d}"
+
             credit_sale = CreditSale.objects.create(
-                credit_receipt_number=f"CR-{receipt.created_at.strftime('%Y%m%d')}-{today_count + 1:04d}",
+                credit_receipt_number=credit_number,
                 customer_name=receipt.customer_name or "Walk-in Customer",
                 customer_phone=receipt.customer_phone or "",
                 total_amount=receipt.total_amount,
                 amount_paid=receipt.amount_paid,
                 remaining_balance=max(remaining, Decimal('0.00')),
-                payment_method=receipt.payment_method,
+                payment_method=receipt.payment_method or 'credit',
                 items=receipt.items or [],
                 due_date=receipt.created_at.date() + timedelta(days=30),
                 status=status,
@@ -126,25 +141,29 @@ def auto_sync_credit_receipts():
 
             receipt.credit_sale = credit_sale
             receipt.is_credit = True
-            receipt.save()
+            receipt.save(update_fields=['credit_sale', 'is_credit'])
             created += 1
 
-            if receipt.amount_paid > 0:
+            # Record the initial payment if any
+            if receipt.amount_paid and receipt.amount_paid > 0:
                 CreditPayment.objects.create(
                     credit_sale=credit_sale,
                     amount=receipt.amount_paid,
-                    payment_method=receipt.payment_method,
+                    payment_method=receipt.payment_method or 'credit',
                     reference=f"Initial payment from receipt {receipt.receipt_number}",
                     created_by=receipt.created_by,
                     created_at=receipt.created_at
                 )
 
             print(f"✅ Auto-synced: {receipt.receipt_number} → {credit_sale.credit_receipt_number}")
-        except Exception as e:
-            print(f"❌ Error syncing {receipt.receipt_number}: {str(e)}")
-            skipped += 1
 
-    print(f"📊 Auto-sync summary: {created} created, {linked} linked, {skipped} skipped")
+        except Exception as e:
+            errors += 1
+            print(f"❌ Error syncing {receipt.receipt_number}: {str(e)}")
+            import traceback
+            traceback.print_exc()
+
+    print(f"📊 Auto-sync summary: {created} created, {linked} linked, {skipped} skipped, {errors} errors")
     return created
 
 
@@ -243,7 +262,7 @@ def send_report_email(report_data, email, report_type):
         if sync_info:
             sync_info_html = f"""
             <div style="background: #e8f5e9; padding: 10px; border-radius: 5px; margin: 10px 0; border-left: 4px solid #4caf50;">
-                <strong>🔄 Credit Receipts Synced:</strong> {sync_info.get('credit_receipts_synced', 0)} 
+                <strong>🔄 Credit Receipts Synced:</strong> {sync_info.get('credit_receipts_synced', 0)}
                 <span style="font-size: 12px; color: #666;">(at {sync_info.get('synced_at', 'N/A')})</span>
             </div>
             """
@@ -432,35 +451,33 @@ def run_daily_report(request):
 
     try:
         today = timezone.now().date()
-        
-        # ============================================================
+
         # Sync any credit receipts before generating the report
-        # ============================================================
         sync_count = auto_sync_credit_receipts()
         print(f"📊 Daily report: Synced {sync_count} credit receipts")
-        
+
         # Generate report data
         report_data = generate_report_data('daily', today)
-        
+
         # Add sync info to report data
         report_data['sync_info'] = {
             'credit_receipts_synced': sync_count,
             'synced_at': timezone.now().strftime('%Y-%m-%d %H:%M:%S')
         }
-        
+
         # Send the report email
         success = send_report_email(report_data, 'kiyimbahenry314@gmail.com', 'daily')
 
         if success:
             return JsonResponse({
-                'success': True, 
+                'success': True,
                 'message': f'Daily report sent successfully. Synced {sync_count} credit receipts.',
                 'sync_count': sync_count,
                 'report_date': today.strftime('%Y-%m-%d')
             })
         else:
             return JsonResponse({
-                'success': False, 
+                'success': False,
                 'error': 'Failed to send email',
                 'sync_count': sync_count
             }, status=500)
@@ -469,14 +486,14 @@ def run_daily_report(request):
         error_details = traceback.format_exc()
         print(f"❌ Error in run_daily_report: {error_details}")
         return JsonResponse({
-            'success': False, 
+            'success': False,
             'error': str(e),
             'traceback': error_details if settings.DEBUG else None
         }, status=500)
 
 
 # ============================================================
-# MANUAL SYNC ENDPOINT (Admin only)
+# MANUAL SYNC ENDPOINTS (Admin only)
 # ============================================================
 
 @login_required
@@ -485,7 +502,7 @@ def manual_sync_credit_receipts(request):
     """Manual endpoint to sync credit receipts (admin only)"""
     if request.method != 'POST':
         return JsonResponse({'error': 'Method not allowed'}, status=405)
-    
+
     try:
         sync_count = auto_sync_credit_receipts()
         return JsonResponse({
@@ -576,27 +593,21 @@ def logout_view(request):
 
 @login_required
 def dashboard(request):
-    """
-    Dashboard view showing statistics and recent data
-    """
+    """Dashboard view showing statistics and recent data"""
     today = timezone.now().date()
 
-    # Get statistics
     total_medicines = Drug.objects.count()
     total_suppliers = Supplier.objects.count()
     total_invoices = Invoice.objects.count()
     low_stock_count = Drug.objects.filter(stock_quantity__lt=10).count()
 
-    # Get recent medicines (last 5)
     recent_medicines = Drug.objects.all().order_by('-id')[:5]
 
-    # Calculate total stock value
     all_drugs = Drug.objects.all()
     total_stock_value = 0
     for drug in all_drugs:
         total_stock_value += drug.stock_quantity * drug.selling_price
 
-    # ---- OUT OF STOCK COUNT ----
     out_of_stock_count = Drug.objects.filter(stock_quantity=0).count()
     expired_out_of_stock_count = Drug.objects.filter(
         expiry_date__lt=today,
@@ -604,7 +615,6 @@ def dashboard(request):
     ).count()
     total_out_of_stock = out_of_stock_count + expired_out_of_stock_count
 
-    # ---- TODAY'S SALES ----
     today_receipts = Receipt.objects.filter(created_at__date=today)
     today_sales = (
         today_receipts.aggregate(Sum('total_amount'))['total_amount__sum']
@@ -612,7 +622,6 @@ def dashboard(request):
     )
     today_transactions = today_receipts.count()
 
-    # ---- TODAY'S CREDIT SALES ----
     today_credit_sales = CreditSale.objects.filter(created_at__date=today)
     today_credit_total = (
         today_credit_sales.aggregate(Sum('total_amount'))['total_amount__sum']
@@ -620,7 +629,6 @@ def dashboard(request):
     )
     today_credit_count = today_credit_sales.count()
 
-    # ---- TODAY'S RETURNS ----
     today_returns = ReturnedDrug.objects.filter(returned_date__date=today)
     today_returns_amount = (
         today_returns.aggregate(Sum('total_refund'))['total_refund__sum']
@@ -628,10 +636,8 @@ def dashboard(request):
     )
     today_returns_count = today_returns.count()
 
-    # ---- NET SALES (Sales - Returns) ----
     net_sales = today_sales - today_returns_amount
 
-    # ---- TOP SELLING PRODUCTS TODAY ----
     top_drugs = {}
     for receipt in today_receipts:
         if receipt.items:
@@ -645,14 +651,12 @@ def dashboard(request):
 
     top_selling = sorted(top_drugs.items(), key=lambda x: x[1], reverse=True)[:5]
 
-    # ---- TOTAL OUTSTANDING CREDIT ----
     total_outstanding = CreditSale.objects.filter(
         status__in=['pending', 'partial']
     ).aggregate(
         total=Sum('remaining_balance')
     )['total'] or Decimal("0.00")
 
-    # ---- OVERDUE CREDIT SALES ----
     overdue_credits = CreditSale.objects.filter(
         status__in=['pending', 'partial'],
         due_date__lt=today
@@ -783,7 +787,7 @@ def autocomplete_drugs(request):
 
 
 # ============================================================
-# COMPLETE SALE - FIXED WITH PROPER DECIMAL HANDLING AND CLEAR_CART
+# COMPLETE SALE
 # ============================================================
 
 @login_required
@@ -844,13 +848,11 @@ def complete_sale(request):
 
         customer_name = data.get('customer_name', 'Walk-in Customer')
         customer_phone = data.get('customer_phone', '')
-        
-        # Use Decimal for all monetary values
+
         amount_paid = Decimal(str(data.get('amount_paid', 0) or '0'))
         payment_method = data.get('payment_method', 'cash')
         sale_type = data.get('sale_type', 'retail')
 
-        # Credit sale fields
         is_credit = data.get('is_credit', False)
         due_date = data.get('due_date')
         credit_limit = Decimal(str(data.get('credit_limit', 0) or '0'))
@@ -916,7 +918,6 @@ def complete_sale(request):
             drug.save()
             print(f"  ✅ Updated stock for {drug.name}: {drug.stock_quantity} remaining")
 
-            # Use Decimal for calculation
             item_total = drug.selling_price * quantity
             total_amount += item_total
 
@@ -935,17 +936,17 @@ def complete_sale(request):
             }, status=400)
 
         # ============================================================
-        # Handle Credit Sale - FIXED with transaction and Decimal
+        # Handle Credit Sale
+        # ============================================================
+        # The form now sends is_credit=True and amount_paid=0 for credit sales,
+        # so the customer's remaining_balance = total_amount (full debt).
         # ============================================================
         if is_credit:
-            # For credit sales, amount_paid should be 0 (customer pays later)
             credit_amount_paid = amount_paid if amount_paid > 0 else Decimal('0.00')
 
             print(f"Creating credit sale: total={total_amount}, paid={credit_amount_paid}")
 
-            # Use transaction to ensure atomicity
             with transaction.atomic():
-                # Create credit sale
                 credit_sale = CreditSale.objects.create(
                     customer_name=customer_name,
                     customer_phone=customer_phone,
@@ -966,7 +967,6 @@ def complete_sale(request):
 
                 print(f"✅ CreditSale created: {credit_sale.credit_receipt_number}")
 
-                # Record the payment if any was made
                 if credit_amount_paid > 0:
                     CreditPayment.objects.create(
                         credit_sale=credit_sale,
@@ -977,7 +977,6 @@ def complete_sale(request):
                     )
                     print(f"✅ CreditPayment created: UGX {credit_amount_paid}")
 
-                # ALWAYS CREATE A RECEIPT
                 receipt = Receipt.objects.create(
                     customer_name=customer_name,
                     customer_phone=customer_phone,
@@ -1008,13 +1007,12 @@ def complete_sale(request):
                 'items': sale_items,
                 'credit_url': f'/credits/{credit_sale.id}/',
                 'receipt_url': f'/receipts/{receipt.id}/',
-                'clear_cart': True  # Signal to clear the cart
+                'clear_cart': True
             })
 
         # Regular sale (cash/mobile/card)
         change_due = amount_paid - total_amount if amount_paid > total_amount else Decimal('0.00')
 
-        # Use transaction for regular sale too
         with transaction.atomic():
             receipt = Receipt.objects.create(
                 customer_name=customer_name,
@@ -1043,7 +1041,7 @@ def complete_sale(request):
             'change_due': float(change_due),
             'items': sale_items,
             'receipt_url': f'/receipts/{receipt.id}/',
-            'clear_cart': True  # Signal to clear the cart
+            'clear_cart': True
         })
 
     except json.JSONDecodeError as e:
@@ -1066,23 +1064,36 @@ def complete_sale(request):
 # ============================================================
 # CREDIT SALE VIEWS
 # ============================================================
+# KEY FIX: credit_list() now calls auto_sync_credit_receipts()
+# BEFORE querying, so any unlinked credit receipt shows up here.
+# ============================================================
 
 @login_required
 def credit_list(request):
-    """List only active (unpaid) credit sales with filtering and pagination"""
-    # Only show pending and partial credits (active credits)
+    """List only active (unpaid) credit sales with filtering and pagination.
+    Auto-syncs any unlinked credit receipts first."""
+    # ============================================================
+    # AUTO-SYNC: Pick up any credit receipts not yet linked to a CreditSale
+    # ============================================================
+    try:
+        synced = auto_sync_credit_receipts()
+        if synced:
+            print(f"🔄 credit_list: Auto-synced {synced} credit receipts")
+    except Exception as e:
+        print(f"⚠️ Credit auto-sync error: {e}")
+        import traceback
+        traceback.print_exc()
+
     credits = CreditSale.objects.filter(
         status__in=['pending', 'partial']
     ).select_related('created_by').order_by('-created_at')
 
-    # Filter by status (optional - allows viewing paid credits)
     status_filter = request.GET.get('status')
     if status_filter == 'all':
         credits = CreditSale.objects.all().select_related('created_by').order_by('-created_at')
     elif status_filter:
         credits = credits.filter(status=status_filter)
 
-    # Filter by date range
     date_from = request.GET.get('date_from')
     date_to = request.GET.get('date_to')
     if date_from:
@@ -1090,7 +1101,6 @@ def credit_list(request):
     if date_to:
         credits = credits.filter(created_at__date__lte=date_to)
 
-    # Search by customer name or phone
     search_query = request.GET.get('search')
     if search_query:
         credits = credits.filter(
@@ -1099,7 +1109,6 @@ def credit_list(request):
             Q(credit_receipt_number__icontains=search_query)
         )
 
-    # Pagination
     paginator = Paginator(credits, 20)
     page = request.GET.get('page')
     try:
@@ -1109,7 +1118,6 @@ def credit_list(request):
     except EmptyPage:
         credits_page = paginator.page(paginator.num_pages)
 
-    # Statistics (only from active credits)
     total_outstanding = CreditSale.objects.filter(
         status__in=['pending', 'partial']
     ).aggregate(
@@ -1181,7 +1189,6 @@ def credit_payment(request, credit_id):
                 messages.error(request, f'Payment amount cannot exceed remaining balance of UGX {credit.remaining_balance:,.0f}.')
                 return redirect('stock:credit_detail', credit_id=credit.id)
 
-            # Create the payment record
             CreditPayment.objects.create(
                 credit_sale=credit,
                 amount=amount,
@@ -1190,7 +1197,6 @@ def credit_payment(request, credit_id):
                 created_by=request.user
             )
 
-            # RECALCULATE from all payments using Decimal
             total_paid = credit.payments.aggregate(models.Sum('amount'))['amount__sum'] or Decimal('0.00')
 
             credit.amount_paid = total_paid
@@ -1388,10 +1394,7 @@ def expired_drug_list(request):
 
 @login_required
 def out_of_stock(request):
-    """
-    View to show drugs that are out of stock (stock_quantity = 0)
-    and expired drugs that are no longer available for sale.
-    """
+    """View to show drugs that are out of stock and expired drugs."""
     out_of_stock_drugs = Drug.objects.filter(stock_quantity=0).order_by('name')
 
     today = timezone.now().date()
@@ -2099,10 +2102,6 @@ def receipt_detail(request, receipt_id):
     return render(request, 'stock/receipt_detail.html', {'receipt': receipt})
 
 
-# ============================================================
-# create_sale_receipt - FIXED with proper Decimal handling and clear_cart
-# ============================================================
-
 @login_required
 def create_sale_receipt(request):
     if request.method == 'POST':
@@ -2113,6 +2112,7 @@ def create_sale_receipt(request):
             customer_phone = data.get('customer_phone', '')
             amount_paid = Decimal(str(data.get('amount_paid', 0) or '0'))
             payment_method = data.get('payment_method', 'cash')
+            is_credit = data.get('is_credit', False)
 
             if not items:
                 return JsonResponse({'success': False, 'message': 'No items in sale'}, status=400)
@@ -2143,15 +2143,19 @@ def create_sale_receipt(request):
                 total_amount += total
 
                 sale_items.append({
+                    'drug_id': drug.id,
                     'drug_name': drug.name,
                     'quantity': quantity,
                     'unit_price': float(selling_price),
                     'total': float(total)
                 })
 
+            # Credit sales should not treat amount_paid as total
+            if is_credit or payment_method.lower() == 'credit':
+                amount_paid = Decimal('0.00')
+
             change_due = amount_paid - total_amount if amount_paid > total_amount else Decimal('0.00')
 
-            # CREATE RECEIPT
             receipt = Receipt.objects.create(
                 customer_name=customer_name,
                 customer_phone=customer_phone,
@@ -2163,8 +2167,7 @@ def create_sale_receipt(request):
                 created_by=request.user
             )
 
-            # CREATE CREDIT SALE IF PAYMENT METHOD IS CREDIT
-            if payment_method.lower() == 'credit':
+            if payment_method.lower() == 'credit' or is_credit:
                 credit_amount_paid = amount_paid if amount_paid > 0 else Decimal('0.00')
 
                 with transaction.atomic():
@@ -2209,7 +2212,7 @@ def create_sale_receipt(request):
                         'total_amount': float(total_amount),
                         'change_due': float(change_due),
                         'receipt_url': f'/receipts/{receipt.id}/',
-                        'clear_cart': True  # Signal to clear the cart
+                        'clear_cart': True
                     })
 
             return JsonResponse({
@@ -2220,7 +2223,7 @@ def create_sale_receipt(request):
                 'total_amount': float(total_amount),
                 'change_due': float(change_due),
                 'receipt_url': f'/receipts/{receipt.id}/',
-                'clear_cart': True  # Signal to clear the cart
+                'clear_cart': True
             })
 
         except Drug.DoesNotExist:
@@ -2476,7 +2479,6 @@ def return_create(request):
             messages.error(request, f'Error creating return: {str(e)}')
             return redirect('stock:return_create')
 
-    # GET request - show form with properly JSON-encoded items
     import json
     receipts = Receipt.objects.all().order_by('-created_at')
 
@@ -2663,7 +2665,6 @@ def reports_dashboard(request):
 
     top_selling = sorted(drug_summary.items(), key=lambda x: x[1]['quantity'], reverse=True)[:10]
 
-    # Credit sales statistics
     total_outstanding = CreditSale.objects.filter(
         status__in=['pending', 'partial']
     ).aggregate(
@@ -2714,17 +2715,7 @@ def generate_report_api(request):
         email = data.get('email', 'kiyimbahenry314@gmail.com')
 
         today = timezone.now().date()
-
-        if report_type == 'daily':
-            report_date = today
-        elif report_type == 'weekly':
-            report_date = today
-        elif report_type == 'monthly':
-            report_date = today
-        elif report_type == 'annual':
-            report_date = today
-        else:
-            report_date = today
+        report_date = today
 
         report_data = generate_report_data(report_type, report_date)
 
@@ -2763,13 +2754,11 @@ def generate_report_api(request):
 
 
 # ============================================================
-# generate_report_data (UNCHANGED)
+# generate_report_data
 # ============================================================
 
 def generate_report_data(report_type, report_date=None):
-    """
-    Generate report data based on type (including returns and credit sales)
-    """
+    """Generate report data based on type (including returns and credit sales)"""
     if report_date is None:
         report_date = timezone.now().date()
 
@@ -2835,7 +2824,6 @@ def generate_report_data(report_type, report_date=None):
 
     net_sales = total_sales - total_returned_amount
 
-    # Credit sales data
     total_credit_amount = credit_sales.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
     total_credit_paid = credit_sales.aggregate(Sum('amount_paid'))['amount_paid__sum'] or 0
     total_credit_outstanding = total_credit_amount - total_credit_paid

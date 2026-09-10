@@ -364,6 +364,19 @@
         .expiry-normal-text {
             color: #28a745;
         }
+        .credit-notice {
+            display: none;
+            margin-top: 12px;
+            padding: 12px 15px;
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            border-radius: 5px;
+            color: #856404;
+            font-size: 14px;
+        }
+        .credit-notice.show {
+            display: block;
+        }
     </style>
 </head>
 <body>
@@ -431,6 +444,11 @@
                         <button data-method="credit" onclick="selectPayment('credit')">📝 Credit</button>
                     </div>
 
+                    <div id="creditNotice" class="credit-notice">
+                        📝 <strong>Credit Sale:</strong> Customer will owe the full amount.
+                        You can record payments later from the <em>Credit</em> page.
+                    </div>
+
                     <button class="complete-btn" id="completeBtn" onclick="completeSale()" disabled>
                         ✅ Complete Sale
                     </button>
@@ -477,7 +495,6 @@
                 .then(data => {
                     // Sort drugs by expiry date (shortest expiry first)
                     allDrugs = data.sort((a, b) => {
-                        // If no expiry date, put at end
                         if (!a.expiry) return 1;
                         if (!b.expiry) return -1;
                         return new Date(a.expiry) - new Date(b.expiry);
@@ -514,7 +531,6 @@
                 const stockClass = drug.qty < 10 ? 'badge-stock low' : 'badge-stock ok';
                 const stockText = drug.qty < 10 ? '⚠️ Low Stock' : '✅ In Stock';
 
-                // Expiry status
                 let expiryClass = 'badge-expiry good';
                 let expiryText = '';
                 if (drug.expiry) {
@@ -679,6 +695,14 @@
                     btn.classList.add('active');
                 }
             });
+
+            // Show/hide credit notice
+            const notice = document.getElementById('creditNotice');
+            if (method === 'credit') {
+                notice.classList.add('show');
+            } else {
+                notice.classList.remove('show');
+            }
         }
 
         function completeSale() {
@@ -693,6 +717,15 @@
 
             const total = cart.reduce((sum, item) => sum + (item.price * item.quantity), 0);
 
+            // ============================================================
+            // CRITICAL FIX: For credit sales, amount_paid must be 0
+            // so the customer's balance is the full amount (outstanding debt).
+            // Previously it sent `total`, making every credit sale appear
+            // as fully paid (0 outstanding), which is why the Credit page
+            // never showed anything.
+            // ============================================================
+            const isCredit = selectedPayment === 'credit';
+
             const data = {
                 items: cart.map(item => ({
                     drug_id: item.id,
@@ -700,9 +733,10 @@
                 })),
                 customer_name: document.getElementById('customerName').value || 'Walk-in Customer',
                 customer_phone: document.getElementById('customerPhone').value || '',
-                amount_paid: total,
+                amount_paid: isCredit ? 0 : total,
                 payment_method: selectedPayment,
-                sale_type: 'retail'
+                sale_type: 'retail',
+                is_credit: isCredit
             };
 
             console.log('Sending sale data:', data);
@@ -718,9 +752,23 @@
             .then(response => response.json())
             .then(data => {
                 if (data.success) {
-                    showToast(`✅ Sale completed! Receipt #${data.receipt_number}`, 'success');
+                    if (data.is_credit) {
+                        showToast(
+                            `✅ Credit sale created! Receipt #${data.receipt_number} • Outstanding: UGX ${data.remaining_balance.toLocaleString()}`,
+                            'success'
+                        );
+                    } else {
+                        showToast(`✅ Sale completed! Receipt #${data.receipt_number}`, 'success');
+                    }
+
+                    // Clear the cart
                     cart = [];
                     updateCart();
+
+                    // Reset customer fields
+                    document.getElementById('customerName').value = '';
+                    document.getElementById('customerPhone').value = '';
+
                     if (confirm('Print receipt?')) {
                         window.open(data.receipt_url + 'print/', '_blank');
                     }
