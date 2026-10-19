@@ -613,9 +613,6 @@ def dashboard(request):
     total_out_of_stock = out_of_stock_count + expired_out_of_stock_count
 
     today_receipts = Receipt.objects.filter(created_at__date=today)
-    today_sales = (
-        today_receipts.aggregate(Sum('total_amount'))['total_amount__sum']
-        or Decimal("0.00")
     )
     today_transactions = today_receipts.count()
 
@@ -3088,15 +3085,22 @@ def invoice_delete(request, invoice_id):
             invoice_number = invoice.invoice_number
             invoice.delete()
             messages.success(request, f'Invoice #{invoice_number} deleted successfully!')
+            return redirect('stock:invoice_list')
 
         except Exception as e:
             messages.error(request, f'Error deleting invoice: {str(e)}')
+            
+    return render(request, 'stock/invoice_confirm_delete.html', {'invoice': invoice})
+
 
 # ============================================================
 # CATEGORY VIEWS
 # ============================================================
 
 @login_required
+def category_list(request):
+    categories = Category.objects.all()
+    return render(request, 'stock/category_list.html', {'categories': categories})
 
 
 # ============================================================
@@ -3150,18 +3154,11 @@ def user_create(request):
         ('pharmacist', 'Pharmacist'),
         ('cashier', 'Cashier'),
         ('dispenser', 'Dispenser'),
-def category_list(request):
-    categories = Category.objects.all()
-    return render(request, 'stock/category_list.html', {'categories': categories})
         ('viewer', 'Viewer (Read-only)'),
     ]
 
-    return render(request, 'stock/invoice_confirm_delete.html', {'invoice': invoice})
-
-
     if request.method == 'POST':
         try:
-
             username = request.POST.get('username')
             email = request.POST.get('email')
             password = request.POST.get('password')
@@ -3193,14 +3190,11 @@ def category_list(request):
             messages.success(request, f'User "{username}" created successfully!')
             return redirect('stock:user_list')
 
-
         except Exception as e:
             messages.error(request, f'Error creating user: {str(e)}')
 
-
     return render(request, 'stock/user_form.html', {
         'is_edit': False,
-
         'role_choices': ROLE_CHOICES,
     })
 
