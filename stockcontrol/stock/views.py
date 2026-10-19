@@ -57,13 +57,6 @@ def is_admin_or_manager(user):
 # ============================================================
 # AUTO SYNC CREDIT RECEIPTS - IMPROVED VERSION
 # ============================================================
-# This function now:
-#   1. Looks for BOTH is_credit=True receipts AND credit payment_method receipts
-#   2. Only processes receipts that don't have a credit_sale linked yet
-#   3. Handles duplicates safely (checks for existing CreditSale with same data)
-#   4. Records initial payments if amount_paid > 0
-#   5. Generates unique credit_receipt_numbers to avoid collisions
-# ============================================================
 
 def auto_sync_credit_receipts():
     """
@@ -352,7 +345,11 @@ def send_report_email(report_data, email, report_type):
                 {sync_info_html}
                 <table>
                     <tr><th>Description</th><th>Value</th></tr>
-                    <tr><td>Total Sales</td><td>UGX {sales.get('total_amount', 0):,.0f}</td></tr>
+                    <tr><td>Total Sales (Medicines Sold)</td><td>UGX {sales.get('total_amount', 0):,.0f}</td></tr>
+                    
+                    <tr><td><strong>Total Cash Received Today</strong></td><td><strong>UGX {sales.get('cash_received', 0):,.0f}</strong></td></tr>
+                    <tr><td>Credit Repayments Received Today</td><td>UGX {credit_sales.get('total_credit_paid', 0):,.0f}</td></tr>
+                    
                     <tr><td>Net Sales</td><td>UGX {sales.get('net_sales', 0):,.0f}</td></tr>
                     <tr><td>Total Returns</td><td>UGX {sales.get('total_returns', 0):,.0f}</td></tr>
                     <tr><td>Total Transactions</td><td>{sales.get('total_transactions', 0)}</td></tr>
@@ -2811,6 +2808,24 @@ def generate_report_data(report_type, report_date=None):
         created_at__date__lte=end_date
     )
 
+    credit_payments = CreditPayment.objects.filter(
+        created_at__date__gte=start_date,
+        created_at__date__lte=end_date
+    )
+
+    all_credit_sales = CreditSale.objects.filter(
+        created_at__date__lte=end_date
+    )
+    
+    total_credit_outstanding = sum(
+        (credit.remaining_balance for credit in all_credit_sales),
+        Decimal('0.00')
+    )
+
+    cash_receipts = receipts.filter(payment_method__iexact='cash').aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
+    cash_repayments = credit_payments.filter(payment_method__iexact='cash').aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
+    cash_received_today = cash_receipts + cash_repayments
+
     total_sales = receipts.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
     total_transactions = receipts.count()
     total_items_sold = 0
@@ -2825,8 +2840,7 @@ def generate_report_data(report_type, report_date=None):
     net_sales = total_sales - total_returned_amount
 
     total_credit_amount = credit_sales.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
-    total_credit_paid = credit_sales.aggregate(Sum('amount_paid'))['amount_paid__sum'] or 0
-    total_credit_outstanding = total_credit_amount - total_credit_paid
+    total_credit_paid_period = credit_payments.aggregate(Sum('amount'))['amount__sum'] or 0
 
     report_data['sales'] = {
         'total_amount': float(total_sales),
@@ -2836,13 +2850,14 @@ def generate_report_data(report_type, report_date=None):
         'total_transactions': total_transactions,
         'total_items_sold': total_items_sold,
         'average_transaction': float(total_sales / total_transactions) if total_transactions > 0 else 0,
+        'cash_received': float(cash_received_today),
         'start_date': start_date.strftime('%Y-%m-%d'),
         'end_date': end_date.strftime('%Y-%m-%d'),
     }
 
     report_data['credit_sales'] = {
         'total_credit_amount': float(total_credit_amount),
-        'total_credit_paid': float(total_credit_paid),
+        'total_credit_paid': float(total_credit_paid_period),
         'total_credit_outstanding': float(total_credit_outstanding),
         'total_credit_transactions': credit_sales.count(),
         'overdue_count': credit_sales.filter(
@@ -2851,17 +2866,29 @@ def generate_report_data(report_type, report_date=None):
         ).count(),
     }
 
-    payment_breakdown = receipts.values('payment_method').annotate(
-        total=Sum('total_amount'),
-        count=Count('id')
-    )
+    payment_breakdown_dict = {}
 
-    for item in payment_breakdown:
-        report_data['payment_breakdown'].append({
-            'method': item['payment_method'] or 'unknown',
+    for item in receipts.values('payment_method').annotate(total=Sum('total_amount'), count=Count('id')):
+        method = item['payment_method'] or 'unknown'
+        payment_breakdown_dict[method] = {
+            'method': method,
             'total': float(item['total']),
             'count': item['count']
-        })
+        }
+
+    for item in credit_payments.values('payment_method').annotate(total=Sum('amount'), count=Count('id')):
+        method = item['payment_method'] or 'cash'
+        if method in payment_breakdown_dict:
+            payment_breakdown_dict[method]['total'] += float(item['total'])
+            payment_breakdown_dict[method]['count'] += item['count']
+        else:
+            payment_breakdown_dict[method] = {
+                'method': method,
+                'total': float(item['total']),
+                'count': item['count']
+            }
+
+    report_data['payment_breakdown'] = list(payment_breakdown_dict.values())
 
     product_sales = {}
     for receipt in receipts:
@@ -3061,22 +3088,15 @@ def invoice_delete(request, invoice_id):
             invoice_number = invoice.invoice_number
             invoice.delete()
             messages.success(request, f'Invoice #{invoice_number} deleted successfully!')
-            return redirect('stock:invoice_list')
 
         except Exception as e:
             messages.error(request, f'Error deleting invoice: {str(e)}')
-
-    return render(request, 'stock/invoice_confirm_delete.html', {'invoice': invoice})
-
 
 # ============================================================
 # CATEGORY VIEWS
 # ============================================================
 
 @login_required
-def category_list(request):
-    categories = Category.objects.all()
-    return render(request, 'stock/category_list.html', {'categories': categories})
 
 
 # ============================================================
@@ -3130,11 +3150,18 @@ def user_create(request):
         ('pharmacist', 'Pharmacist'),
         ('cashier', 'Cashier'),
         ('dispenser', 'Dispenser'),
+def category_list(request):
+    categories = Category.objects.all()
+    return render(request, 'stock/category_list.html', {'categories': categories})
         ('viewer', 'Viewer (Read-only)'),
     ]
 
+    return render(request, 'stock/invoice_confirm_delete.html', {'invoice': invoice})
+
+
     if request.method == 'POST':
         try:
+
             username = request.POST.get('username')
             email = request.POST.get('email')
             password = request.POST.get('password')
@@ -3166,11 +3193,14 @@ def user_create(request):
             messages.success(request, f'User "{username}" created successfully!')
             return redirect('stock:user_list')
 
+
         except Exception as e:
             messages.error(request, f'Error creating user: {str(e)}')
 
+
     return render(request, 'stock/user_form.html', {
         'is_edit': False,
+
         'role_choices': ROLE_CHOICES,
     })
 

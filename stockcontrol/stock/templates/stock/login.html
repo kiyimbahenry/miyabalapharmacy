@@ -1,193 +1,376 @@
-<!DOCTYPE html>
 {% load static %}
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Login - Miyabala Pharmacy</title>
-    <!-- Bootstrap 5 -->
-    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Font Awesome -->
+    <!-- Google Fonts for a clean, modern look -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    
     <style>
         * {
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+            font-family: 'Inter', sans-serif;
         }
+
         body {
-            min-height: 100vh;
+            background-color: #f0f4f8;
             display: flex;
-            align-items: center;
             justify-content: center;
-            background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-        }
-        .login-wrapper {
-            width: 100%;
-            max-width: 420px;
+            align-items: center;
+            min-height: 100vh;
             padding: 20px;
         }
-        .login-card {
+
+        .login-container {
+            display: flex;
+            width: 100%;
+            max-width: 1000px;
+            height: 600px;
             background: #ffffff;
-            border-radius: 24px;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.12);
-            padding: 40px 35px;
-            transition: transform 0.2s;
+            border-radius: 20px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
         }
-        .login-card:hover {
-            transform: translateY(-4px);
+
+        /* =========================================
+           LEFT SIDE: IMAGE & BRANDING
+           ========================================= */
+        .login-left {
+            flex: 1;
+            position: relative;
+            /* Base background color resembling a pharmacy */
+            background: linear-gradient(135deg, #e0f2fe 0%, #bae6fd 100%);
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-end;
+            padding: 40px;
         }
-        .login-logo {
-            text-align: center;
+
+        /* The fading pharmacist image */
+        .login-left::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            /* REPLACE THE URL BELOW with your actual image path, e.g., url('{% static "images/pharmacist.jpg" %}') */
+            background-image: url('https://images.unsplash.com/photo-1576091160399-112ba8d25d1d?ixlib=rb-4.0.3&auto=format&fit=crop&w=800&q=80');
+            background-size: cover;
+            background-position: center top;
+            /* This creates the beautiful fade effect */
+            mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 100%);
+            -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 40%, rgba(0,0,0,0) 100%);
+            opacity: 0.9;
+            z-index: 1;
+        }
+
+        .brand-text {
+            position: relative;
+            z-index: 2;
+            color: #0f172a;
             margin-bottom: 20px;
         }
-        .login-logo i {
-            font-size: 3.5rem;
-            color: #0b3b5c;
-            background: #e6f0fa;
-            padding: 20px;
-            border-radius: 50%;
-            display: inline-block;
-        }
-        .login-title {
+
+        .brand-text h1 {
+            font-size: 32px;
             font-weight: 700;
-            color: #0b3b5c;
-            font-size: 1.8rem;
-            text-align: center;
-            margin-bottom: 0.2rem;
+            margin-bottom: 5px;
+            color: #0369a1;
+            text-shadow: 0 2px 4px rgba(255,255,255,0.8);
         }
-        .login-sub {
-            text-align: center;
-            color: #6c7a8a;
-            font-size: 0.95rem;
+
+        .brand-text p {
+            font-size: 15px;
+            font-weight: 600;
+            color: #0f172a;
+            text-shadow: 0 2px 4px rgba(255,255,255,0.8);
+        }
+
+        /* =========================================
+           RIGHT SIDE: LOGIN FORM
+           ========================================= */
+        .login-right {
+            flex: 1;
+            padding: 50px;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            position: relative;
+        }
+
+        /* Logo / Icon */
+        .logo-icon {
+            width: 60px;
+            height: 60px;
+            background: #e0f2fe;
+            border-radius: 50%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 20px;
+        }
+
+        .logo-icon i {
+            font-size: 28px;
+            color: #0369a1;
+        }
+
+        .login-right h2 {
+            font-size: 26px;
+            color: #1e293b;
+            margin-bottom: 8px;
+            font-weight: 700;
+        }
+
+        .login-right > p {
+            color: #64748b;
+            font-size: 14px;
             margin-bottom: 25px;
         }
-        .form-control {
-            border-radius: 12px;
-            padding: 12px 16px;
-            border: 1px solid #dce3ed;
-            transition: border-color 0.3s, box-shadow 0.3s;
-        }
-        .form-control:focus {
-            border-color: #0b3b5c;
-            box-shadow: 0 0 0 4px rgba(11, 59, 92, 0.08);
-        }
-        .form-label {
-            font-weight: 500;
-            color: #2d3748;
-        }
-        .input-group-text {
-            background: #f8fafc;
-            border: 1px solid #dce3ed;
-            border-right: none;
-            border-radius: 12px 0 0 12px;
-            color: #6c7a8a;
-        }
-        .input-group .form-control {
-            border-left: none;
-            border-radius: 0 12px 12px 0;
-        }
-        .input-group {
-            margin-bottom: 18px;
-        }
-        .btn-login {
-            background: linear-gradient(135deg, #0b3b5c, #1a5d7a);
-            border: none;
-            border-radius: 12px;
-            padding: 12px;
-            font-weight: 600;
-            font-size: 1.05rem;
-            color: white;
-            width: 100%;
-            transition: opacity 0.3s;
-            margin-top: 8px;
-        }
-        .btn-login:hover {
-            opacity: 0.9;
-        }
-        .form-check-label {
-            font-size: 0.9rem;
-            color: #4a5568;
-        }
-        .forgot-link {
-            color: #0b3b5c;
-            text-decoration: none;
-            font-weight: 500;
-            font-size: 0.9rem;
-        }
-        .forgot-link:hover {
-            text-decoration: underline;
-        }
-        .login-footer {
-            text-align: center;
-            margin-top: 25px;
-            font-size: 0.8rem;
-            color: #94a3b8;
-        }
+
+        /* Alerts (Django messages) */
         .alert {
-            border-radius: 12px;
+            padding: 12px 15px;
+            border-radius: 8px;
             margin-bottom: 20px;
+            font-size: 14px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .alert-success {
+            background-color: #dcfce7;
+            color: #166534;
+            border: 1px solid #bbf7d0;
+        }
+
+        .alert-error {
+            background-color: #fee2e2;
+            color: #991b1b;
+            border: 1px solid #fecaca;
+        }
+
+        .alert .close-btn {
+            cursor: pointer;
+            font-size: 18px;
+            font-weight: bold;
+            background: none;
+            border: none;
+            color: inherit;
+        }
+
+        /* Input Fields */
+        .input-group {
+            position: relative;
+            margin-bottom: 20px;
+        }
+
+        .input-group i {
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            color: #94a3b8;
+            font-size: 16px;
+        }
+
+        .input-group input {
+            width: 100%;
+            padding: 14px 15px 14px 45px;
+            border: 1px solid #e2e8f0;
+            border-radius: 10px;
+            background-color: #f8fafc;
+            font-size: 15px;
+            color: #334155;
+            transition: all 0.3s ease;
+        }
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 25px;
+            font-size: 14px;
+        }
+
+        .remember-me {
+            display: flex;
+            align-items: center;
+            color: #64748b;
+            cursor: pointer;
+        }
+
+        .remember-me input {
+            margin-right: 8px;
+            cursor: pointer;
+        }
+
+        .forgot-password {
+            color: #0369a1;
+            text-decoration: none;
+            font-weight: 600;
+            transition: color 0.2s;
+        }
+
+        .forgot-password:hover {
+            color: #0284c7;
+        }
+
+        /* Login Button */
+        .login-btn {
+            width: 100%;
+            padding: 14px;
+            background: #0f172a;
+            color: #ffffff;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.3s, transform 0.2s;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .login-btn:hover {
+            background: #1e293b;
+            transform: translateY(-2px);
+        }
+
+        /* =========================================
+           FOOTER / COPYRIGHT
+           ========================================= */
+        .footer-text {
+            position: absolute;
+            bottom: 20px;
+            left: 0;
+            width: 100%;
+            text-align: center;
+            font-size: 13px;
+            font-weight: 700;
+            /* Nice color gradient for the text */
+            background: linear-gradient(90deg, #0369a1, #7c3aed, #db2777);
+            -webkit-background-clip: text;
+
+        /* Remember Me & Forgot Password */
+        .form-actions {
+            -webkit-text-fill-color: transparent;
+            letter-spacing: 0.5px;
+
+        .input-group input:focus {
+        }
+        }
+            outline: none;
+            border-color: #38bdf8;
+            box-shadow: 0 0 0 4px rgba(56, 189, 248, 0.1);
+
+        /* Responsive Design */
+        @media (max-width: 768px) {
+            .login-container {
+
+                flex-direction: column;
+                height: auto;
+                max-width: 450px;
+            }
+            .login-left {
+                height: 200px;
+                padding: 20px;
+            }
+            .login-left::before {
+                mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 20%, rgba(0,0,0,0) 100%);
+                -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,1) 20%, rgba(0,0,0,0) 100%);
+                background-position: center 20%;
+            }
+            .brand-text h1 { font-size: 24px; }
+            .login-right { padding: 30px; }
+            .footer-text { position: relative; margin-top: 20px; }
         }
     </style>
 </head>
 <body>
-    <div class="login-wrapper">
-        <div class="login-card">
-            <!-- Logo -->
-            <div class="login-logo">
-                <i class="fas fa-capsules"></i>
-            </div>
-            <h2 class="login-title">Miyabala Pharmacy</h2>
-            <p class="login-sub">Welcome back! Please log in to your account.</p>
 
-            <!-- Messages -->
+    <div class="login-container">
+        <!-- LEFT SIDE: Image & Branding -->
+
+        <div class="login-left">
+
+            <div class="brand-text">
+                <h1>Miyabala Pharmacy</h1>
+                <p>Your Health, Our Priority</p>
+
+            </div>
+
+        </div>
+
+
+        <!-- RIGHT SIDE: Form -->
+        <div class="login-right">
+            <div class="logo-icon">
+                <i class="fa-solid fa-capsules"></i>
+            </div>
+            
+            <h2>Welcome Back</h2>
+            <p>Please log in to your account.</p>
+
+            <!-- Django Messages -->
             {% if messages %}
                 {% for message in messages %}
-                    <div class="alert alert-{{ message.tags }} alert-dismissible fade show" role="alert">
-                        {{ message }}
-                        <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+                    <div class="alert {% if message.tags %}alert-{{ message.tags }}{% else %}alert-info{% endif %}">
+                        <span>{{ message }}</span>
+                        <button class="close-btn" onclick="this.parentElement.style.display='none';">&times;</button>
                     </div>
                 {% endfor %}
             {% endif %}
 
-            <form method="post">
+
+            <form method="post" action="{% url 'stock:login' %}">
+
                 {% csrf_token %}
-                <!-- Email / Username -->
+                
+
                 <div class="input-group">
-                    <span class="input-group-text"><i class="fas fa-envelope"></i></span>
-                    <input type="text" class="form-control" id="username" name="username"
-                           placeholder="Email or Username" required>
+
+                    <i class="fa-regular fa-user"></i>
+
+                    <input type="text" name="username" id="username" placeholder="Username or Email" required autofocus>
                 </div>
 
-                <!-- Password -->
                 <div class="input-group">
-                    <span class="input-group-text"><i class="fas fa-lock"></i></span>
-                    <input type="password" class="form-control" id="password" name="password"
-                           placeholder="Password" required>
+                    <i class="fa-solid fa-lock"></i>
+                    <input type="password" name="password" id="password" placeholder="Password" required>
                 </div>
 
-                <!-- Remember me & Forgot Password -->
-                <div class="d-flex justify-content-between align-items-center mb-3">
-                    <div class="form-check">
-                        <input type="checkbox" class="form-check-input" id="remember" name="remember">
-                        <label class="form-check-label" for="remember">Remember me</label>
-                    </div>
-                    <a href="{% url 'stock:password_reset' %}" class="forgot-link">
-                        <i class="fas fa-key me-1"></i> Forgot Password?
-                    </a>
+                <div class="form-actions">
+                    <label class="remember-me">
+                        <input type="checkbox" name="remember_me">
+                        Remember me
+                    </label>
+                    <a href="#" class="forgot-password">Forgot Password?</a>
                 </div>
 
-                <!-- Login Button -->
-                <button type="submit" class="btn btn-login">
-                    <i class="fas fa-sign-in-alt me-2"></i> Login
+                <button type="submit" class="login-btn">
+                    <i class="fa-solid fa-arrow-right-to-bracket"></i> Login
                 </button>
             </form>
 
-            <div class="login-footer">
-                &copy; 2026 Miyabala Pharmacy Management System
+
+            <!-- Custom Copyright Text -->
+
+            <div class="footer-text">
+                &copy; KIYIMBA HENRY @ADMIN 0759025693
+
             </div>
         </div>
+
     </div>
+
 </body>
 </html>
