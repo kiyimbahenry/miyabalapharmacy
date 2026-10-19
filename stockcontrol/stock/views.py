@@ -613,6 +613,9 @@ def dashboard(request):
     total_out_of_stock = out_of_stock_count + expired_out_of_stock_count
 
     today_receipts = Receipt.objects.filter(created_at__date=today)
+    today_sales = (
+        today_receipts.aggregate(Sum('total_amount'))['total_amount__sum']
+        or Decimal("0.00")
     )
     today_transactions = today_receipts.count()
 
@@ -3089,7 +3092,7 @@ def invoice_delete(request, invoice_id):
 
         except Exception as e:
             messages.error(request, f'Error deleting invoice: {str(e)}')
-            
+
     return render(request, 'stock/invoice_confirm_delete.html', {'invoice': invoice})
 
 
