@@ -9,7 +9,7 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600;700&display=swap" rel="stylesheet">
     <!-- FontAwesome for icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
+
     <style>
         * {
             margin: 0;
@@ -59,8 +59,8 @@
             left: 0;
             width: 100%;
             height: 100%;
-            /* Reliable, permanent web link to a smiling pharmacist */
-            background-image: url('https://img.freepik.com/free-photo/portrait-smiling-pharmacist-standing-pharmacy_107420-65297.jpg');
+            /* THIS NOW LOADS YOUR LOCAL SAVED IMAGE */
+            background-image: url('{% static "images/pharmacist.jpg" %}');
             background-size: cover;
             background-position: center top;
             z-index: 1;
@@ -292,7 +292,7 @@
             <div class="logo-icon">
                 <i class="fa-solid fa-capsules"></i>
             </div>
-            
+
             <h2>Welcome Back</h2>
             <p>Please log in to your account.</p>
 
@@ -307,7 +307,7 @@
 
             <form method="post" action="{% url 'stock:login' %}">
                 {% csrf_token %}
-                
+
                 <div class="input-group">
                     <i class="fa-regular fa-user"></i>
                     <input type="text" name="username" id="username" placeholder="Username or Email" required autofocus>
