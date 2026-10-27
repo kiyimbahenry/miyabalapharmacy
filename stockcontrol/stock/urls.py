@@ -104,6 +104,8 @@ urlpatterns = [
     path('receipts/<int:receipt_id>/print/', views.print_receipt, name='print_receipt'),
     path('sale/create/', views.create_sale_receipt, name='create_sale'),
     path('api/complete-sale/', views.complete_sale, name='complete_sale'),
+    path('wholesale/', views.wholesale_sale, name='wholesale_sale'),
+    path('api/complete-wholesale-sale/', views.complete_wholesale_sale, name='complete_wholesale_sale'),
     
     # ============================================================
     # RETURN URLs

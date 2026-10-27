@@ -2233,6 +2233,109 @@ def create_sale_receipt(request):
 
 
 @login_required
+def wholesale_sale(request):
+    """View for the wholesale sale page."""
+    return render(request, 'stock/wholesale_form.html')
+
+
+@login_required
+def complete_wholesale_sale(request):
+    """API endpoint to process a wholesale sale."""
+    if request.method != 'POST':
+        return JsonResponse({'success': False, 'message': 'Invalid request method'}, status=400)
+
+    try:
+        data = json.loads(request.body)
+        drug_id = data.get('drug_id')
+        sale_type = data.get('sale_type') # 'packet' or 'tablet'
+        quantity = int(data.get('quantity', 0))
+        unit_price = Decimal(str(data.get('unit_price', 0)))
+        customer_name = data.get('customer_name', 'Walk-in Customer')
+        customer_phone = data.get('customer_phone', '')
+        amount_paid = Decimal(str(data.get('amount_paid', 0)))
+        payment_method = data.get('payment_method', 'cash')
+
+        drug = get_object_or_404(Drug, id=drug_id)
+
+        # Calculate total units and total price
+        if sale_type == 'packet':
+            total_units = quantity * drug.pack_size
+            if drug.stock_quantity < total_units:
+                return JsonResponse({'success': False, 'message': f'Insufficient stock. Only {drug.stock_quantity} units left.'}, status=400)
+            
+            total_amount = unit_price * quantity
+            item_description = f"{drug.name} (Pack of {drug.pack_size})"
+            unit_label = 'packet'
+        else: # tablet
+            total_units = quantity
+            if drug.stock_quantity < total_units:
+                return JsonResponse({'success': False, 'message': f'Insufficient stock. Only {drug.stock_quantity} units left.'}, status=400)
+            
+            total_amount = unit_price * quantity
+            item_description = drug.name
+            unit_label = 'tablet'
+
+        # Deduct stock
+        drug.stock_quantity -= total_units
+        drug.save()
+
+        sale_items = [{
+            'drug_id': drug.id,
+            'drug_name': item_description,
+            'quantity': quantity,
+            'unit_price': float(unit_price),
+            'total': float(total_amount)
+        }]
+
+        change_due = amount_paid - total_amount if amount_paid > total_amount else Decimal('0.00')
+
+        with transaction.atomic():
+            receipt = Receipt.objects.create(
+                customer_name=f"{customer_name} (Wholesale)",
+                customer_phone=customer_phone,
+                total_amount=total_amount,
+                amount_paid=amount_paid,
+                change_due=change_due,
+                payment_method=payment_method,
+                items=sale_items,
+                created_by=request.user
+            )
+
+            # If it's a credit wholesale sale
+            if payment_method.lower() == 'credit':
+                credit_sale = CreditSale.objects.create(
+                    credit_receipt_number=f"CR-WS-{timezone.now().strftime('%Y%m%d')}-{CreditSale.objects.filter(created_at__date=timezone.now().date()).count() + 1:04d}",
+                    customer_name=customer_name,
+                    customer_phone=customer_phone,
+                    total_amount=total_amount,
+                    amount_paid=Decimal('0.00'),
+                    remaining_balance=total_amount,
+                    payment_method='credit',
+                    items=sale_items,
+                    due_date=timezone.now().date() + timedelta(days=30),
+                    status='pending',
+                    created_by=request.user
+                )
+                receipt.credit_sale = credit_sale
+                receipt.is_credit = True
+                receipt.save()
+
+        return JsonResponse({
+            'success': True,
+            'message': 'Wholesale sale completed successfully!',
+            'receipt_id': receipt.id,
+            'receipt_number': receipt.receipt_number,
+            'receipt_url': f'/receipts/{receipt.id}/',
+            'clear_cart': True
+        })
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JsonResponse({'success': False, 'message': str(e)}, status=500)
+
+
+@login_required
 def print_receipt(request, receipt_id):
     receipt = get_object_or_404(Receipt, id=receipt_id)
 
