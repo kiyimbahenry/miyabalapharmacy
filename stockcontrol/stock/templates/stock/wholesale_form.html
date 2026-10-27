@@ -1,27 +1,29 @@
 {% extends 'stock/base.html' %}
 {% block content %}
 <style>
-    /* OVERRIDE BOOTSTRAP'S DEFAULT CARD STYLES TO PREVENT CONFLICTS */
-    .ws-container { display: grid; grid-template-columns: 300px 350px 1fr; gap: 20px; padding: 20px; max-width: 1600px; margin: 0 auto; }
-    .ws-box { background: white; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); padding: 20px; border: 1px solid #e2e8f0; }
+    /* CUSTOM CLASSES TO AVOID BOOTSTRAP CONFLICTS */
+    .ws-container { display: grid; grid-template-columns: 320px 350px 1fr; gap: 20px; padding: 20px; max-width: 1600px; margin: 0 auto; }
+    .ws-box { background: white; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); padding: 20px; border: 1px solid #e2e8f0; height: fit-content; }
     
-    /* Left Column */
-    .search-results { max-height: 500px; overflow-y: auto; margin-top: 15px; }
-    .drug-item { padding: 12px; border-bottom: 1px solid #eee; cursor: pointer; border-radius: 5px; transition: 0.2s; }
-    .drug-item:hover { background: #f8f9fa; border-left: 4px solid #3498db; }
-    .drug-info .name { font-weight: 600; color: #333; font-size: 14px; }
+    /* Left Column: Search */
+    .search-results { max-height: 600px; overflow-y: auto; margin-top: 15px; }
+    .drug-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #eee; }
+    .drug-info .name { font-weight: 600; color: #333; font-size: 14px; margin-bottom: 3px; }
     .drug-info .details { font-size: 12px; color: #666; }
+    .btn-select { background: #3498db; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer; font-size: 13px; font-weight: 600; transition: 0.2s; }
+    .btn-select:hover { background: #2980b9; }
     
-    /* Middle Column */
+    /* Middle Column: Add to Cart Form */
     .selected-drug-card { display: none; }
     .selected-drug-card.active { display: block; }
     .form-group { margin-bottom: 15px; }
     .form-group label { display: block; font-weight: 600; margin-bottom: 5px; font-size: 13px; color: #333; }
     .form-group input, .form-group select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px; }
+    .form-group input:focus, .form-group select:focus { border-color: #3498db; outline: none; }
     .btn-add { width: 100%; padding: 12px; background: #27ae60; color: white; border: none; border-radius: 5px; font-size: 15px; font-weight: 600; cursor: pointer; transition: 0.2s; margin-top: 10px; }
     .btn-add:hover { background: #219a52; }
 
-    /* Right Column (Cart) */
+    /* Right Column: Cart */
     .cart-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
     .cart-table th { text-align: left; padding: 10px; border-bottom: 2px solid #eee; font-size: 13px; color: #555;}
     .cart-table td { padding: 10px; border-bottom: 1px solid #eee; font-size: 14px; }
@@ -48,9 +50,9 @@
 <div class="ws-container">
     <div id="toast" class="toast"></div>
 
-    <!-- LEFT: Search -->
+    <!-- LEFT COLUMN: Search -->
     <div class="ws-box">
-        <h3>🔍 Search Medicine</h3>
+        <h3 style="margin-bottom: 15px;">🔍 Search Medicine</h3>
         <div class="form-group">
             <input type="text" id="searchInput" placeholder="Search brand or generic..." onkeyup="searchDrugs()" autocomplete="off">
         </div>
@@ -59,9 +61,9 @@
         </div>
     </div>
 
-    <!-- MIDDLE: Add Item Form -->
+    <!-- MIDDLE COLUMN: Add Item Form -->
     <div class="ws-box">
-        <h3>📝 Add to Cart</h3>
+        <h3 style="margin-bottom: 15px;">📝 Add to Cart</h3>
         
         <div id="emptyState" style="text-align:center; color:#999; padding: 40px 10px;">
             <i class="fas fa-hand-pointer" style="font-size:30px; margin-bottom:10px;"></i><br>
@@ -100,9 +102,9 @@
         </div>
     </div>
 
-    <!-- RIGHT: Cart & Checkout -->
+    <!-- RIGHT COLUMN: Cart & Checkout -->
     <div class="ws-box">
-        <h3>🛒 Wholesale Cart</h3>
+        <h3 style="margin-bottom: 15px;">🛒 Wholesale Cart</h3>
         
         <table class="cart-table">
             <thead>
@@ -195,11 +197,12 @@
                     data.forEach(drug => {
                         const drugString = encodeURIComponent(JSON.stringify(drug));
                         html += `
-                            <div class="drug-item" onclick="selectDrug('${drugString}')">
+                            <div class="drug-item">
                                 <div class="drug-info">
                                     <div class="name">${drug.brand || drug.generic_name} (${drug.name})</div>
                                     <div class="details">Stock: ${drug.stock_quantity} | Pack: ${drug.pack_size}</div>
                                 </div>
+                                <button class="btn-select" onclick="selectDrug('${drugString}')">Select</button>
                             </div>
                         `;
                     });
@@ -210,6 +213,12 @@
                 console.error("Search error:", err);
                 resultsDiv.innerHTML = '<p style="text-align:center; color:#e74c3c;">Error searching.</p>';
             });
+    }
+
+    function selectDrug(encodedDrug) {
+        const drug = JSON.parse(decodeURIComponent(encodedDrug));
+        selectedDrug = drug;
+        
         document.getElementById('dispName').textContent = `${drug.brand || drug.generic_name} (${drug.name})`;
         document.getElementById('dispStock').textContent = drug.stock_quantity;
         document.getElementById('dispPackSize').textContent = drug.pack_size;
@@ -379,6 +388,4 @@
         });
     }
 </script>
-{% endblock %}    }
-
-    function selectDrug(encodedDrug) {
+{% endblock %}
