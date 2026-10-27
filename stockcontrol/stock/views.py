@@ -55,7 +55,7 @@ def is_admin_or_manager(user):
 
 
 # ============================================================
-# AUTO SYNC CREDIT RECEIPTS - IMPROVED VERSION
+# AUTO SYNC CREDIT RECEIPTS - FIXED SYNTAX
 # ============================================================
 
 def auto_sync_credit_receipts():
@@ -96,7 +96,6 @@ def auto_sync_credit_receipts():
                 linked += 1
                 print(f"⏭️ Linked existing CreditSale to receipt {receipt.receipt_number}")
                 continue
-
             remaining = receipt.total_amount - receipt.amount_paid
 
             if remaining <= 0:
@@ -150,6 +149,7 @@ def auto_sync_credit_receipts():
 
             print(f"✅ Auto-synced: {receipt.receipt_number} → {credit_sale.credit_receipt_number}")
 
+        except Exception as e:
             errors += 1
             print(f"❌ Error syncing {receipt.receipt_number}: {str(e)}")
             import traceback
