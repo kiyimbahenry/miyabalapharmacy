@@ -1,61 +1,76 @@
 {% extends 'stock/base.html' %}
 {% block content %}
 <style>
-    .wholesale-container { max-width: 1400px; margin: auto; padding: 20px; display: grid; grid-template-columns: 1fr 1.2fr; gap: 20px; }
-    .card { background: white; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); padding: 25px; }
-    .search-results { max-height: 300px; overflow-y: auto; margin-top: 15px; }
-    .drug-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #eee; cursor: pointer; border-radius: 5px; transition: 0.2s; }
+    /* OVERRIDE BOOTSTRAP'S DEFAULT CARD STYLES TO PREVENT CONFLICTS */
+    .ws-container { display: grid; grid-template-columns: 300px 350px 1fr; gap: 20px; padding: 20px; max-width: 1600px; margin: 0 auto; }
+    .ws-box { background: white; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); padding: 20px; border: 1px solid #e2e8f0; }
+    
+    /* Left Column */
+    .search-results { max-height: 500px; overflow-y: auto; margin-top: 15px; }
+    .drug-item { padding: 12px; border-bottom: 1px solid #eee; cursor: pointer; border-radius: 5px; transition: 0.2s; }
     .drug-item:hover { background: #f8f9fa; border-left: 4px solid #3498db; }
-    .drug-info .name { font-weight: 600; color: #333; }
+    .drug-info .name { font-weight: 600; color: #333; font-size: 14px; }
     .drug-info .details { font-size: 12px; color: #666; }
     
+    /* Middle Column */
+    .selected-drug-card { display: none; }
+    .selected-drug-card.active { display: block; }
     .form-group { margin-bottom: 15px; }
-    .form-group label { display: block; font-weight: 600; margin-bottom: 5px; font-size: 14px; color: #333; }
+    .form-group label { display: block; font-weight: 600; margin-bottom: 5px; font-size: 13px; color: #333; }
     .form-group input, .form-group select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px; }
-    .form-group input:focus, .form-group select:focus { border-color: #3498db; outline: none; }
-    
-    .btn-primary { width: 100%; padding: 12px; background: #3498db; color: white; border: none; border-radius: 5px; font-size: 15px; font-weight: 600; cursor: pointer; transition: 0.2s; }
-    .btn-primary:hover { background: #2980b9; }
-    
-    .btn-add { padding: 10px 15px; background: #27ae60; color: white; border: none; border-radius: 5px; font-size: 14px; font-weight: 600; cursor: pointer; width: 100%; margin-top: 10px; }
+    .btn-add { width: 100%; padding: 12px; background: #27ae60; color: white; border: none; border-radius: 5px; font-size: 15px; font-weight: 600; cursor: pointer; transition: 0.2s; margin-top: 10px; }
     .btn-add:hover { background: #219a52; }
 
-    .payment-methods { display: flex; gap: 10px; margin-bottom: 20px; }
-    .payment-methods button { flex: 1; padding: 10px; border: 2px solid #ddd; background: white; border-radius: 5px; cursor: pointer; font-weight: 600; transition: 0.2s; font-size: 13px;}
-    .payment-methods button.active { border-color: #3498db; background: #ebf8ff; color: #3498db; }
-    
-    .selected-drug-card { background: #ebf8ff; border: 1px solid #bce3ff; padding: 15px; border-radius: 8px; margin-bottom: 15px; display: none; }
-    .selected-drug-card.active { display: block; }
-    
-    .toast { position: fixed; top: 20px; right: 20px; padding: 15px 25px; border-radius: 5px; color: white; z-index: 1000; display: none; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
-    .toast.success { background: #27ae60; display: block; }
-    .toast.error { background: #e74c3c; display: block; }
-
-    /* Cart Styles */
-    .cart-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+    /* Right Column (Cart) */
+    .cart-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
     .cart-table th { text-align: left; padding: 10px; border-bottom: 2px solid #eee; font-size: 13px; color: #555;}
     .cart-table td { padding: 10px; border-bottom: 1px solid #eee; font-size: 14px; }
     .btn-remove { background: #e74c3c; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; }
     .total-display { font-size: 22px; font-weight: bold; color: #2980b9; text-align: right; margin: 15px 0; border-top: 2px solid #eee; padding-top: 15px;}
+    
+    /* Checkout */
+    .payment-methods { display: flex; gap: 10px; margin-bottom: 15px; }
+    .payment-methods button { flex: 1; padding: 10px; border: 2px solid #ddd; background: white; border-radius: 5px; cursor: pointer; font-weight: 600; transition: 0.2s; font-size: 13px;}
+    .payment-methods button.active { border-color: #3498db; background: #ebf8ff; color: #3498db; }
+    .btn-primary { width: 100%; padding: 15px; background: #3498db; color: white; border: none; border-radius: 5px; font-size: 16px; font-weight: 600; cursor: pointer; transition: 0.2s; }
+    .btn-primary:disabled { background: #bdc3c7; cursor: not-allowed; }
+
+    .toast { position: fixed; top: 20px; right: 20px; padding: 15px 25px; border-radius: 5px; color: white; z-index: 1000; display: none; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+    .toast.success { background: #27ae60; display: block; }
+    .toast.error { background: #e74c3c; display: block; }
+
+    /* Mobile Responsive */
+    @media (max-width: 1200px) {
+        .ws-container { grid-template-columns: 1fr; }
+    }
 </style>
 
-<div class="wholesale-container">
+<div class="ws-container">
     <div id="toast" class="toast"></div>
 
-    <!-- Left Side: Search & Add -->
-    <div class="card">
-        <h2>🔍 Search Medicine</h2>
+    <!-- LEFT: Search -->
+    <div class="ws-box">
+        <h3>🔍 Search Medicine</h3>
         <div class="form-group">
-            <input type="text" id="searchInput" placeholder="Search by brand or generic name..." onkeyup="searchDrugs()" autocomplete="off">
+            <input type="text" id="searchInput" placeholder="Search brand or generic..." onkeyup="searchDrugs()" autocomplete="off">
         </div>
         <div class="search-results" id="searchResults">
-            <p style="text-align:center; color:#999; padding: 20px;">Type at least 2 letters to search...</p>
+            <p style="text-align:center; color:#999; padding: 20px;">Type to search...</p>
+        </div>
+    </div>
+
+    <!-- MIDDLE: Add Item Form -->
+    <div class="ws-box">
+        <h3>📝 Add to Cart</h3>
+        
+        <div id="emptyState" style="text-align:center; color:#999; padding: 40px 10px;">
+            <i class="fas fa-hand-pointer" style="font-size:30px; margin-bottom:10px;"></i><br>
+            Select a drug from the left to begin.
         </div>
 
-        <!-- Selected Drug Details to Add -->
-        <div id="selectedDrugCard" class="selected-drug-card" style="margin-top: 20px;">
-            <h3 id="dispName" style="color: #2980b9; margin-bottom: 5px;"></h3>
-            <p style="font-size: 13px; color: #475569; margin-bottom: 10px;">Stock Available: <strong id="dispStock"></strong> units | Pack Size: <strong id="dispPackSize"></strong></p>
+        <div id="selectedDrugCard" class="selected-drug-card">
+            <h4 id="dispName" style="color: #2980b9; margin-bottom: 5px; font-size: 16px;"></h4>
+            <p style="font-size: 12px; color: #475569; margin-bottom: 15px;">Stock: <strong id="dispStock"></strong> | Pack: <strong id="dispPackSize"></strong></p>
             
             <div class="form-group">
                 <label>Sale Type</label>
@@ -67,11 +82,11 @@
 
             <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                 <div class="form-group">
-                    <label id="qtyLabel">Qty (Tablets)</label>
+                    <label id="qtyLabel">Qty (Tabs)</label>
                     <input type="number" id="quantity" min="1" value="1" oninput="calculateItemTotal()">
                 </div>
                 <div class="form-group">
-                    <label id="priceLabel">Price per Tablet (UGX)</label>
+                    <label id="priceLabel">Price (UGX)</label>
                     <input type="number" id="unitPrice" min="0" value="0" oninput="calculateItemTotal()">
                 </div>
             </div>
@@ -85,40 +100,38 @@
         </div>
     </div>
 
-    <!-- Right Side: Cart & Checkout -->
-    <div class="card">
-        <h2>🛒 Wholesale Cart</h2>
+    <!-- RIGHT: Cart & Checkout -->
+    <div class="ws-box">
+        <h3>🛒 Wholesale Cart</h3>
         
         <table class="cart-table">
             <thead>
                 <tr>
-                    <th>Drug & Pricing</th>
+                    <th>Drug</th>
                     <th>Qty</th>
                     <th>Total</th>
-                    <th>Action</th>
+                    <th>X</th>
                 </tr>
             </thead>
             <tbody id="cartBody">
-                <tr><td colspan="4" style="text-align:center; color:#999;">Cart is empty</td></tr>
+                <tr><td colspan="4" style="text-align:center; color:#999; padding:20px;">Cart is empty</td></tr>
             </tbody>
         </table>
 
         <div class="total-display" id="grandTotalDisplay">Total: UGX 0</div>
 
-        <hr style="margin: 20px 0; border: none; border-top: 1px solid #eee;">
-
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px;">
             <div class="form-group">
-                <label>Customer Name (Optional)</label>
-                <input type="text" id="customerName" placeholder="Walk-in Customer">
+                <label>Customer Name</label>
+                <input type="text" id="customerName" placeholder="Optional">
             </div>
             <div class="form-group">
-                <label>Phone Number (Optional)</label>
-                <input type="text" id="customerPhone" placeholder="Phone">
+                <label>Phone</label>
+                <input type="text" id="customerPhone" placeholder="Optional">
             </div>
         </div>
 
-        <label style="font-weight: 600; font-size: 14px; margin-bottom: 10px; display: block;">Payment Method</label>
+        <label style="font-weight: 600; font-size: 13px; margin-bottom: 5px; display: block;">Payment Method</label>
         <div class="payment-methods">
             <button type="button" class="active" onclick="selectPayment('cash')" id="btn-cash">💵 Cash</button>
             <button type="button" onclick="selectPayment('mobile')" id="btn-mobile">📱 Mobile</button>
@@ -163,13 +176,12 @@
         setTimeout(() => t.style.display = 'none', 4000);
     }
 
-    // Live search drugs via API
     function searchDrugs() {
         const query = document.getElementById('searchInput').value;
         const resultsDiv = document.getElementById('searchResults');
 
         if (query.length < 2) {
-            resultsDiv.innerHTML = '<p style="text-align:center; color:#999; padding: 20px;">Type at least 2 letters to search...</p>';
+            resultsDiv.innerHTML = '<p style="text-align:center; color:#999; padding: 20px;">Type to search...</p>';
             return;
         }
 
@@ -178,7 +190,7 @@
             .then(data => {
                 let html = '';
                 if (data.length === 0) {
-                    html = '<p style="text-align:center; color:#e74c3c; padding: 20px;">No drugs found matching that name.</p>';
+                    html = '<p style="text-align:center; color:#e74c3c; padding: 20px;">No drugs found.</p>';
                 } else {
                     data.forEach(drug => {
                         const drugString = encodeURIComponent(JSON.stringify(drug));
@@ -186,9 +198,8 @@
                             <div class="drug-item" onclick="selectDrug('${drugString}')">
                                 <div class="drug-info">
                                     <div class="name">${drug.brand || drug.generic_name} (${drug.name})</div>
-                                    <div class="details">Stock: ${drug.stock_quantity} units | Pack Size: ${drug.pack_size}</div>
+                                    <div class="details">Stock: ${drug.stock_quantity} | Pack: ${drug.pack_size}</div>
                                 </div>
-                                <button class="btn btn-sm btn-outline-primary" style="pointer-events:none;">Select</button>
                             </div>
                         `;
                     });
@@ -197,21 +208,15 @@
             })
             .catch(err => {
                 console.error("Search error:", err);
-                resultsDiv.innerHTML = '<p style="text-align:center; color:#e74c3c;">Error searching drugs.</p>';
+                resultsDiv.innerHTML = '<p style="text-align:center; color:#e74c3c;">Error searching.</p>';
             });
-    }
-
-    // When a drug is clicked from search
-    function selectDrug(encodedDrug) {
-        const drug = JSON.parse(decodeURIComponent(encodedDrug));
-        selectedDrug = drug;
-        
         document.getElementById('dispName').textContent = `${drug.brand || drug.generic_name} (${drug.name})`;
         document.getElementById('dispStock').textContent = drug.stock_quantity;
         document.getElementById('dispPackSize').textContent = drug.pack_size;
         
+        document.getElementById('emptyState').style.display = 'none';
         document.getElementById('selectedDrugCard').classList.add('active');
-        document.getElementById('searchResults').innerHTML = '<p style="text-align:center; color:#27ae60; padding: 20px;">✅ Drug selected. Add details and click Add to Cart.</p>';
+        document.getElementById('searchResults').innerHTML = '<p style="text-align:center; color:#27ae60; padding: 20px;">✅ Drug selected.</p>';
         document.getElementById('searchInput').value = '';
         
         updateLabels();
@@ -220,11 +225,11 @@
     function updateLabels() {
         const type = document.getElementById('saleType').value;
         if (type === 'packet') {
-            document.getElementById('qtyLabel').textContent = 'Qty (Packets)';
-            document.getElementById('priceLabel').textContent = 'Price per Packet (UGX)';
+            document.getElementById('qtyLabel').textContent = 'Qty (Packs)';
+            document.getElementById('priceLabel').textContent = 'Price (UGX)';
         } else {
-            document.getElementById('qtyLabel').textContent = 'Qty (Tablets)';
-            document.getElementById('priceLabel').textContent = 'Price per Tablet (UGX)';
+            document.getElementById('qtyLabel').textContent = 'Qty (Tabs)';
+            document.getElementById('priceLabel').textContent = 'Price (UGX)';
         }
         calculateItemTotal();
     }
@@ -243,14 +248,13 @@
         const type = document.getElementById('saleType').value;
 
         if (qty <= 0 || price <= 0) {
-            showToast("Please enter a valid quantity and price.", "error");
+            showToast("Enter valid quantity and price.", "error");
             return;
         }
 
-        // Check stock limit based on packet or tablet
         const totalUnitsNeeded = type === 'packet' ? (qty * selectedDrug.pack_size) : qty;
         if (totalUnitsNeeded > selectedDrug.stock_quantity) {
-            showToast(`Insufficient stock! You need ${totalUnitsNeeded} units but only ${selectedDrug.stock_quantity} are available.`, "error");
+            showToast(`Insufficient stock! Need ${totalUnitsNeeded} units, only ${selectedDrug.stock_quantity} available.`, "error");
             return;
         }
 
@@ -265,6 +269,7 @@
 
         selectedDrug = null;
         document.getElementById('selectedDrugCard').classList.remove('active');
+        document.getElementById('emptyState').style.display = 'block';
         renderCart();
         showToast("Item added to cart", "success");
     }
@@ -279,7 +284,7 @@
         const submitBtn = document.getElementById('submitBtn');
         
         if (cart.length === 0) {
-            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#999;">Cart is empty</td></tr>';
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#999; padding:20px;">Cart is empty</td></tr>';
             document.getElementById('grandTotalDisplay').textContent = 'Total: UGX 0';
             submitBtn.disabled = true;
             return;
@@ -290,12 +295,12 @@
 
         cart.forEach((item, index) => {
             grandTotal += item.total;
-            const unitLabel = item.sale_type === 'packet' ? 'Packets' : 'Tablets';
+            const unitLabel = item.sale_type === 'packet' ? 'Packs' : 'Tabs';
             html += `
                 <tr>
                     <td>
                         <strong>${item.name}</strong><br>
-                        <small style="color:#666;">${item.quantity} ${unitLabel} @ ${item.unit_price.toLocaleString()} UGX</small>
+                        <small style="color:#666;">${item.quantity} ${unitLabel} @ ${item.unit_price.toLocaleString()}</small>
                     </td>
                     <td>${item.quantity}</td>
                     <td>UGX ${item.total.toLocaleString()}</td>
@@ -307,7 +312,6 @@
         tbody.innerHTML = html;
         document.getElementById('grandTotalDisplay').textContent = `Total: UGX ${grandTotal.toLocaleString()}`;
         
-        // Auto-fill amount paid if cash
         if (currentPaymentMethod === 'cash') {
             document.getElementById('amountPaid').value = grandTotal;
         }
@@ -375,4 +379,6 @@
         });
     }
 </script>
-{% endblock %}
+{% endblock %}    }
+
+    function selectDrug(encodedDrug) {
