@@ -7,7 +7,7 @@
     <title>{% block title %}MIYABALA Pharmacy{% endblock %}</title>
 
     <!-- ======================================== -->
-    <!-- PWA / APP ICON META TAGS (NEW)           -->
+    <!-- PWA / APP ICON META TAGS                 -->
     <!-- ======================================== -->
     {% load static %}
     <link rel="manifest" href="{% static 'manifest.json' %}">
@@ -15,7 +15,7 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="Miyabala Pharmacy">
-    
+
     <!-- App Icons / Favicon -->
     <link rel="icon" type="image/png" sizes="192x192" href="{% static 'icons/icon-192.png' %}">
     <link rel="icon" type="image/png" sizes="512x512" href="{% static 'icons/icon-512.png' %}">
@@ -259,10 +259,26 @@
                             </a>
                         </li>
 
-                        <!-- New Sale (always visible) -->
+                        <!-- Credits (New) -->
+                        <li class="nav-item">
+                            <a class="nav-link {% if 'credit' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'stock:credit_list' %}">
+                                <i class="fas fa-hand-holding-usd text-warning"></i> Credits
+                            </a>
+                        </li>
+
+                        <!-- ======================================== -->
+                        <!-- RETAIL & WHOLESALE SALES                 -->
+                        <!-- ======================================== -->
                         <li class="nav-item">
                             <a class="nav-link {% if 'create_sale' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'stock:create_sale' %}">
                                 <i class="fas fa-cash-register"></i> New Sale
+                            </a>
+                        </li>
+                        
+                        <!-- ADDED: WHOLE SALE LINK -->
+                        <li class="nav-item">
+                            <a class="nav-link {% if 'wholesale' in request.resolver_match.url_name %}active{% endif %}" href="{% url 'stock:wholesale_sale' %}">
+                                <i class="fas fa-warehouse"></i> Whole Sale
                             </a>
                         </li>
 
@@ -365,7 +381,7 @@
     </script>
 
     <!-- ======================================== -->
-    <!-- Service Worker Registration (NEW)        -->
+    <!-- Service Worker Registration              -->
     <!-- ======================================== -->
     {% load static %}
     <script>

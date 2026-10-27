@@ -818,9 +818,12 @@
             <div class="nav-item active" data-section="retail">
                 <i class="fas fa-store"></i> Retail Sale
             </div>
-            <div class="nav-item" data-section="wholesale">
+            
+            <!-- UPDATED: Whole Sale is now a direct link -->
+            <a href="{% url 'stock:wholesale_sale' %}" class="nav-item" style="text-decoration:none; color:inherit;">
                 <i class="fas fa-warehouse"></i> Whole Sale
-            </div>
+            </a>
+
             <div class="nav-item" data-section="receipts">
                 <i class="fas fa-receipt"></i> Receipts
             </div>
@@ -1063,11 +1066,6 @@ function renderTable() {
     drugData.forEach(drug => {
         const expiryDate = new Date(drug.expiry);
         const today = new Date();
-        const daysUntilExpiry = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
-        const expiryClass = daysUntilExpiry <= 30 ? 'expiry-soon' : 'expiry-normal';
-
-        const row = document.createElement('tr');
-        row.innerHTML = `
             <td><strong>${drug.generic || 'N/A'}</strong></td>
             <td>${drug.brand || 'N/A'}</td>
             <td><span class="${expiryClass}">${drug.expiry}</span></td>
@@ -1412,12 +1410,8 @@ document.addEventListener('DOMContentLoaded', function() {
                 receiptsPanel.style.display = 'none';
                 salePanel.style.display = 'block';
                 fetchDrugs(1);
-            } else if (section === 'wholesale') {
-                drugPanel.style.display = 'block';
-                receiptsPanel.style.display = 'none';
-                salePanel.style.display = 'block';
-                showToast('📋 Wholesale section coming soon!', 'info');
             }
+            // The wholesale section is now handled by the <a> tag linking to the new page
         });
     });
 });
@@ -1540,4 +1534,6 @@ if ('serviceWorker' in navigator) {
 }
 </script>
 </body>
-</html>
+</html>        const daysUntilExpiry = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
+        const expiryClass = daysUntilExpiry <= 30 ? 'expiry-soon' : 'expiry-normal';
+
