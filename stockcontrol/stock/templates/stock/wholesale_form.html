@@ -1,0 +1,265 @@
+{% extends 'stock/base.html' %}
+{% block content %}
+<style>
+    .wholesale-container { max-width: 1200px; margin: auto; padding: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .card { background: white; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); padding: 25px; }
+    .search-results { max-height: 400px; overflow-y: auto; margin-top: 15px; }
+    .drug-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #eee; cursor: pointer; }
+    .drug-item:hover { background: #f8f9fa; }
+    .drug-info .name { font-weight: 600; color: #333; }
+    .drug-info .details { font-size: 12px; color: #666; }
+    .form-group { margin-bottom: 15px; }
+    .form-group label { display: block; font-weight: 600; margin-bottom: 5px; font-size: 14px; color: #333; }
+    .form-group input, .form-group select { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px; }
+    .btn-primary { width: 100%; padding: 15px; background: #2563eb; color: white; border: none; border-radius: 5px; font-size: 16px; font-weight: 600; cursor: pointer; }
+    .btn-primary:hover { background: #1d4ed8; }
+    .payment-methods { display: flex; gap: 10px; margin-bottom: 20px; }
+    .payment-methods button { flex: 1; padding: 10px; border: 2px solid #ddd; background: white; border-radius: 5px; cursor: pointer; font-weight: 600; }
+    .payment-methods button.active { border-color: #2563eb; background: #eff6ff; color: #2563eb; }
+    .selected-drug-card { background: #eff6ff; border: 1px solid #bfdbfe; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: none; }
+    .selected-drug-card.active { display: block; }
+    .toast { position: fixed; top: 20px; right: 20px; padding: 15px 25px; border-radius: 5px; color: white; z-index: 1000; display: none; }
+    .toast.success { background: #16a34a; display: block; }
+    .toast.error { background: #dc2626; display: block; }
+</style>
+
+<div class="wholesale-container">
+    <div id="toast" class="toast"></div>
+
+    <!-- Left Side: Search Drugs -->
+    <div class="card">
+        <h2>🔍 Search Medicine for Wholesale</h2>
+        <div class="form-group">
+            <input type="text" id="searchInput" placeholder="Search by brand or generic name..." onkeyup="searchDrugs()" autocomplete="off">
+        </div>
+        <div class="search-results" id="searchResults">
+            <!-- Results will appear here -->
+        </div>
+    </div>
+
+    <!-- Right Side: Sale Details -->
+    <div class="card">
+        <h2>🛒 Wholesale Sale Details</h2>
+        
+        <div id="selectedDrugCard" class="selected-drug-card">
+            <h3 id="dispName" style="color: #1e3a8a; margin-bottom: 5px;"></h3>
+            <p style="font-size: 14px; color: #475569; margin-bottom: 10px;">Stock Available: <strong id="dispStock"></strong> units | Pack Size: <strong id="dispPackSize"></strong></p>
+        </div>
+
+        <form id="saleForm" onsubmit="submitSale(event)">
+            <input type="hidden" id="selectedDrugId" required>
+
+            <div class="form-group">
+                <label>Sale Type</label>
+                <select id="saleType" onchange="updateLabels()" required>
+                    <option value="tablet">Sell per Tablet (Unit)</option>
+                    <option value="packet">Sell per Packet</option>
+                </select>
+            </div>
+
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                <div class="form-group">
+                    <label id="qtyLabel">Quantity (Tablets)</label>
+                    <input type="number" id="quantity" min="1" value="1" required oninput="calculateTotal()">
+                </div>
+                <div class="form-group">
+                    <label id="priceLabel">Custom Price per Tablet (UGX)</label>
+                    <input type="number" id="unitPrice" min="0" value="0" required oninput="calculateTotal()">
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Total Amount (UGX)</label>
+                <input type="text" id="totalAmount" readonly style="background: #f1f5f9; font-weight: bold; font-size: 18px; color: #1e3a8a;">
+            </div>
+
+            <hr style="margin: 20px 0; border: none; border-top: 1px solid #eee;">
+
+            <div class="form-group">
+                <label>Customer Name (Optional)</label>
+                <input type="text" id="customerName" placeholder="Walk-in Customer">
+            </div>
+            <div class="form-group">
+                <label>Phone Number (Optional)</label>
+                <input type="text" id="customerPhone" placeholder="Phone">
+            </div>
+
+            <label style="font-weight: 600; font-size: 14px; margin-bottom: 10px; display: block;">Payment Method</label>
+            <div class="payment-methods">
+                <button type="button" class="active" onclick="selectPayment('cash')" id="btn-cash">💵 Cash</button>
+                <button type="button" onclick="selectPayment('mobile')" id="btn-mobile">📱 Mobile</button>
+                <button type="button" onclick="selectPayment('credit')" id="btn-credit">📝 Credit</button>
+            </div>
+
+            <div class="form-group">
+                <label>Amount Paid (UGX)</label>
+                <input type="number" id="amountPaid" min="0" value="0" required>
+            </div>
+
+            <button type="submit" class="btn-primary" id="submitBtn" disabled>Complete Wholesale Sale</button>
+        </form>
+    </div>
+</div>
+
+<script>
+    let selectedDrug = null;
+    let currentPaymentMethod = 'cash';
+
+    function getCookie(name) {
+        let cookieValue = null;
+        if (document.cookie && document.cookie !== '') {
+            const cookies = document.cookie.split(';');
+            for (let i = 0; i < cookies.length; i++) {
+                const cookie = cookies[i].trim();
+                if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                    cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                    break;
+                }
+            }
+        }
+        return cookieValue;
+    }
+    const csrftoken = getCookie('csrftoken');
+
+    function showToast(msg, type='success') {
+        const t = document.getElementById('toast');
+        t.textContent = msg;
+        t.className = 'toast ' + type;
+        setTimeout(() => t.style.display = 'none', 4000);
+    }
+
+    // Live search drugs via API
+    function searchDrugs() {
+        const query = document.getElementById('searchInput').value;
+        if (query.length < 2) {
+            document.getElementById('searchResults').innerHTML = '';
+            return;
+        }
+
+        fetch(`/api/drugs/autocomplete/?q=${query}`)
+            .then(res => res.json())
+            .then(data => {
+                let html = '';
+                if (data.length === 0) {
+                    html = '<p style="text-align:center; color:#666;">No drugs found.</p>';
+                } else {
+                    data.forEach(drug => {
+                        html += `
+                            <div class="drug-item" onclick="selectDrug(${JSON.stringify(drug).replace(/"/g, '&quot;')})">
+                                <div class="drug-info">
+                                    <div class="name">${drug.brand || drug.generic_name} (${drug.name})</div>
+                                    <div class="details">Stock: ${drug.stock_quantity} units | Pack Size: ${drug.pack_size}</div>
+                                </div>
+                            </div>
+                        `;
+                    });
+                }
+                document.getElementById('searchResults').innerHTML = html;
+            });
+    }
+
+    // When a drug is clicked from search
+    function selectDrug(drug) {
+        selectedDrug = drug;
+        document.getElementById('selectedDrugId').value = drug.id;
+        document.getElementById('dispName').textContent = `${drug.brand || drug.generic_name} (${drug.name})`;
+        document.getElementById('dispStock').textContent = drug.stock_quantity;
+        document.getElementById('dispPackSize').textContent = drug.pack_size;
+        
+        document.getElementById('selectedDrugCard').classList.add('active');
+        document.getElementById('searchResults').innerHTML = '';
+        document.getElementById('searchInput').value = '';
+        
+        updateLabels();
+    }
+
+    // Adjust labels based on Pack or Tablet
+    function updateLabels() {
+        const type = document.getElementById('saleType').value;
+        if (type === 'packet') {
+            document.getElementById('qtyLabel').textContent = 'Number of Packets';
+            document.getElementById('priceLabel').textContent = 'Custom Price per Packet (UGX)';
+        } else {
+            document.getElementById('qtyLabel').textContent = 'Quantity (Tablets)';
+            document.getElementById('priceLabel').textContent = 'Custom Price per Tablet (UGX)';
+        }
+        calculateTotal();
+    }
+
+    // Calculate total price dynamically
+    function calculateTotal() {
+        const qty = parseFloat(document.getElementById('quantity').value) || 0;
+        const price = parseFloat(document.getElementById('unitPrice').value) || 0;
+        const total = qty * price;
+        
+        document.getElementById('totalAmount').value = total.toLocaleString();
+        
+        // Auto-fill amount paid if cash to match total
+        if (currentPaymentMethod === 'cash') {
+            document.getElementById('amountPaid').value = total;
+        }
+    }
+
+    function selectPayment(method) {
+        currentPaymentMethod = method;
+        document.querySelectorAll('.payment-methods button').forEach(b => b.classList.remove('active'));
+        document.getElementById(`btn-${method}`).classList.add('active');
+        
+        if (method === 'credit') {
+            document.getElementById('amountPaid').value = 0;
+        } else {
+            const total = document.getElementById('totalAmount').value.replace(/,/g, '');
+            document.getElementById('amountPaid').value = total;
+        }
+    }
+
+    function submitSale(e) {
+        e.preventDefault();
+        const btn = document.getElementById('submitBtn');
+        btn.disabled = true;
+        btn.textContent = 'Processing...';
+
+        const data = {
+            drug_id: document.getElementById('selectedDrugId').value,
+            sale_type: document.getElementById('saleType').value,
+            quantity: document.getElementById('quantity').value,
+            unit_price: document.getElementById('unitPrice').value,
+            customer_name: document.getElementById('customerName').value || 'Walk-in Customer',
+            customer_phone: document.getElementById('customerPhone').value,
+            amount_paid: document.getElementById('amountPaid').value,
+            payment_method: currentPaymentMethod
+        };
+
+        fetch('/api/complete-wholesale-sale/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': csrftoken
+            },
+            body: JSON.stringify(data)
+        })
+        .then(res => res.json())
+        .then(res => {
+            if (res.success) {
+                showToast(`✅ Wholesale sale completed! Receipt #${res.receipt_number}`);
+                setTimeout(() => {
+                    if(confirm('Print receipt?')) {
+                        window.open(res.receipt_url + 'print/', '_blank');
+                    }
+                    window.location.reload();
+                }, 1000);
+            } else {
+                showToast(res.message, 'error');
+                btn.disabled = false;
+                btn.textContent = 'Complete Wholesale Sale';
+            }
+        })
+        .catch(err => {
+            console.error(err);
+            showToast('Error processing sale', 'error');
+            btn.disabled = false;
+            btn.textContent = 'Complete Wholesale Sale';
+        });
+    }
+</script>
+{% endblock %}
