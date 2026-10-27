@@ -1,82 +1,113 @@
 {% extends 'stock/base.html' %}
 {% block content %}
 <style>
-    .wholesale-container { max-width: 1200px; margin: auto; padding: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .wholesale-container { max-width: 1400px; margin: auto; padding: 20px; display: grid; grid-template-columns: 1fr 1.2fr; gap: 20px; }
     .card { background: white; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); padding: 25px; }
-    .search-results { max-height: 400px; overflow-y: auto; margin-top: 15px; }
+    .search-results { max-height: 300px; overflow-y: auto; margin-top: 15px; }
     .drug-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #eee; cursor: pointer; border-radius: 5px; transition: 0.2s; }
     .drug-item:hover { background: #f8f9fa; border-left: 4px solid #3498db; }
     .drug-info .name { font-weight: 600; color: #333; }
     .drug-info .details { font-size: 12px; color: #666; }
+    
     .form-group { margin-bottom: 15px; }
     .form-group label { display: block; font-weight: 600; margin-bottom: 5px; font-size: 14px; color: #333; }
-    .form-group input, .form-group select { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px; }
+    .form-group input, .form-group select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px; }
     .form-group input:focus, .form-group select:focus { border-color: #3498db; outline: none; }
-    .btn-primary { width: 100%; padding: 15px; background: #3498db; color: white; border: none; border-radius: 5px; font-size: 16px; font-weight: 600; cursor: pointer; transition: 0.2s; }
+    
+    .btn-primary { width: 100%; padding: 12px; background: #3498db; color: white; border: none; border-radius: 5px; font-size: 15px; font-weight: 600; cursor: pointer; transition: 0.2s; }
     .btn-primary:hover { background: #2980b9; }
-    .btn-primary:disabled { background: #bdc3c7; cursor: not-allowed; }
+    
+    .btn-add { padding: 10px 15px; background: #27ae60; color: white; border: none; border-radius: 5px; font-size: 14px; font-weight: 600; cursor: pointer; width: 100%; margin-top: 10px; }
+    .btn-add:hover { background: #219a52; }
+
     .payment-methods { display: flex; gap: 10px; margin-bottom: 20px; }
-    .payment-methods button { flex: 1; padding: 10px; border: 2px solid #ddd; background: white; border-radius: 5px; cursor: pointer; font-weight: 600; transition: 0.2s; }
+    .payment-methods button { flex: 1; padding: 10px; border: 2px solid #ddd; background: white; border-radius: 5px; cursor: pointer; font-weight: 600; transition: 0.2s; font-size: 13px;}
     .payment-methods button.active { border-color: #3498db; background: #ebf8ff; color: #3498db; }
-    .selected-drug-card { background: #ebf8ff; border: 1px solid #bce3ff; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: none; }
+    
+    .selected-drug-card { background: #ebf8ff; border: 1px solid #bce3ff; padding: 15px; border-radius: 8px; margin-bottom: 15px; display: none; }
     .selected-drug-card.active { display: block; }
+    
     .toast { position: fixed; top: 20px; right: 20px; padding: 15px 25px; border-radius: 5px; color: white; z-index: 1000; display: none; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
     .toast.success { background: #27ae60; display: block; }
     .toast.error { background: #e74c3c; display: block; }
+
+    /* Cart Styles */
+    .cart-table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
+    .cart-table th { text-align: left; padding: 10px; border-bottom: 2px solid #eee; font-size: 13px; color: #555;}
+    .cart-table td { padding: 10px; border-bottom: 1px solid #eee; font-size: 14px; }
+    .btn-remove { background: #e74c3c; color: white; border: none; padding: 4px 8px; border-radius: 4px; cursor: pointer; font-size: 12px; }
+    .total-display { font-size: 22px; font-weight: bold; color: #2980b9; text-align: right; margin: 15px 0; border-top: 2px solid #eee; padding-top: 15px;}
 </style>
 
 <div class="wholesale-container">
     <div id="toast" class="toast"></div>
 
-    <!-- Left Side: Search Drugs -->
+    <!-- Left Side: Search & Add -->
     <div class="card">
-        <h2>🔍 Search Medicine for Wholesale</h2>
+        <h2>🔍 Search Medicine</h2>
         <div class="form-group">
             <input type="text" id="searchInput" placeholder="Search by brand or generic name..." onkeyup="searchDrugs()" autocomplete="off">
         </div>
         <div class="search-results" id="searchResults">
             <p style="text-align:center; color:#999; padding: 20px;">Type at least 2 letters to search...</p>
         </div>
-    </div>
 
-    <!-- Right Side: Sale Details -->
-    <div class="card">
-        <h2>🛒 Wholesale Sale Details</h2>
-        
-        <div id="selectedDrugCard" class="selected-drug-card">
+        <!-- Selected Drug Details to Add -->
+        <div id="selectedDrugCard" class="selected-drug-card" style="margin-top: 20px;">
             <h3 id="dispName" style="color: #2980b9; margin-bottom: 5px;"></h3>
-            <p style="font-size: 14px; color: #475569; margin-bottom: 10px;">Stock Available: <strong id="dispStock"></strong> units | Pack Size: <strong id="dispPackSize"></strong></p>
-        </div>
-
-        <form id="saleForm" onsubmit="submitSale(event)">
-            <input type="hidden" id="selectedDrugId" required>
-
+            <p style="font-size: 13px; color: #475569; margin-bottom: 10px;">Stock Available: <strong id="dispStock"></strong> units | Pack Size: <strong id="dispPackSize"></strong></p>
+            
             <div class="form-group">
                 <label>Sale Type</label>
-                <select id="saleType" onchange="updateLabels()" required>
+                <select id="saleType" onchange="updateLabels()">
                     <option value="tablet">Sell per Tablet (Unit)</option>
                     <option value="packet">Sell per Packet</option>
                 </select>
             </div>
 
-            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
                 <div class="form-group">
-                    <label id="qtyLabel">Quantity (Tablets)</label>
-                    <input type="number" id="quantity" min="1" value="1" required oninput="calculateTotal()">
+                    <label id="qtyLabel">Qty (Tablets)</label>
+                    <input type="number" id="quantity" min="1" value="1" oninput="calculateItemTotal()">
                 </div>
                 <div class="form-group">
-                    <label id="priceLabel">Custom Price per Tablet (UGX)</label>
-                    <input type="number" id="unitPrice" min="0" value="0" required oninput="calculateTotal()">
+                    <label id="priceLabel">Price per Tablet (UGX)</label>
+                    <input type="number" id="unitPrice" min="0" value="0" oninput="calculateItemTotal()">
                 </div>
             </div>
-
+            
             <div class="form-group">
-                <label>Total Amount (UGX)</label>
-                <input type="text" id="totalAmount" readonly style="background: #f1f5f9; font-weight: bold; font-size: 18px; color: #1e3a8a;">
+                <label>Item Total (UGX)</label>
+                <input type="text" id="itemTotal" readonly style="background: #f1f5f9; font-weight: bold;">
             </div>
 
-            <hr style="margin: 20px 0; border: none; border-top: 1px solid #eee;">
+            <button type="button" class="btn-add" onclick="addToCart()">➕ Add to Cart</button>
+        </div>
+    </div>
 
+    <!-- Right Side: Cart & Checkout -->
+    <div class="card">
+        <h2>🛒 Wholesale Cart</h2>
+        
+        <table class="cart-table">
+            <thead>
+                <tr>
+                    <th>Drug & Pricing</th>
+                    <th>Qty</th>
+                    <th>Total</th>
+                    <th>Action</th>
+                </tr>
+            </thead>
+            <tbody id="cartBody">
+                <tr><td colspan="4" style="text-align:center; color:#999;">Cart is empty</td></tr>
+            </tbody>
+        </table>
+
+        <div class="total-display" id="grandTotalDisplay">Total: UGX 0</div>
+
+        <hr style="margin: 20px 0; border: none; border-top: 1px solid #eee;">
+
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
             <div class="form-group">
                 <label>Customer Name (Optional)</label>
                 <input type="text" id="customerName" placeholder="Walk-in Customer">
@@ -85,27 +116,28 @@
                 <label>Phone Number (Optional)</label>
                 <input type="text" id="customerPhone" placeholder="Phone">
             </div>
+        </div>
 
-            <label style="font-weight: 600; font-size: 14px; margin-bottom: 10px; display: block;">Payment Method</label>
-            <div class="payment-methods">
-                <button type="button" class="active" onclick="selectPayment('cash')" id="btn-cash">💵 Cash</button>
-                <button type="button" onclick="selectPayment('mobile')" id="btn-mobile">📱 Mobile</button>
-                <button type="button" onclick="selectPayment('credit')" id="btn-credit">📝 Credit</button>
-            </div>
+        <label style="font-weight: 600; font-size: 14px; margin-bottom: 10px; display: block;">Payment Method</label>
+        <div class="payment-methods">
+            <button type="button" class="active" onclick="selectPayment('cash')" id="btn-cash">💵 Cash</button>
+            <button type="button" onclick="selectPayment('mobile')" id="btn-mobile">📱 Mobile</button>
+            <button type="button" onclick="selectPayment('credit')" id="btn-credit">📝 Credit</button>
+        </div>
 
-            <div class="form-group">
-                <label>Amount Paid (UGX)</label>
-                <input type="number" id="amountPaid" min="0" value="0" required>
-            </div>
+        <div class="form-group">
+            <label>Amount Paid (UGX)</label>
+            <input type="number" id="amountPaid" min="0" value="0">
+        </div>
 
-            <button type="submit" class="btn-primary" id="submitBtn" disabled>Complete Wholesale Sale</button>
-        </form>
+        <button type="button" class="btn-primary" id="submitBtn" onclick="submitSale()" disabled>Complete Wholesale Sale</button>
     </div>
 </div>
 
 <script>
     let selectedDrug = null;
     let currentPaymentMethod = 'cash';
+    let cart = [];
 
     function getCookie(name) {
         let cookieValue = null;
@@ -141,7 +173,6 @@
             return;
         }
 
-        // Fetch from the correct API endpoint
         fetch(`/api/drugs/autocomplete/?q=${query}`)
             .then(res => res.json())
             .then(data => {
@@ -150,7 +181,6 @@
                     html = '<p style="text-align:center; color:#e74c3c; padding: 20px;">No drugs found matching that name.</p>';
                 } else {
                     data.forEach(drug => {
-                        // Safe way to pass object to onclick without breaking quotes
                         const drugString = encodeURIComponent(JSON.stringify(drug));
                         html += `
                             <div class="drug-item" onclick="selectDrug('${drugString}')">
@@ -176,44 +206,113 @@
         const drug = JSON.parse(decodeURIComponent(encodedDrug));
         selectedDrug = drug;
         
-        document.getElementById('selectedDrugId').value = drug.id;
         document.getElementById('dispName').textContent = `${drug.brand || drug.generic_name} (${drug.name})`;
         document.getElementById('dispStock').textContent = drug.stock_quantity;
         document.getElementById('dispPackSize').textContent = drug.pack_size;
         
         document.getElementById('selectedDrugCard').classList.add('active');
-        document.getElementById('searchResults').innerHTML = '<p style="text-align:center; color:#27ae60; padding: 20px;">✅ Drug selected. Fill in the sale details on the right.</p>';
+        document.getElementById('searchResults').innerHTML = '<p style="text-align:center; color:#27ae60; padding: 20px;">✅ Drug selected. Add details and click Add to Cart.</p>';
         document.getElementById('searchInput').value = '';
         
-        document.getElementById('submitBtn').disabled = false; // Enable button once drug is selected
         updateLabels();
     }
 
-    // Adjust labels based on Pack or Tablet
     function updateLabels() {
         const type = document.getElementById('saleType').value;
         if (type === 'packet') {
-            document.getElementById('qtyLabel').textContent = 'Number of Packets';
-            document.getElementById('priceLabel').textContent = 'Custom Price per Packet (UGX)';
+            document.getElementById('qtyLabel').textContent = 'Qty (Packets)';
+            document.getElementById('priceLabel').textContent = 'Price per Packet (UGX)';
         } else {
-            document.getElementById('qtyLabel').textContent = 'Quantity (Tablets)';
-            document.getElementById('priceLabel').textContent = 'Custom Price per Tablet (UGX)';
+            document.getElementById('qtyLabel').textContent = 'Qty (Tablets)';
+            document.getElementById('priceLabel').textContent = 'Price per Tablet (UGX)';
         }
-        calculateTotal();
+        calculateItemTotal();
     }
 
-    // Calculate total price dynamically
-    function calculateTotal() {
+    function calculateItemTotal() {
         const qty = parseFloat(document.getElementById('quantity').value) || 0;
         const price = parseFloat(document.getElementById('unitPrice').value) || 0;
-        const total = qty * price;
+        document.getElementById('itemTotal').value = (qty * price).toLocaleString();
+    }
+
+    function addToCart() {
+        if (!selectedDrug) return;
         
-        document.getElementById('totalAmount').value = total.toLocaleString();
-        
-        // Auto-fill amount paid if cash to match total
-        if (currentPaymentMethod === 'cash') {
-            document.getElementById('amountPaid').value = total;
+        const qty = parseFloat(document.getElementById('quantity').value) || 0;
+        const price = parseFloat(document.getElementById('unitPrice').value) || 0;
+        const type = document.getElementById('saleType').value;
+
+        if (qty <= 0 || price <= 0) {
+            showToast("Please enter a valid quantity and price.", "error");
+            return;
         }
+
+        // Check stock limit based on packet or tablet
+        const totalUnitsNeeded = type === 'packet' ? (qty * selectedDrug.pack_size) : qty;
+        if (totalUnitsNeeded > selectedDrug.stock_quantity) {
+            showToast(`Insufficient stock! You need ${totalUnitsNeeded} units but only ${selectedDrug.stock_quantity} are available.`, "error");
+            return;
+        }
+
+        cart.push({
+            drug_id: selectedDrug.id,
+            name: `${selectedDrug.brand || selectedDrug.generic_name}`,
+            sale_type: type,
+            quantity: qty,
+            unit_price: price,
+            total: qty * price
+        });
+
+        selectedDrug = null;
+        document.getElementById('selectedDrugCard').classList.remove('active');
+        renderCart();
+        showToast("Item added to cart", "success");
+    }
+
+    function removeFromCart(index) {
+        cart.splice(index, 1);
+        renderCart();
+    }
+
+    function renderCart() {
+        const tbody = document.getElementById('cartBody');
+        const submitBtn = document.getElementById('submitBtn');
+        
+        if (cart.length === 0) {
+            tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#999;">Cart is empty</td></tr>';
+            document.getElementById('grandTotalDisplay').textContent = 'Total: UGX 0';
+            submitBtn.disabled = true;
+            return;
+        }
+
+        let html = '';
+        let grandTotal = 0;
+
+        cart.forEach((item, index) => {
+            grandTotal += item.total;
+            const unitLabel = item.sale_type === 'packet' ? 'Packets' : 'Tablets';
+            html += `
+                <tr>
+                    <td>
+                        <strong>${item.name}</strong><br>
+                        <small style="color:#666;">${item.quantity} ${unitLabel} @ ${item.unit_price.toLocaleString()} UGX</small>
+                    </td>
+                    <td>${item.quantity}</td>
+                    <td>UGX ${item.total.toLocaleString()}</td>
+                    <td><button class="btn-remove" onclick="removeFromCart(${index})">X</button></td>
+                </tr>
+            `;
+        });
+
+        tbody.innerHTML = html;
+        document.getElementById('grandTotalDisplay').textContent = `Total: UGX ${grandTotal.toLocaleString()}`;
+        
+        // Auto-fill amount paid if cash
+        if (currentPaymentMethod === 'cash') {
+            document.getElementById('amountPaid').value = grandTotal;
+        }
+        
+        submitBtn.disabled = false;
     }
 
     function selectPayment(method) {
@@ -224,27 +323,20 @@
         if (method === 'credit') {
             document.getElementById('amountPaid').value = 0;
         } else {
-            const total = document.getElementById('totalAmount').value.replace(/,/g, '');
-            document.getElementById('amountPaid').value = total;
+            let grandTotal = cart.reduce((sum, item) => sum + item.total, 0);
+            document.getElementById('amountPaid').value = grandTotal;
         }
     }
 
-    function submitSale(e) {
-        e.preventDefault();
-        if (!selectedDrug) {
-            showToast("Please select a drug first", "error");
-            return;
-        }
+    function submitSale() {
+        if (cart.length === 0) return;
 
         const btn = document.getElementById('submitBtn');
         btn.disabled = true;
         btn.textContent = 'Processing...';
 
         const data = {
-            drug_id: document.getElementById('selectedDrugId').value,
-            sale_type: document.getElementById('saleType').value,
-            quantity: document.getElementById('quantity').value,
-            unit_price: document.getElementById('unitPrice').value,
+            items: cart,
             customer_name: document.getElementById('customerName').value || 'Walk-in Customer',
             customer_phone: document.getElementById('customerPhone').value,
             amount_paid: document.getElementById('amountPaid').value,

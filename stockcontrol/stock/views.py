@@ -150,7 +150,6 @@ def auto_sync_credit_receipts():
 
             print(f"✅ Auto-synced: {receipt.receipt_number} → {credit_sale.credit_receipt_number}")
 
-        except Exception as e:
             errors += 1
             print(f"❌ Error syncing {receipt.receipt_number}: {str(e)}")
             import traceback
@@ -2237,56 +2236,67 @@ def wholesale_sale(request):
 
 @login_required
 def complete_wholesale_sale(request):
-    """API endpoint to process a wholesale sale."""
+    """API endpoint to process a wholesale sale with multiple items."""
     if request.method != 'POST':
         return JsonResponse({'success': False, 'message': 'Invalid request method'}, status=400)
 
     try:
         data = json.loads(request.body)
-        drug_id = data.get('drug_id')
-        sale_type = data.get('sale_type') # 'packet' or 'tablet'
-        quantity = int(data.get('quantity', 0))
-        unit_price = Decimal(str(data.get('unit_price', 0)))
+        items = data.get('items', [])
         customer_name = data.get('customer_name', 'Walk-in Customer')
         customer_phone = data.get('customer_phone', '')
         amount_paid = Decimal(str(data.get('amount_paid', 0)))
         payment_method = data.get('payment_method', 'cash')
 
-        drug = get_object_or_404(Drug, id=drug_id)
+        if not items:
+            return JsonResponse({'success': False, 'message': 'No items in wholesale sale.'}, status=400)
 
-        # Calculate total units and total price
-        if sale_type == 'packet':
-            total_units = quantity * drug.pack_size
-            if drug.stock_quantity < total_units:
-                return JsonResponse({'success': False, 'message': f'Insufficient stock. Only {drug.stock_quantity} units left.'}, status=400)
-
-            total_amount = unit_price * quantity
-            item_description = f"{drug.name} (Pack of {drug.pack_size})"
-            unit_label = 'packet'
-        else: # tablet
-            total_units = quantity
-            if drug.stock_quantity < total_units:
-                return JsonResponse({'success': False, 'message': f'Insufficient stock. Only {drug.stock_quantity} units left.'}, status=400)
-
-            total_amount = unit_price * quantity
-            item_description = drug.name
-            unit_label = 'tablet'
-
-        # Deduct stock
-        drug.stock_quantity -= total_units
-        drug.save()
-
-        sale_items = [{
-            'drug_id': drug.id,
-            'drug_name': f"{item_description} ({quantity} {unit_label}{'s' if quantity > 1 else ''} of {unit_price} UGX)",
-            'quantity': quantity,
-            'unit_price': float(unit_price),
-            'total': float(total_amount)
-        }]
-
-        change_due = amount_paid - total_amount if amount_paid > total_amount else Decimal('0.00')
+        sale_items = []
+        total_amount = Decimal('0.00')
 
         with transaction.atomic():
+            for item in items:
+                drug_id = item.get('drug_id')
+                sale_type = item.get('sale_type') # 'packet' or 'tablet'
+                quantity = int(item.get('quantity', 0))
+                unit_price = Decimal(str(item.get('unit_price', 0)))
+
+                drug = get_object_or_404(Drug, id=drug_id)
+
+                # Calculate total units and total price
+                if sale_type == 'packet':
+                    total_units = quantity * drug.pack_size
+                    if drug.stock_quantity < total_units:
+                        return JsonResponse({'success': False, 'message': f'Insufficient stock for {drug.name}. Only {drug.stock_quantity} units left.'}, status=400)
+
+                    item_total = unit_price * quantity
+                    item_description = f"{drug.name} (Pack of {drug.pack_size})"
+                    unit_label = 'packet'
+                else: # tablet
+                    total_units = quantity
+                    if drug.stock_quantity < total_units:
+                        return JsonResponse({'success': False, 'message': f'Insufficient stock for {drug.name}. Only {drug.stock_quantity} units left.'}, status=400)
+
+                    item_total = unit_price * quantity
+                    item_description = drug.name
+                    unit_label = 'tablet'
+
+                # Deduct stock
+                drug.stock_quantity -= total_units
+                drug.save()
+
+                total_amount += item_total
+
+                sale_items.append({
+                    'drug_id': drug.id,
+                    'drug_name': f"{item_description} ({quantity} {unit_label}{'s' if quantity > 1 else ''} of {unit_price} UGX)",
+                    'quantity': quantity,
+                    'unit_price': float(unit_price),
+                    'total': float(item_total)
+                })
+
+            change_due = amount_paid - total_amount if amount_paid > total_amount else Decimal('0.00')
+
             receipt = Receipt.objects.create(
                 customer_name=f"{customer_name} (Wholesale)",
                 customer_phone=customer_phone,
@@ -3301,6 +3311,7 @@ def user_create(request):
             user = User.objects.create_user(
                 username=username,
                 email=email,
+                password=password
             )
             user.is_staff = is_staff
             user.is_superuser = is_superuser
