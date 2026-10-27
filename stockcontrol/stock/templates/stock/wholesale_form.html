@@ -4,23 +4,25 @@
     .wholesale-container { max-width: 1200px; margin: auto; padding: 20px; display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
     .card { background: white; border-radius: 10px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); padding: 25px; }
     .search-results { max-height: 400px; overflow-y: auto; margin-top: 15px; }
-    .drug-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #eee; cursor: pointer; }
-    .drug-item:hover { background: #f8f9fa; }
+    .drug-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; border-bottom: 1px solid #eee; cursor: pointer; border-radius: 5px; transition: 0.2s; }
+    .drug-item:hover { background: #f8f9fa; border-left: 4px solid #3498db; }
     .drug-info .name { font-weight: 600; color: #333; }
     .drug-info .details { font-size: 12px; color: #666; }
     .form-group { margin-bottom: 15px; }
     .form-group label { display: block; font-weight: 600; margin-bottom: 5px; font-size: 14px; color: #333; }
     .form-group input, .form-group select { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 5px; font-size: 14px; }
-    .btn-primary { width: 100%; padding: 15px; background: #2563eb; color: white; border: none; border-radius: 5px; font-size: 16px; font-weight: 600; cursor: pointer; }
-    .btn-primary:hover { background: #1d4ed8; }
+    .form-group input:focus, .form-group select:focus { border-color: #3498db; outline: none; }
+    .btn-primary { width: 100%; padding: 15px; background: #3498db; color: white; border: none; border-radius: 5px; font-size: 16px; font-weight: 600; cursor: pointer; transition: 0.2s; }
+    .btn-primary:hover { background: #2980b9; }
+    .btn-primary:disabled { background: #bdc3c7; cursor: not-allowed; }
     .payment-methods { display: flex; gap: 10px; margin-bottom: 20px; }
-    .payment-methods button { flex: 1; padding: 10px; border: 2px solid #ddd; background: white; border-radius: 5px; cursor: pointer; font-weight: 600; }
-    .payment-methods button.active { border-color: #2563eb; background: #eff6ff; color: #2563eb; }
-    .selected-drug-card { background: #eff6ff; border: 1px solid #bfdbfe; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: none; }
+    .payment-methods button { flex: 1; padding: 10px; border: 2px solid #ddd; background: white; border-radius: 5px; cursor: pointer; font-weight: 600; transition: 0.2s; }
+    .payment-methods button.active { border-color: #3498db; background: #ebf8ff; color: #3498db; }
+    .selected-drug-card { background: #ebf8ff; border: 1px solid #bce3ff; padding: 15px; border-radius: 8px; margin-bottom: 20px; display: none; }
     .selected-drug-card.active { display: block; }
-    .toast { position: fixed; top: 20px; right: 20px; padding: 15px 25px; border-radius: 5px; color: white; z-index: 1000; display: none; }
-    .toast.success { background: #16a34a; display: block; }
-    .toast.error { background: #dc2626; display: block; }
+    .toast { position: fixed; top: 20px; right: 20px; padding: 15px 25px; border-radius: 5px; color: white; z-index: 1000; display: none; box-shadow: 0 4px 12px rgba(0,0,0,0.15); }
+    .toast.success { background: #27ae60; display: block; }
+    .toast.error { background: #e74c3c; display: block; }
 </style>
 
 <div class="wholesale-container">
@@ -33,7 +35,7 @@
             <input type="text" id="searchInput" placeholder="Search by brand or generic name..." onkeyup="searchDrugs()" autocomplete="off">
         </div>
         <div class="search-results" id="searchResults">
-            <!-- Results will appear here -->
+            <p style="text-align:center; color:#999; padding: 20px;">Type at least 2 letters to search...</p>
         </div>
     </div>
 
@@ -42,7 +44,7 @@
         <h2>🛒 Wholesale Sale Details</h2>
         
         <div id="selectedDrugCard" class="selected-drug-card">
-            <h3 id="dispName" style="color: #1e3a8a; margin-bottom: 5px;"></h3>
+            <h3 id="dispName" style="color: #2980b9; margin-bottom: 5px;"></h3>
             <p style="font-size: 14px; color: #475569; margin-bottom: 10px;">Stock Available: <strong id="dispStock"></strong> units | Pack Size: <strong id="dispPackSize"></strong></p>
         </div>
 
@@ -125,51 +127,65 @@
         const t = document.getElementById('toast');
         t.textContent = msg;
         t.className = 'toast ' + type;
+        t.style.display = 'block';
         setTimeout(() => t.style.display = 'none', 4000);
     }
 
     // Live search drugs via API
     function searchDrugs() {
         const query = document.getElementById('searchInput').value;
+        const resultsDiv = document.getElementById('searchResults');
+
         if (query.length < 2) {
-            document.getElementById('searchResults').innerHTML = '';
+            resultsDiv.innerHTML = '<p style="text-align:center; color:#999; padding: 20px;">Type at least 2 letters to search...</p>';
             return;
         }
 
+        // Fetch from the correct API endpoint
         fetch(`/api/drugs/autocomplete/?q=${query}`)
             .then(res => res.json())
             .then(data => {
                 let html = '';
                 if (data.length === 0) {
-                    html = '<p style="text-align:center; color:#666;">No drugs found.</p>';
+                    html = '<p style="text-align:center; color:#e74c3c; padding: 20px;">No drugs found matching that name.</p>';
                 } else {
                     data.forEach(drug => {
+                        // Safe way to pass object to onclick without breaking quotes
+                        const drugString = encodeURIComponent(JSON.stringify(drug));
                         html += `
-                            <div class="drug-item" onclick="selectDrug(${JSON.stringify(drug).replace(/"/g, '&quot;')})">
+                            <div class="drug-item" onclick="selectDrug('${drugString}')">
                                 <div class="drug-info">
                                     <div class="name">${drug.brand || drug.generic_name} (${drug.name})</div>
                                     <div class="details">Stock: ${drug.stock_quantity} units | Pack Size: ${drug.pack_size}</div>
                                 </div>
+                                <button class="btn btn-sm btn-outline-primary" style="pointer-events:none;">Select</button>
                             </div>
                         `;
                     });
                 }
-                document.getElementById('searchResults').innerHTML = html;
+                resultsDiv.innerHTML = html;
+            })
+            .catch(err => {
+                console.error("Search error:", err);
+                resultsDiv.innerHTML = '<p style="text-align:center; color:#e74c3c;">Error searching drugs.</p>';
             });
     }
 
     // When a drug is clicked from search
-    function selectDrug(drug) {
+    function selectDrug(encodedDrug) {
+        const drug = JSON.parse(decodeURIComponent(encodedDrug));
         selectedDrug = drug;
+        
         document.getElementById('selectedDrugId').value = drug.id;
         document.getElementById('dispName').textContent = `${drug.brand || drug.generic_name} (${drug.name})`;
         document.getElementById('dispStock').textContent = drug.stock_quantity;
         document.getElementById('dispPackSize').textContent = drug.pack_size;
         
         document.getElementById('selectedDrugCard').classList.add('active');
-        document.getElementById('searchResults').innerHTML = '';
+        document.getElementById('searchResults').innerHTML = '<p style="text-align:center; color:#27ae60; padding: 20px;">✅ Drug selected. Fill in the sale details on the right.</p>';
         document.getElementById('searchInput').value = '';
         
+        document.getElementById('submitBtn').disabled = false; // Enable button once drug is selected
         updateLabels();
     }
 
@@ -215,6 +231,11 @@
 
     function submitSale(e) {
         e.preventDefault();
+        if (!selectedDrug) {
+            showToast("Please select a drug first", "error");
+            return;
+        }
+
         const btn = document.getElementById('submitBtn');
         btn.disabled = true;
         btn.textContent = 'Processing...';

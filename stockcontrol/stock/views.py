@@ -161,7 +161,7 @@ def auto_sync_credit_receipts():
 
 
 # ============================================================
-# SEND REPORT EMAIL - COMPLETE VERSION
+# SEND REPORT EMAIL - COMPLETE VERSION (UPDATED WITH WHOLESALE)
 # ============================================================
 
 def send_report_email(report_data, email, report_type):
@@ -212,6 +212,7 @@ def send_report_email(report_data, email, report_type):
         payment_breakdown = report_data.get("payment_breakdown", [])
         top_products = report_data.get("top_products", [])
         credit_sales = report_data.get("credit_sales", {})
+        wholesale_data = report_data.get("wholesale", {})
         period = report_data.get("period", f"{report_type.capitalize()} Report")
         generated_at = report_data.get("generated_at", timezone.now().strftime('%Y-%m-%d %H:%M:%S'))
         sync_info = report_data.get("sync_info", {})
@@ -345,11 +346,10 @@ def send_report_email(report_data, email, report_type):
                 {sync_info_html}
                 <table>
                     <tr><th>Description</th><th>Value</th></tr>
-                    <tr><td>Total Sales (Medicines Sold)</td><td>UGX {sales.get('total_amount', 0):,.0f}</td></tr>
-                    
-                    <tr><td><strong>Total Cash Received Today</strong></td><td><strong>UGX {sales.get('cash_received', 0):,.0f}</strong></td></tr>
+                    <tr><td>Total Sales (Retail + Wholesale)</td><td>UGX {sales.get('total_amount', 0):,.0f}</td></tr>
+                    <tr><td><strong>Wholesale Sales</strong></td><td><strong>UGX {wholesale_data.get('total_wholesale_amount', 0):,.0f}</strong></td></tr>
+                    <tr><td>Total Cash Received Today</td><td>UGX {sales.get('cash_received', 0):,.0f}</td></tr>
                     <tr><td>Credit Repayments Received Today</td><td>UGX {credit_sales.get('total_credit_paid', 0):,.0f}</td></tr>
-                    
                     <tr><td>Net Sales</td><td>UGX {sales.get('net_sales', 0):,.0f}</td></tr>
                     <tr><td>Total Returns</td><td>UGX {sales.get('total_returns', 0):,.0f}</td></tr>
                     <tr><td>Total Transactions</td><td>{sales.get('total_transactions', 0)}</td></tr>
@@ -1060,9 +1060,6 @@ def complete_sale(request):
 
 # ============================================================
 # CREDIT SALE VIEWS
-# ============================================================
-# KEY FIX: credit_list() now calls auto_sync_credit_receipts()
-# BEFORE querying, so any unlinked credit receipt shows up here.
 # ============================================================
 
 @login_required
@@ -2262,7 +2259,7 @@ def complete_wholesale_sale(request):
             total_units = quantity * drug.pack_size
             if drug.stock_quantity < total_units:
                 return JsonResponse({'success': False, 'message': f'Insufficient stock. Only {drug.stock_quantity} units left.'}, status=400)
-            
+
             total_amount = unit_price * quantity
             item_description = f"{drug.name} (Pack of {drug.pack_size})"
             unit_label = 'packet'
@@ -2270,7 +2267,7 @@ def complete_wholesale_sale(request):
             total_units = quantity
             if drug.stock_quantity < total_units:
                 return JsonResponse({'success': False, 'message': f'Insufficient stock. Only {drug.stock_quantity} units left.'}, status=400)
-            
+
             total_amount = unit_price * quantity
             item_description = drug.name
             unit_label = 'tablet'
@@ -2281,7 +2278,7 @@ def complete_wholesale_sale(request):
 
         sale_items = [{
             'drug_id': drug.id,
-            'drug_name': item_description,
+            'drug_name': f"{item_description} ({quantity} {unit_label}{'s' if quantity > 1 else ''} of {unit_price} UGX)",
             'quantity': quantity,
             'unit_price': float(unit_price),
             'total': float(total_amount)
@@ -2303,22 +2300,34 @@ def complete_wholesale_sale(request):
 
             # If it's a credit wholesale sale
             if payment_method.lower() == 'credit':
+                credit_amount_paid = amount_paid if amount_paid > 0 else Decimal('0.00')
+                
                 credit_sale = CreditSale.objects.create(
                     credit_receipt_number=f"CR-WS-{timezone.now().strftime('%Y%m%d')}-{CreditSale.objects.filter(created_at__date=timezone.now().date()).count() + 1:04d}",
                     customer_name=customer_name,
                     customer_phone=customer_phone,
                     total_amount=total_amount,
-                    amount_paid=Decimal('0.00'),
-                    remaining_balance=total_amount,
+                    amount_paid=credit_amount_paid,
+                    remaining_balance=total_amount - credit_amount_paid,
                     payment_method='credit',
                     items=sale_items,
                     due_date=timezone.now().date() + timedelta(days=30),
-                    status='pending',
+                    status='paid' if credit_amount_paid >= total_amount else ('partial' if credit_amount_paid > 0 else 'pending'),
                     created_by=request.user
                 )
+                
                 receipt.credit_sale = credit_sale
                 receipt.is_credit = True
                 receipt.save()
+                
+                if credit_amount_paid > 0:
+                    CreditPayment.objects.create(
+                        credit_sale=credit_sale,
+                        amount=credit_amount_paid,
+                        payment_method='credit',
+                        reference=f"Initial wholesale payment",
+                        created_by=request.user
+                    )
 
         return JsonResponse({
             'success': True,
@@ -2854,11 +2863,11 @@ def generate_report_api(request):
 
 
 # ============================================================
-# generate_report_data
+# generate_report_data (UPDATED TO TRACK WHOLESALE)
 # ============================================================
 
 def generate_report_data(report_type, report_date=None):
-    """Generate report data based on type (including returns and credit sales)"""
+    """Generate report data based on type (including returns, credit sales, and wholesale)"""
     if report_date is None:
         report_date = timezone.now().date()
 
@@ -2873,7 +2882,8 @@ def generate_report_data(report_type, report_date=None):
         'invoices': {},
         'payment_breakdown': [],
         'top_products': [],
-        'credit_sales': {}
+        'credit_sales': {},
+        'wholesale': {}
     }
 
     if report_type == 'daily':
@@ -2919,7 +2929,7 @@ def generate_report_data(report_type, report_date=None):
     all_credit_sales = CreditSale.objects.filter(
         created_at__date__lte=end_date
     )
-    
+
     total_credit_outstanding = sum(
         (credit.remaining_balance for credit in all_credit_sales),
         Decimal('0.00')
@@ -2928,6 +2938,10 @@ def generate_report_data(report_type, report_date=None):
     cash_receipts = receipts.filter(payment_method__iexact='cash').aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
     cash_repayments = credit_payments.filter(payment_method__iexact='cash').aggregate(total=Sum('amount'))['total'] or Decimal('0.00')
     cash_received_today = cash_receipts + cash_repayments
+
+    # Wholesale Tracking
+    wholesale_receipts = receipts.filter(customer_name__contains='(Wholesale)')
+    total_wholesale_amount = wholesale_receipts.aggregate(total=Sum('total_amount'))['total'] or Decimal('0.00')
 
     total_sales = receipts.aggregate(Sum('total_amount'))['total_amount__sum'] or 0
     total_transactions = receipts.count()
@@ -2956,6 +2970,11 @@ def generate_report_data(report_type, report_date=None):
         'cash_received': float(cash_received_today),
         'start_date': start_date.strftime('%Y-%m-%d'),
         'end_date': end_date.strftime('%Y-%m-%d'),
+    }
+
+    report_data['wholesale'] = {
+        'total_wholesale_amount': float(total_wholesale_amount),
+        'total_wholesale_transactions': wholesale_receipts.count(),
     }
 
     report_data['credit_sales'] = {
@@ -3282,7 +3301,6 @@ def user_create(request):
             user = User.objects.create_user(
                 username=username,
                 email=email,
-                password=password
             )
             user.is_staff = is_staff
             user.is_superuser = is_superuser
